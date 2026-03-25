@@ -1,0 +1,79 @@
+# =============================================================
+#  .gitignore — Java dev Pro
+#  Cours "De Développeur à Architecte Backend"
+#  Auteur : Gilles Kemgoum
+# =============================================================
+
+# ── Node / npm ──────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.pnp
+.pnp.js
+.yarn/
+
+# ── Fichiers générés par les scripts ────────────────────────
+# Texte extrait du PDF (produit par le script Node, non versionné)
+extracted.txt
+
+# ── Fichiers PDF sources (trop lourds, binaires) ────────────
+# Gardez cette ligne si vous ne souhaitez pas versionner le PDF
+# Commentez-la si vous voulez l'inclure dans le dépôt
+*.pdf
+
+# ── Systèmes d'exploitation ─────────────────────────────────
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+
+# ── Éditeurs & IDEs ─────────────────────────────────────────
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# IntelliJ / WebStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Vim / Emacs
+*.swp
+*.swo
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+Session.vim
+.netrwhist
+tags
+
+# ── Logs génériques ─────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ── Variables d'environnement ────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Builds / dist ────────────────────────────────────────────
+dist/
+build/
