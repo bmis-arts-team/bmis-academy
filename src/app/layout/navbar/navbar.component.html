@@ -1,0 +1,13 @@
+<header class="navbar">
+  <div class="navbar-left">
+    <button class="menu-toggle" (click)="menuToggle.emit()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <a routerLink="/" class="navbar-brand">BMIS Academy</a>
+  </div>
+  <nav class="navbar-links">
+    <a routerLink="/">Accueil</a>
+    <a routerLink="/courses/devops">DevOps</a>
+    <a routerLink="/courses/architecte-backend">Architecte Backend</a>
+  </nav>
+</header>

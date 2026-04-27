@@ -1,0 +1,313 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ 4.1 Acquis et objectifs ═══════════════ -->
+  <section>
+    <h2>4.1 Acquis et objectifs</h2>
+    <p>Au fil des chapitres précédents, vous avez construit une base solide :</p>
+
+    <ul>
+      <li><strong>Chapitre 1</strong> - Clean Architecture, couches, séparation des responsabilités</li>
+      <li><strong>Chapitre 2</strong> - Microservices, communication REST/Event-Driven, API Gateway</li>
+      <li><strong>Chapitre 3</strong> - DevOps, CI/CD, Kubernetes, observabilité</li>
+    </ul>
+
+    <p>L'objectif de ce chapitre : <strong>penser comme un architecte</strong>. Nous allons aborder les patterns avancés qui permettent de construire des systèmes véritablement scalables, résilients et maintenables en production.</p>
+  </section>
+
+  <!-- ═══════════════ 4.2 Scalabilité horizontale et verticale ═══════════════ -->
+  <section>
+    <h2>4.2 Scalabilité horizontale et verticale</h2>
+    <p>La scalabilité est la capacité d'un système à gérer une charge croissante. Il existe deux approches fondamentalement différentes :</p>
+
+    <div class="comparison-grid">
+      <div class="comparison-card bad">
+        <h4>Scalabilité Verticale</h4>
+        <ul>
+          <li>Ajouter plus de CPU / RAM à une seule machine</li>
+          <li>Coûteux - matériel haut de gamme</li>
+          <li>Single point of failure - si la machine tombe, tout tombe</li>
+          <li>Limite physique - on ne peut pas ajouter indéfiniment</li>
+          <li>Simple à mettre en œuvre - pas de changement d'architecture</li>
+        </ul>
+      </div>
+      <div class="comparison-card good">
+        <h4>Scalabilité Horizontale</h4>
+        <ul>
+          <li>Ajouter plus d'instances (pods, conteneurs)</li>
+          <li>Load balancer / HPA distribue la charge</li>
+          <li>Nécessite des services <strong>stateless</strong></li>
+          <li>Scalabilité quasi illimitée</li>
+          <li>Résilience naturelle - si une instance tombe, les autres prennent le relais</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout warning">
+      <strong>Prérequis : services stateless</strong>
+      <p>Pour scaler horizontalement, chaque instance doit être interchangeable. Aucun état ne doit être stocké en mémoire locale (session, cache local). Utilisez Redis pour le cache partagé et une base de données externe pour la persistance.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 4.3 Event Broker avancé - Kafka ═══════════════ -->
+  <section>
+    <h2>4.3 Event Broker avancé - Kafka</h2>
+    <p>Apache Kafka va bien au-delà d'un simple broker de messages. C'est une plateforme de streaming d'événements distribuée avec des caractéristiques uniques :</p>
+
+    <ul>
+      <li><strong>Topics partitionnés</strong> - les messages sont répartis en partitions pour paralléliser le traitement</li>
+      <li><strong>Persistance durable</strong> - les événements sont stockés sur disque, rejouables à volonté</li>
+      <li><strong>Consumer groups</strong> - plusieurs consommateurs se partagent le traitement des partitions</li>
+    </ul>
+
+    <h3>Producteur d'événements avec clé de partition</h3>
+    <div class="code-block">
+      <div class="code-header">TaskEventProducer.java</div>
+      <pre><code class="language-java">&#64;Service
+public class TaskEventProducer {{ '{' }}
+
+    private final KafkaTemplate&lt;String, TaskEvent&gt; kafkaTemplate;
+
+    public TaskEventProducer(KafkaTemplate&lt;String, TaskEvent&gt; kafkaTemplate) {{ '{' }}
+        this.kafkaTemplate = kafkaTemplate;
+    {{ '}' }}
+
+    public void publishTaskCreated(Task task) {{ '{' }}
+        TaskEvent event = new TaskEvent(
+            task.getId(),
+            task.getTitle(),
+            task.getProjectId(),
+            EventType.TASK_CREATED
+        );
+
+        // La clé de partition = projectId
+        // Toutes les tâches d'un même projet vont dans la même partition
+        // → Garantit l'ordre des événements par projet
+        kafkaTemplate.send("task-events", task.getProjectId(), event);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Clé de partition et ordering</strong>
+      <p>En utilisant <code>projectId</code> comme clé de partition, tous les événements d'un même projet sont traités dans l'ordre par le même consommateur. C'est essentiel pour maintenir la cohérence : la tâche doit être créée avant d'être assignée.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 4.4 Patterns distribués avancés ═══════════════ -->
+  <section>
+    <h2>4.4 Patterns distribués avancés</h2>
+
+    <h3>SAGA - Transactions distribuées</h3>
+    <p>Dans un système monolithique, une transaction SQL garantit l'atomicité. Dans un système distribué, c'est impossible. Le pattern SAGA orchestre des transactions distribuées <strong>sans verrou global</strong>, avec compensation en cas d'échec.</p>
+
+    <div class="arch-diagram">
+      <pre>
+  SAGA : Création de tâche dans TaskFlow
+
+  1. Task Service crée la tâche
+     └──→ Publie événement « TaskCreated »
+
+  2. Project Service consomme l'événement
+     └──→ Met à jour le compteur de tâches du projet
+     └──→ Publie « ProjectUpdated »
+
+  3. Notification Service consomme l'événement
+     └──→ Envoie email de notification à l'assigné
+
+  4. ⚠ Si Project Service échoue :
+     └──→ Publie « TaskCreationFailed »
+     └──→ Compensation : Task Service annule la tâche
+     └──→ Compensation : Notification Service annule l'email</pre>
+    </div>
+
+    <h3>CQRS - Command Query Responsibility Segregation</h3>
+    <p>CQRS sépare les opérations de lecture et d'écriture en deux modèles distincts, chacun optimisé pour son usage :</p>
+
+    <div class="comparison-grid">
+      <div class="comparison-card good">
+        <h4>Command (Écriture)</h4>
+        <ul>
+          <li>Base de données normalisée (PostgreSQL)</li>
+          <li>Validations strictes et règles métier</li>
+          <li>Événements publiés après chaque modification</li>
+          <li>Optimisée pour la cohérence</li>
+        </ul>
+      </div>
+      <div class="comparison-card good">
+        <h4>Query (Lecture)</h4>
+        <ul>
+          <li>Vues dénormalisées, pré-calculées</li>
+          <li>Cache Redis pour les requêtes fréquentes</li>
+          <li>Pas de validations - lecture seule</li>
+          <li>Optimisée pour la performance</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Circuit Breaker avec Resilience4j</h3>
+    <p>Le Circuit Breaker protège un service contre les appels répétés vers un service défaillant. Après plusieurs échecs, le circuit s'ouvre et les appels sont court-circuités vers un fallback.</p>
+
+    <div class="code-block">
+      <div class="code-header">NotificationServiceClient.java</div>
+      <pre><code class="language-java">&#64;Service
+public class NotificationServiceClient {{ '{' }}
+
+    private final WebClient webClient;
+
+    public NotificationServiceClient(WebClient.Builder webClientBuilder) {{ '{' }}
+        this.webClient = webClientBuilder
+            .baseUrl("http://notification-service:8084")
+            .build();
+    {{ '}' }}
+
+    &#64;CircuitBreaker(name = "notificationService", fallbackMethod = "fallbackNotify")
+    public void notifyUser(String userId, String message) {{ '{' }}
+        webClient.post()
+            .uri("/api/notifications")
+            .bodyValue(new NotificationRequest(userId, message))
+            .retrieve()
+            .bodyToMono(Void.class)
+            .block();
+    {{ '}' }}
+
+    private void fallbackNotify(String userId, String message, Throwable t) {{ '{' }}
+        // Fallback : enregistrer la notification en file d'attente
+        // pour réessayer plus tard
+        log.warn("Notification service indisponible, mise en file d'attente: {{ '{' }}{{ '}' }}", t.getMessage());
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 4.5 Cache distribué avec Redis ═══════════════ -->
+  <section>
+    <h2>4.5 Cache distribué avec Redis</h2>
+    <p>Redis est une base de données clé-valeur in-memory utilisée comme cache distribué. Spring Boot s'intègre nativement avec Redis via les annotations de cache.</p>
+
+    <div class="code-block">
+      <div class="code-header">TaskQueryService.java</div>
+      <pre><code class="language-java">&#64;Service
+public class TaskQueryService {{ '{' }}
+
+    private final TaskRepository taskRepository;
+
+    public TaskQueryService(TaskRepository taskRepository) {{ '{' }}
+        this.taskRepository = taskRepository;
+    {{ '}' }}
+
+    &#64;Cacheable(value = "tasks", key = "#projectId")
+    public List&lt;Task&gt; getTasksByProject(String projectId) {{ '{' }}
+        // Cette méthode n'est appelée que si le cache est vide
+        // Sinon, Redis retourne directement le résultat
+        return taskRepository.findByProjectId(projectId);
+    {{ '}' }}
+
+    &#64;CacheEvict(value = "tasks", key = "#task.projectId")
+    public Task createTask(Task task) {{ '{' }}
+        // Invalide le cache du projet quand une tâche est créée
+        return taskRepository.save(task);
+    {{ '}' }}
+
+    &#64;CacheEvict(value = "tasks", allEntries = true)
+    public void clearAllCache() {{ '{' }}
+        log.info("Cache des tâches entièrement vidé");
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+
+    <h3>Configuration Redis</h3>
+    <div class="code-block">
+      <div class="code-header">application.yml - Redis Cache</div>
+      <pre><code class="language-yaml">spring:
+  data:
+    redis:
+      host: redis
+      port: 6379
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000
+      cache-null-values: false</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>TTL de 5 minutes</strong>
+      <p><code>time-to-live: 300000</code> (millisecondes) = 5 minutes. Après ce délai, le cache est automatiquement invalidé et la prochaine requête ira chercher les données en base. Choisissez un TTL adapté à la fréquence de modification de vos données.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 4.6 Observabilité avancée ═══════════════ -->
+  <section>
+    <h2>4.6 Observabilité avancée</h2>
+    <p>En production, l'observabilité est votre radar. Voici les trois composantes essentielles :</p>
+
+    <table>
+      <thead>
+        <tr><th>Composante</th><th>Outil</th><th>Rôle dans TaskFlow</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Tracing distribué</strong></td>
+          <td>Jaeger / Zipkin</td>
+          <td>Suivre une requête de l'API Gateway jusqu'au dernier microservice</td>
+        </tr>
+        <tr>
+          <td><strong>Métriques</strong></td>
+          <td>Prometheus + Grafana</td>
+          <td>Dashboards temps réel : latence, throughput, taux d'erreurs, usage mémoire</td>
+        </tr>
+        <tr>
+          <td><strong>Alerting</strong></td>
+          <td>Alertmanager</td>
+          <td>Notifications automatiques si un seuil est dépassé (latence > 2s, erreurs > 5%)</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ═══════════════ 4.7 Architecture complète TaskFlow ═══════════════ -->
+  <section>
+    <h2>4.7 Architecture complète TaskFlow</h2>
+    <p>Voici la vue d'ensemble de l'architecture TaskFlow avec tous les patterns intégrés :</p>
+
+    <div class="arch-diagram">
+      <pre>
+                           ┌─────────────────┐
+                           │   Client HTTP    │
+                           └────────┬────────┘
+                                    │
+                           ┌────────▼────────┐
+                           │   API Gateway    │
+                           │   (routing)      │
+                           └────────┬────────┘
+                                    │
+              ┌─────────────────────┼─────────────────────┐
+              │                     │                     │
+    ┌─────────▼─────────┐ ┌───────▼────────┐ ┌──────────▼──────────┐
+    │   user-service     │ │  task-service   │ │  project-service    │
+    └───────────────────┘ └───────┬────────┘ └─────────────────────┘
+                                  │
+                    ┌─────────────┼─────────────┐
+                    │             │             │
+           ┌───────▼──────┐ ┌───▼───┐ ┌───────▼────────┐
+           │  REST check   │ │ Cache │ │   Publish      │
+           │  project-svc  │ │ Redis │ │   Kafka        │
+           └──────────────┘ └───────┘ └───────┬────────┘
+                                              │
+                                    ┌─────────▼──────────┐
+                                    │ notification-svc   │
+                                    └────────────────────┘
+
+       ┌─────────────────────────────────────────────────┐
+       │              Observabilité                      │
+       │   Prometheus  +  Grafana  +  Jaeger             │
+       └─────────────────────────────────────────────────┘</pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Tous les patterns réunis</strong>
+      <p>Cette architecture combine : Clean Architecture (par service), communication Event-Driven (Kafka), cache distribué (Redis), Circuit Breaker (Resilience4j), CQRS, SAGA, et observabilité complète. C'est le niveau attendu d'un architecte backend en entreprise.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

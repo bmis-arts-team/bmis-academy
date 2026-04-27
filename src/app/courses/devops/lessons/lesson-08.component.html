@@ -1,0 +1,299 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Vue d'ensemble de l'architecture</h2>
+    <p>Dans cette leçon, nous allons déployer un système complet sur Kubernetes : un backend Spring Boot connecté à PostgreSQL et Redis, exposé via un Ingress.</p>
+
+    <div class="arch-diagram">
+      <pre>
+                    ┌───────────────┐
+                    │   Ingress     │
+                    │ (NGINX + TLS) │
+                    └──────┬────────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+        ┌─────▼──┐  ┌──────▼──┐  ┌─────▼────┐
+        │Frontend│  │   API   │  │   API    │
+        │(Angular│  │ Replica │  │ Replica  │
+        │  SPA)  │  │   #1    │  │   #2     │
+        └────────┘  └────┬────┘  └────┬─────┘
+                         │            │
+                    ┌────▼────────────▼────┐
+                    │                      │
+              ┌─────▼──────┐    ┌──────────▼─┐
+              │ PostgreSQL │    │    Redis    │
+              │ (StatefulS)│    │ (Deployment)│
+              └────────────┘    └────────────┘</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Structure des manifestes</h2>
+    <p>Organisez vos manifestes Kubernetes avec <strong>Kustomize</strong> pour gérer plusieurs environnements :</p>
+    <div class="file-tree">k8s/
+├── base/
+│   ├── kustomization.yaml
+│   ├── namespace.yaml
+│   ├── postgres-statefulset.yaml
+│   ├── postgres-service.yaml
+│   ├── redis-deployment.yaml
+│   ├── redis-service.yaml
+│   ├── api-deployment.yaml
+│   ├── api-service.yaml
+│   ├── api-configmap.yaml
+│   ├── api-secrets.yaml
+│   └── ingress.yaml
+├── overlays/
+│   ├── dev/
+│   │   └── kustomization.yaml
+│   └── prod/
+│       └── kustomization.yaml</div>
+  </section>
+
+  <section>
+    <h2>PostgreSQL StatefulSet</h2>
+    <div class="code-block">
+      <div class="code-header"><span>postgres-statefulset.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app_user"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Redis Deployment</h2>
+    <div class="code-block">
+      <div class="code-header"><span>redis-deployment.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Backend API Deployment</h2>
+    <div class="code-block">
+      <div class="code-header"><span>api-deployment.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+        - name: api
+          image: myregistry/api-backend:1.0.0
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Kustomize - Overlays par environnement</h2>
+    <div class="code-block">
+      <div class="code-header"><span>overlays/prod/kustomization.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: production
+resources:
+  - ../../base
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: api-backend
+      spec:
+        replicas: 3
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: api-hpa
+      spec:
+        scaleTargetRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: api-backend
+        minReplicas: 3
+        maxReplicas: 10
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 70</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Déploiement pas à pas</h2>
+    <div class="steps">
+      <div class="step">
+        <h4>Créer le namespace</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/namespace.yaml</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Déployer les Secrets et ConfigMaps</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/api-secrets.yaml
+kubectl apply -f k8s/base/api-configmap.yaml</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Déployer la base de données</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/postgres-statefulset.yaml
+kubectl apply -f k8s/base/postgres-service.yaml
+kubectl wait --for=condition=ready pod/postgres-0 --timeout=120s</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Déployer Redis puis l'API</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/redis-deployment.yaml
+kubectl apply -f k8s/base/api-deployment.yaml
+kubectl apply -f k8s/base/ingress.yaml</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Vérifier le déploiement</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl get all
+kubectl get pods -o wide
+kubectl logs deployment/api-backend -f</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <strong>Avec Kustomize</strong>
+      <p>Pour un déploiement complet en une commande : <code>kubectl apply -k k8s/overlays/prod/</code></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Résolution d'erreurs courantes</h2>
+    <table>
+      <thead><tr><th>Erreur</th><th>Cause probable</th><th>Solution</th></tr></thead>
+      <tbody>
+        <tr><td><code>CrashLoopBackOff</code></td><td>L'application crashe au démarrage</td><td><code>kubectl logs pod-name</code> pour voir l'erreur</td></tr>
+        <tr><td><code>ImagePullBackOff</code></td><td>Image introuvable ou credentials manquants</td><td>Vérifier le nom de l'image et le imagePullSecret</td></tr>
+        <tr><td><code>Pending (PVC)</code></td><td>Pas de PV disponible</td><td>Vérifier la StorageClass et les capacités</td></tr>
+        <tr><td><code>CreateContainerConfigError</code></td><td>ConfigMap ou Secret manquant</td><td><code>kubectl describe pod</code> pour les détails</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</app-lesson-page>

@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Métriques - Prometheus & Grafana - DevOps BMIS Academy</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="progress-bar"></div>
+
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="docs-layout">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <a href="../../index.html" class="sidebar-brand">
+      <div class="brand-logo">BM</div>
+      <div class="brand-text">
+        <span class="brand-name">BMIS Academy</span>
+        <span class="brand-tagline">DevOps &amp; Production</span>
+      </div>
+    </a>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Vue d'ensemble</div>
+        <a href="index.html" class="nav-link">Accueil du cours</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">1 - Fondations Docker</div>
+        <a href="01-docker-images-containers.html" class="nav-link">Images vs Containers</a>
+        <a href="02-docker-volumes-networking.html" class="nav-link">Volumes &amp; Networking</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">2 - Kubernetes Core</div>
+        <a href="03-kubernetes-architecture.html" class="nav-link">Architecture K8s</a>
+        <a href="04-kubernetes-workloads.html" class="nav-link">Deployments &amp; StatefulSets</a>
+        <a href="05-kubernetes-services-ingress.html" class="nav-link">Services &amp; Ingress</a>
+        <a href="06-kubernetes-configmaps-secrets.html" class="nav-link">ConfigMaps &amp; Secrets</a>
+        <a href="07-kubernetes-storage-namespaces.html" class="nav-link">Storage &amp; Namespaces</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">3 - Déploiement Système</div>
+        <a href="08-deploy-fintech-system.html" class="nav-link">Déployer le Système Fintech</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">4 - CI/CD</div>
+        <a href="09-cicd-github-actions.html" class="nav-link">Pipeline GitHub Actions</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">5 - Observabilité</div>
+        <a href="10-observability-metrics.html" class="nav-link active">Prometheus &amp; Grafana</a>
+        <a href="11-observability-logging-alerting.html" class="nav-link">ELK Stack &amp; Alerting</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">6 - Réseau &amp; Sécurité</div>
+        <a href="12-networking-security.html" class="nav-link">Networking &amp; Security</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">7 - CDN &amp; Assets</div>
+        <a href="13-cdn-asset-delivery.html" class="nav-link">CDN &amp; Distribution</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">8 - Production</div>
+        <a href="14-production-best-practices.html" class="nav-link">Best Practices Production</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../../index.html" class="sidebar-footer-link">← Retour au catalogue</a>
+    </div>
+  </aside>
+
+  <main class="docs-main">
+    <div class="docs-content">
+
+    <!-- ═══════════════════════════════════════════ HEADER ═══════════════════════════════════════════ -->
+    <div class="lesson-header">
+      <div class="lesson-meta">
+        <span class="lesson-number">Leçon 10</span>
+        <span class="lesson-section">Section 5 - Observabilité</span>
+      </div>
+      <h1>Métriques - Prometheus &amp; Grafana</h1>
+      <p class="lesson-subtitle">Instrumenter Spring Boot, collecter les métriques, et créer des dashboards de monitoring production.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ 1. LES 3 PILIERS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>1 - Les 3 piliers de l'observabilité</h2>
+
+      <p>Un système en production est une <strong>boîte noire</strong>. Vous ne pouvez pas y mettre de breakpoints, vous ne pouvez pas le debugger en direct, et vous ne pouvez pas demander à un utilisateur de reproduire un bug sous vos yeux. L'<strong>observabilité</strong> est la capacité à comprendre l'état interne d'un système à partir de ses sorties externes.</p>
+
+      <p>L'observabilité repose sur <strong>trois piliers</strong> fondamentaux :</p>
+
+      <h3>1.1 - Metrics (Métriques)</h3>
+
+      <p>Les métriques sont des <strong>valeurs numériques mesurées dans le temps</strong>. Elles répondent à la question : <em>"Combien ?"</em> et <em>"À quelle vitesse ?"</em>. Par exemple : le nombre de requêtes HTTP par seconde, l'utilisation mémoire en pourcentage, le temps de réponse moyen d'une API.</p>
+
+      <p>Les métriques sont <strong>agrégées</strong> - elles ne vous disent pas ce qui s'est passé pour une requête spécifique, mais elles vous montrent les tendances globales. Elles sont peu coûteuses en stockage et en calcul, ce qui les rend idéales pour le monitoring en temps réel et les alertes.</p>
+
+      <h3>1.2 - Logs (Journaux)</h3>
+
+      <p>Les logs sont des <strong>enregistrements textuels d'événements discrets</strong>. Ils répondent à la question : <em>"Que s'est-il passé exactement ?"</em>. Un log contient un horodatage, un niveau de sévérité, et un message descriptif. Contrairement aux métriques, les logs sont <strong>individuels</strong> - chaque entrée correspond à un événement précis.</p>
+
+      <p>Les logs sont essentiels pour le <strong>debugging post-mortem</strong>. Quand une métrique indique un pic d'erreurs, ce sont les logs qui vous disent <em>quelle</em> erreur et <em>pourquoi</em>.</p>
+
+      <h3>1.3 - Traces (Traces distribuées)</h3>
+
+      <p>Les traces suivent le <strong>parcours d'une requête</strong> à travers plusieurs services. Dans une architecture microservices, une seule action utilisateur (par exemple, un paiement) peut traverser 5 à 10 services différents. Une trace vous montre exactement quel service a été appelé, dans quel ordre, et combien de temps chaque appel a pris.</p>
+
+      <p>Les traces répondent à la question : <em>"Où est le goulot d'étranglement ?"</em>. Elles sont indispensables pour diagnostiquer les problèmes de latence dans les systèmes distribués.</p>
+
+      <div class="callout info">
+        <strong>Les trois piliers sont complémentaires</strong> - Les métriques vous alertent qu'il y a un problème (ex : taux d'erreur à 15%). Les logs vous disent quel est le problème (ex : <code>NullPointerException</code> dans <code>PaymentService</code>). Les traces vous montrent où est le problème (ex : le service de validation met 8 secondes à répondre). <strong>Cette leçon se concentre sur les métriques.</strong> Les logs et les alertes seront traités dans la leçon suivante.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 2. PROMETHEUS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>2 - Prometheus - Présentation</h2>
+
+      <p><strong>Prometheus</strong> est un système de monitoring et d'alerting open-source, développé initialement chez SoundCloud et maintenant projet gradué de la <strong>Cloud Native Computing Foundation</strong> (CNCF). C'est le standard de facto pour le monitoring des applications cloud-native et Kubernetes.</p>
+
+      <h3>2.1 - Modèle Pull-based</h3>
+
+      <p>Contrairement aux systèmes push-based (comme Graphite ou StatsD) où les applications envoient leurs métriques vers un collecteur central, Prometheus utilise un modèle <strong>pull-based</strong> : c'est Prometheus qui va <strong>chercher</strong> (scraper) les métriques auprès de chaque cible à intervalles réguliers (par défaut toutes les 15 secondes).</p>
+
+      <p>Avantages du modèle pull :</p>
+
+      <ul>
+        <li><strong>Détection automatique des pannes</strong> - Si Prometheus ne peut plus scraper une cible, il sait immédiatement que le service est down.</li>
+        <li><strong>Pas de surcharge réseau</strong> - Les applications n'ont pas besoin de pousser des données en permanence. Elles exposent simplement un endpoint HTTP.</li>
+        <li><strong>Contrôle centralisé</strong> - L'opérateur décide quelles cibles scraper, à quelle fréquence, et avec quels labels.</li>
+        <li><strong>Facilité de debugging</strong> - Vous pouvez visiter l'endpoint <code>/metrics</code> d'une application dans votre navigateur pour voir exactement ce qu'elle expose.</li>
+      </ul>
+
+      <h3>2.2 - Base de données Time Series</h3>
+
+      <p>Prometheus stocke ses données dans une <strong>base de données time series</strong> locale, optimisée pour les écritures séquentielles et les requêtes par plage temporelle. Chaque métrique est identifiée par un <strong>nom</strong> et un ensemble de <strong>labels</strong> (paires clé-valeur) :</p>
+
+<pre><code class="language-bash"># Format d'une métrique Prometheus
+http_server_requests_seconds_count{method="GET", uri="/api/payments", status="200"} 1547
+http_server_requests_seconds_count{method="POST", uri="/api/payments", status="201"} 892
+http_server_requests_seconds_count{method="GET", uri="/api/payments", status="500"} 23</code></pre>
+
+      <h3>2.3 - PromQL</h3>
+
+      <p><strong>PromQL</strong> (Prometheus Query Language) est le langage de requête de Prometheus. Il permet de sélectionner, filtrer, agréger et transformer les séries temporelles. C'est un langage fonctionnel puissant que nous détaillerons dans la section 6.</p>
+
+      <h3>2.4 - Architecture</h3>
+
+      <p>Voici le flux de données typique dans un stack de monitoring Prometheus + Grafana :</p>
+
+      <div class="arch-diagram">
+<pre>
+┌───────────────────────────────────────────────────────────────────────────┐
+│                        SOURCES DE MÉTRIQUES                              │
+│                                                                          │
+│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                   │
+│   │ Spring Boot  │  │  PostgreSQL  │  │    Redis     │                   │
+│   │  /actuator/  │  │  Exporter    │  │  Exporter    │                   │
+│   │  prometheus  │  │  :9187       │  │  :9121       │                   │
+│   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘                   │
+│          │                 │                  │                           │
+└──────────┼─────────────────┼──────────────────┼───────────────────────────┘
+           │    HTTP GET     │   HTTP GET        │   HTTP GET
+           │   /metrics      │  /metrics         │  /metrics
+           ▼                 ▼                   ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         PROMETHEUS SERVER                                 │
+│                                                                          │
+│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                   │
+│   │  Scraper     │─▶│   TSDB       │─▶│  Rule Engine │                   │
+│   │  (Pull)      │  │  (Storage)   │  │  (Alerting)  │                   │
+│   └──────────────┘  └──────┬───────┘  └──────┬───────┘                   │
+│                            │                  │                           │
+└────────────────────────────┼──────────────────┼───────────────────────────┘
+                             │ PromQL            │ Alertes
+                             ▼                   ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                      VISUALISATION &amp; ALERTING                            │
+│                                                                          │
+│   ┌──────────────┐                    ┌──────────────┐                   │
+│   │   GRAFANA    │                    │ Alertmanager │                   │
+│   │  Dashboards  │                    │ → Slack      │                   │
+│   │  Graphiques  │                    │ → Email      │                   │
+│   │  Alertes UI  │                    │ → PagerDuty  │                   │
+│   └──────────────┘                    └──────────────┘                   │
+│                                                                          │
+└───────────────────────────────────────────────────────────────────────────┘
+</pre>
+      </div>
+
+      <p>Le cycle est simple : Prometheus <strong>scrape</strong> les métriques → les <strong>stocke</strong> dans sa TSDB → Grafana les <strong>requête</strong> via PromQL pour les afficher dans des dashboards. En parallèle, le Rule Engine évalue des règles d'alerting et notifie Alertmanager en cas de problème.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 3. MICROMETER ═══════════════════════════════════════════ -->
+    <section>
+      <h2>3 - Instrumenter Spring Boot avec Micrometer</h2>
+
+      <p><strong>Micrometer</strong> est la bibliothèque de métriques de facto pour Spring Boot. C'est une <strong>façade</strong> - exactement comme SLF4J pour les logs - qui fournit une API unifiée pour instrumenter votre code, indépendamment du backend de monitoring (Prometheus, Datadog, New Relic, etc.).</p>
+
+      <h3>3.1 - Dépendances Maven</h3>
+
+      <p>Ajoutez ces deux dépendances à votre <code>pom.xml</code> :</p>
+
+<pre><code class="language-xml">&lt;dependencies&gt;
+    &lt;!-- Spring Boot Actuator - expose les endpoints de monitoring --&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+        &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+
+    &lt;!-- Micrometer Registry Prometheus - formate les métriques pour Prometheus --&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
+        &lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+&lt;/dependencies&gt;</code></pre>
+
+      <p>Spring Boot auto-configure automatiquement Micrometer quand ces dépendances sont présentes. Aucune configuration Java supplémentaire n'est nécessaire pour les métriques de base.</p>
+
+      <h3>3.2 - Configuration application.yml</h3>
+
+      <p>Configurez Spring Boot Actuator pour exposer l'endpoint Prometheus :</p>
+
+<pre><code class="language-yaml"># application.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: bmis-payment-service
+      environment: ${SPRING_PROFILES_ACTIVE:dev}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.95, 0.99
+      sla:
+        http.server.requests: 50ms, 100ms, 200ms, 500ms, 1s, 5s</code></pre>
+
+      <p>Points importants de cette configuration :</p>
+
+      <ul>
+        <li><code>exposure.include</code> - Liste les endpoints Actuator accessibles via HTTP. <code>prometheus</code> expose <code>/actuator/prometheus</code>.</li>
+        <li><code>metrics.tags</code> - Ajoute des labels globaux à <strong>toutes</strong> les métriques. Indispensable pour distinguer les services et les environnements dans Grafana.</li>
+        <li><code>percentiles-histogram</code> - Active les histogrammes pour les requêtes HTTP, permettant de calculer les percentiles (p50, p95, p99) côté Prometheus.</li>
+        <li><code>sla</code> - Définit des buckets SLA pour mesurer combien de requêtes répondent en moins de 50ms, 100ms, etc.</li>
+      </ul>
+
+      <p>Après configuration, l'endpoint est accessible à <code>http://localhost:8080/actuator/prometheus</code> :</p>
+
+<pre><code class="language-bash"># Tester l'endpoint localement
+curl http://localhost:8080/actuator/prometheus
+
+# Sortie (extrait) :
+# HELP jvm_memory_used_bytes The amount of used memory
+# TYPE jvm_memory_used_bytes gauge
+jvm_memory_used_bytes{area="heap",id="G1 Eden Space"} 2.5165824E7
+jvm_memory_used_bytes{area="heap",id="G1 Old Gen"} 1.8874368E7
+jvm_memory_used_bytes{area="heap",id="G1 Survivor Space"} 4194304.0
+# HELP http_server_requests_seconds Duration of HTTP server request handling
+# TYPE http_server_requests_seconds histogram
+http_server_requests_seconds_bucket{method="GET",status="200",uri="/api/payments",le="0.05"} 892
+http_server_requests_seconds_bucket{method="GET",status="200",uri="/api/payments",le="0.1"} 1203
+http_server_requests_seconds_bucket{method="GET",status="200",uri="/api/payments",le="0.5"} 1547</code></pre>
+
+      <h3>3.3 - Métriques exposées par défaut</h3>
+
+      <p>Sans écrire une seule ligne de code, Spring Boot + Micrometer expose automatiquement des dizaines de métriques :</p>
+
+      <ul>
+        <li><strong>JVM</strong> - Utilisation mémoire heap/non-heap, pauses GC, threads actifs, classes chargées</li>
+        <li><strong>HTTP</strong> - Nombre de requêtes, temps de réponse, distribution par status code et URI</li>
+        <li><strong>Connexions DB</strong> - Pool HikariCP : connexions actives, idle, pending, temps d'attente</li>
+        <li><strong>Cache</strong> - Hit/miss ratio pour les caches Caffeine, Redis, EhCache</li>
+        <li><strong>Tomcat</strong> - Threads actifs, sessions, requêtes en cours de traitement</li>
+        <li><strong>Logback</strong> - Nombre de logs par niveau (ERROR, WARN, INFO)</li>
+        <li><strong>System</strong> - CPU usage, file descriptors ouverts, uptime</li>
+      </ul>
+
+      <h3>3.4 - Métriques personnalisées</h3>
+
+      <p>Les métriques par défaut couvrent l'infrastructure, mais vos métriques <strong>business</strong> sont celles qui comptent vraiment. Voici comment créer des métriques personnalisées avec Micrometer :</p>
+
+      <h4>Counter - Compteur de paiements</h4>
+
+<pre><code class="language-java">import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.stereotype.Service;
+
+@Service
+public class PaymentService {
+
+    private final Counter paymentSuccessCounter;
+    private final Counter paymentFailureCounter;
+
+    public PaymentService(MeterRegistry registry) {
+        this.paymentSuccessCounter = Counter.builder("bmis_payments_total")
+            .description("Nombre total de paiements traités")
+            .tag("status", "success")
+            .register(registry);
+
+        this.paymentFailureCounter = Counter.builder("bmis_payments_total")
+            .description("Nombre total de paiements traités")
+            .tag("status", "failure")
+            .register(registry);
+    }
+
+    public PaymentResponse processPayment(PaymentRequest request) {
+        try {
+            PaymentResponse response = executePayment(request);
+            paymentSuccessCounter.increment();
+            return response;
+        } catch (PaymentException e) {
+            paymentFailureCounter.increment();
+            throw e;
+        }
+    }
+}</code></pre>
+
+      <h4>Gauge - Utilisateurs actifs</h4>
+
+<pre><code class="language-java">import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+@Component
+public class ActiveUsersTracker {
+
+    private final AtomicInteger activeUsers = new AtomicInteger(0);
+
+    public ActiveUsersTracker(MeterRegistry registry) {
+        Gauge.builder("bmis_active_users", activeUsers, AtomicInteger::get)
+            .description("Nombre d'utilisateurs actuellement connectés")
+            .tag("service", "payment-service")
+            .register(registry);
+    }
+
+    public void userConnected() {
+        activeUsers.incrementAndGet();
+    }
+
+    public void userDisconnected() {
+        activeUsers.decrementAndGet();
+    }
+}</code></pre>
+
+      <h4>Timer - Temps de réponse d'une API externe</h4>
+
+<pre><code class="language-java">import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ExternalBankingService {
+
+    private final Timer bankApiTimer;
+
+    public ExternalBankingService(MeterRegistry registry) {
+        this.bankApiTimer = Timer.builder("bmis_bank_api_duration_seconds")
+            .description("Temps de réponse de l'API bancaire externe")
+            .tag("provider", "stripe")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .publishPercentileHistogram()
+            .register(registry);
+    }
+
+    public BankResponse callBankApi(TransferRequest request) {
+        return bankApiTimer.record(() -&gt; {
+            // Appel HTTP vers l'API bancaire
+            return restTemplate.postForObject(
+                "https://api.stripe.com/v1/transfers",
+                request,
+                BankResponse.class
+            );
+        });
+    }
+}</code></pre>
+
+      <h4>Distribution Summary - Montants des transactions</h4>
+
+<pre><code class="language-java">import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.stereotype.Service;
+
+@Service
+public class TransactionMetrics {
+
+    private final DistributionSummary transactionAmounts;
+
+    public TransactionMetrics(MeterRegistry registry) {
+        this.transactionAmounts = DistributionSummary
+            .builder("bmis_transaction_amount")
+            .description("Distribution des montants de transactions")
+            .baseUnit("EUR")
+            .publishPercentiles(0.5, 0.75, 0.95)
+            .register(registry);
+    }
+
+    public void recordTransaction(double amount) {
+        transactionAmounts.record(amount);
+    }
+}</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 4. MÉTRIQUES CLÉS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>4 - Métriques clés à surveiller</h2>
+
+      <p>Toutes les métriques ne se valent pas. Voici les métriques <strong>critiques</strong> à surveiller pour un système fintech en production, organisées par catégorie :</p>
+
+      <h3>4.1 - Métriques JVM</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Métrique Prometheus</th>
+            <th>Description</th>
+            <th>Seuil d'alerte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>jvm_memory_used_bytes{area="heap"}</code></td>
+            <td>Mémoire heap utilisée par la JVM</td>
+            <td>&gt; 80% du max</td>
+          </tr>
+          <tr>
+            <td><code>jvm_gc_pause_seconds_sum</code></td>
+            <td>Temps total passé en pauses GC</td>
+            <td>&gt; 500ms sur 5 min</td>
+          </tr>
+          <tr>
+            <td><code>jvm_threads_live_threads</code></td>
+            <td>Nombre de threads actifs</td>
+            <td>&gt; 300 threads</td>
+          </tr>
+          <tr>
+            <td><code>jvm_memory_used_bytes{area="nonheap"}</code></td>
+            <td>Mémoire non-heap (Metaspace, code cache)</td>
+            <td>&gt; 90% du max</td>
+          </tr>
+          <tr>
+            <td><code>jvm_classes_loaded_classes</code></td>
+            <td>Nombre de classes chargées (détection de class leak)</td>
+            <td>Croissance continue</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.2 - Métriques HTTP</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Métrique Prometheus</th>
+            <th>Description</th>
+            <th>Seuil d'alerte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>rate(http_server_requests_seconds_count[5m])</code></td>
+            <td>Taux de requêtes par seconde</td>
+            <td>Variation &gt; 50%</td>
+          </tr>
+          <tr>
+            <td><code>rate(http_server_requests_seconds_count{status=~"5.."}[5m])</code></td>
+            <td>Taux d'erreurs 5xx par seconde</td>
+            <td>&gt; 1% du trafic total</td>
+          </tr>
+          <tr>
+            <td><code>histogram_quantile(0.95, ...http_server_requests_seconds_bucket...)</code></td>
+            <td>Latence p95 - 95% des requêtes répondent en moins de X</td>
+            <td>&gt; 500ms</td>
+          </tr>
+          <tr>
+            <td><code>histogram_quantile(0.99, ...http_server_requests_seconds_bucket...)</code></td>
+            <td>Latence p99 - les 1% les plus lentes</td>
+            <td>&gt; 2s</td>
+          </tr>
+          <tr>
+            <td><code>histogram_quantile(0.50, ...http_server_requests_seconds_bucket...)</code></td>
+            <td>Latence médiane (p50)</td>
+            <td>&gt; 100ms</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.3 - Métriques Base de Données</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Métrique Prometheus</th>
+            <th>Description</th>
+            <th>Seuil d'alerte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>hikaricp_connections_active</code></td>
+            <td>Connexions DB actuellement utilisées</td>
+            <td>&gt; 80% du pool</td>
+          </tr>
+          <tr>
+            <td><code>hikaricp_connections_idle</code></td>
+            <td>Connexions DB inactives dans le pool</td>
+            <td>&lt; 2</td>
+          </tr>
+          <tr>
+            <td><code>hikaricp_connections_pending</code></td>
+            <td>Threads en attente d'une connexion</td>
+            <td>&gt; 0 pendant &gt; 30s</td>
+          </tr>
+          <tr>
+            <td><code>hikaricp_connections_timeout_total</code></td>
+            <td>Nombre de timeouts de connexion</td>
+            <td>&gt; 0</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.4 - Métriques Redis</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Métrique Prometheus</th>
+            <th>Description</th>
+            <th>Seuil d'alerte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>redis_keyspace_hits_total</code></td>
+            <td>Nombre de cache hits</td>
+            <td>Hit ratio &lt; 80%</td>
+          </tr>
+          <tr>
+            <td><code>redis_keyspace_misses_total</code></td>
+            <td>Nombre de cache misses</td>
+            <td>-</td>
+          </tr>
+          <tr>
+            <td><code>redis_connected_clients</code></td>
+            <td>Nombre de clients connectés</td>
+            <td>&gt; 500</td>
+          </tr>
+          <tr>
+            <td><code>redis_memory_used_bytes</code></td>
+            <td>Mémoire utilisée par Redis</td>
+            <td>&gt; 80% de maxmemory</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.5 - Métriques Business (Fintech)</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Métrique Prometheus</th>
+            <th>Description</th>
+            <th>Seuil d'alerte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>bmis_payments_total{status="success"}</code></td>
+            <td>Nombre total de paiements réussis</td>
+            <td>Chute &gt; 30%</td>
+          </tr>
+          <tr>
+            <td><code>bmis_payments_total{status="failure"}</code></td>
+            <td>Nombre total de paiements échoués</td>
+            <td>&gt; 5% du total</td>
+          </tr>
+          <tr>
+            <td><code>bmis_transaction_amount</code></td>
+            <td>Montant moyen des transactions</td>
+            <td>Variation anormale</td>
+          </tr>
+          <tr>
+            <td><code>bmis_active_users</code></td>
+            <td>Utilisateurs actuellement connectés</td>
+            <td>Chute soudaine</td>
+          </tr>
+          <tr>
+            <td><code>bmis_user_registrations_total</code></td>
+            <td>Nombre d'inscriptions utilisateurs</td>
+            <td>Chute &gt; 50%</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 5. DÉPLOYER PROMETHEUS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>5 - Déployer Prometheus sur Kubernetes</h2>
+
+      <p>Il existe deux approches pour déployer Prometheus sur Kubernetes : le <strong>Helm chart kube-prometheus-stack</strong> (recommandé pour la production) et le <strong>déploiement manuel</strong> (utile pour comprendre les composants).</p>
+
+      <h3>5.1 - Option A : kube-prometheus-stack (Helm)</h3>
+
+      <p>Le chart <code>kube-prometheus-stack</code> déploie en une seule commande : Prometheus, Grafana, Alertmanager, Node Exporter, kube-state-metrics, et les ServiceMonitors pré-configurés pour Kubernetes.</p>
+
+<pre><code class="language-bash"># Ajouter le repo Helm
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Créer le namespace
+kubectl create namespace monitoring
+
+# Installer le stack complet
+helm install kube-prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --set grafana.adminPassword=BmisSecure2024! \
+  --set prometheus.prometheusSpec.retention=30d \
+  --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi \
+  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+  --set alertmanager.alertmanagerSpec.storage.volumeClaimTemplate.spec.resources.requests.storage=10Gi
+
+# Vérifier que tout est déployé
+kubectl get pods -n monitoring
+# NAME                                                     READY   STATUS    RESTARTS
+# kube-prometheus-grafana-5d4c7b8f9-x2k8j                 3/3     Running   0
+# kube-prometheus-kube-state-metrics-7c8b9d6f4-m9n3l       1/1     Running   0
+# kube-prometheus-prometheus-node-exporter-abcde            1/1     Running   0
+# prometheus-kube-prometheus-prometheus-0                   2/2     Running   0
+# alertmanager-kube-prometheus-alertmanager-0               2/2     Running   0</code></pre>
+
+      <h3>5.2 - Option B : Déploiement manuel</h3>
+
+      <p>Pour comprendre chaque composant, voici le déploiement manuel complet.</p>
+
+      <h4>Namespace et ConfigMap</h4>
+
+<pre><code class="language-yaml"># monitoring-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/part-of: monitoring-stack
+---
+# prometheus-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      scrape_timeout: 10s
+
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+
+    scrape_configs:
+      # Prometheus se scrape lui-même
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Scraper les pods Kubernetes avec les annotations appropriées
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Garder uniquement les pods annotés prometheus.io/scrape: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          # Utiliser le port défini dans l'annotation prometheus.io/port
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: (.+)
+            replacement: ${1}
+          # Utiliser le path défini dans prometheus.io/path (défaut: /metrics)
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # Ajouter des labels pour identifier le namespace et le pod
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: app
+
+      # Scraper les services Spring Boot
+      - job_name: 'spring-boot-services'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - bmis-fintech
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: (.+?)(?::\d+)?;(\d+)
+            replacement: $1:$2
+          - source_labels: [__meta_kubernetes_service_name]
+            action: replace
+            target_label: service_name</code></pre>
+
+      <h4>Deployment et Service Prometheus</h4>
+
+<pre><code class="language-yaml"># prometheus-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.51.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time=30d"
+            - "--storage.tsdb.retention.size=45GB"
+            - "--web.enable-lifecycle"
+            - "--web.enable-admin-api"
+          ports:
+            - containerPort: 9090
+              name: web
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: rules
+              mountPath: /etc/prometheus/rules
+            - name: storage
+              mountPath: /prometheus
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: rules
+          configMap:
+            name: prometheus-rules
+            optional: true
+        - name: storage
+          persistentVolumeClaim:
+            claimName: prometheus-storage
+---
+# prometheus-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: web
+  selector:
+    app: prometheus
+---
+# prometheus-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-storage
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard</code></pre>
+
+      <h4>RBAC - ServiceAccount et ClusterRole</h4>
+
+<pre><code class="language-yaml"># prometheus-rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: prometheus
+  apiGroup: rbac.authorization.k8s.io</code></pre>
+
+      <h3>5.3 - ServiceMonitor pour Spring Boot</h3>
+
+      <p>Si vous utilisez le <code>kube-prometheus-stack</code>, le moyen recommandé de configurer le scraping est via un <strong>ServiceMonitor CRD</strong> (Custom Resource Definition) :</p>
+
+<pre><code class="language-yaml"># servicemonitor-spring-boot.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: bmis-payment-service
+  namespace: monitoring
+  labels:
+    release: kube-prometheus   # Doit correspondre au label du Helm release
+spec:
+  namespaceSelector:
+    matchNames:
+      - bmis-fintech
+  selector:
+    matchLabels:
+      app: payment-service
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: true
+---
+# ServiceMonitor pour tous les services Spring Boot du namespace
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: bmis-all-spring-services
+  namespace: monitoring
+  labels:
+    release: kube-prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - bmis-fintech
+  selector:
+    matchLabels:
+      framework: spring-boot
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s</code></pre>
+
+      <p>Pour que le ServiceMonitor fonctionne, vos Services Kubernetes doivent avoir les labels correspondants :</p>
+
+<pre><code class="language-yaml"># payment-service-k8s.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: bmis-fintech
+  labels:
+    app: payment-service
+    framework: spring-boot
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/port: "8080"
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: payment-service</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 6. PROMQL ═══════════════════════════════════════════ -->
+    <section>
+      <h2>6 - PromQL - Le langage de requête</h2>
+
+      <p>PromQL est le cœur de Prometheus. Maîtriser PromQL est <strong>indispensable</strong> pour créer des dashboards pertinents et des alertes efficaces. Voici les requêtes essentielles pour un système Spring Boot en production.</p>
+
+      <h3>6.1 - Taux de requêtes HTTP (Request Rate)</h3>
+
+<pre><code class="language-promql"># Nombre de requêtes HTTP par seconde (toutes les routes)
+rate(http_server_requests_seconds_count[5m])
+
+# Taux de requêtes pour un endpoint spécifique
+rate(http_server_requests_seconds_count{uri="/api/payments"}[5m])
+
+# Taux d'erreurs 5xx uniquement
+rate(http_server_requests_seconds_count{status=~"5.."}[5m])</code></pre>
+
+      <p>La fonction <code>rate()</code> calcule le taux de variation par seconde d'un compteur sur une fenêtre temporelle (ici 5 minutes). C'est la fonction la plus utilisée en PromQL.</p>
+
+      <h3>6.2 - Latence (Percentiles)</h3>
+
+<pre><code class="language-promql"># Latence p95 - 95% des requêtes répondent en moins de X secondes
+histogram_quantile(0.95,
+  rate(http_server_requests_seconds_bucket[5m])
+)
+
+# Latence p99 - les 1% les plus lentes
+histogram_quantile(0.99,
+  rate(http_server_requests_seconds_bucket[5m])
+)
+
+# Latence p95 par endpoint
+histogram_quantile(0.95,
+  sum by (uri, le) (
+    rate(http_server_requests_seconds_bucket[5m])
+  )
+)
+
+# Latence moyenne (moins utile que les percentiles, mais simple)
+rate(http_server_requests_seconds_sum[5m])
+  /
+rate(http_server_requests_seconds_count[5m])</code></pre>
+
+      <div class="callout info">
+        <strong>Pourquoi les percentiles et pas la moyenne ?</strong> - La moyenne est trompeuse. Si 99% de vos requêtes répondent en 10ms mais 1% en 10 secondes, la moyenne sera ~110ms - ce qui semble correct. Mais 1% de vos utilisateurs ont une expérience catastrophique. Le p99 (10 secondes) révèle le vrai problème.
+      </div>
+
+      <h3>6.3 - Taux d'erreurs</h3>
+
+<pre><code class="language-promql"># Pourcentage d'erreurs HTTP (error rate)
+sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+  /
+sum(rate(http_server_requests_seconds_count[5m]))
+  * 100
+
+# Taux d'erreurs par service
+sum by (application) (
+  rate(http_server_requests_seconds_count{status=~"5.."}[5m])
+)
+  /
+sum by (application) (
+  rate(http_server_requests_seconds_count[5m])
+)
+  * 100
+
+# Répartition par code de statut HTTP
+sum by (status) (
+  rate(http_server_requests_seconds_count[5m])
+)</code></pre>
+
+      <h3>6.4 - Métriques JVM</h3>
+
+<pre><code class="language-promql"># Utilisation mémoire heap en pourcentage
+jvm_memory_used_bytes{area="heap"}
+  /
+jvm_memory_max_bytes{area="heap"}
+  * 100
+
+# Taux de pauses GC (secondes de pause par seconde)
+rate(jvm_gc_pause_seconds_sum[5m])
+
+# Nombre de threads actifs
+jvm_threads_live_threads</code></pre>
+
+      <h3>6.5 - Métriques Database (HikariCP)</h3>
+
+<pre><code class="language-promql"># Utilisation du pool de connexions en pourcentage
+hikaricp_connections_active
+  /
+(hikaricp_connections_active + hikaricp_connections_idle)
+  * 100
+
+# Temps d'attente moyen pour obtenir une connexion
+rate(hikaricp_connections_acquire_seconds_sum[5m])
+  /
+rate(hikaricp_connections_acquire_seconds_count[5m])
+
+# Nombre de connexions en timeout
+rate(hikaricp_connections_timeout_total[5m])</code></pre>
+
+      <h3>6.6 - Métriques Business</h3>
+
+<pre><code class="language-promql"># Taux de paiements réussis vs échoués
+rate(bmis_payments_total{status="success"}[5m])
+rate(bmis_payments_total{status="failure"}[5m])
+
+# Taux de succès des paiements (en pourcentage)
+sum(rate(bmis_payments_total{status="success"}[5m]))
+  /
+sum(rate(bmis_payments_total[5m]))
+  * 100
+
+# Montant moyen des transactions (dernières 5 minutes)
+rate(bmis_transaction_amount_sum[5m])
+  /
+rate(bmis_transaction_amount_count[5m])
+
+# Utilisateurs actifs (valeur instantanée)
+bmis_active_users</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 7. GRAFANA ═══════════════════════════════════════════ -->
+    <section>
+      <h2>7 - Grafana - Dashboards</h2>
+
+      <p>Grafana est la couche de <strong>visualisation</strong>. Prometheus stocke et requête les données - Grafana les transforme en graphiques, jauges, heatmaps et tableaux interactifs. C'est l'outil que vos équipes ops et business utiliseront quotidiennement.</p>
+
+      <h3>7.1 - Déployer Grafana sur Kubernetes</h3>
+
+      <p>Si vous utilisez le <code>kube-prometheus-stack</code>, Grafana est déjà déployé. Sinon, voici le déploiement manuel :</p>
+
+<pre><code class="language-yaml"># grafana-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.4.1
+          ports:
+            - containerPort: 3000
+              name: web
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-secret
+                  key: admin-password
+            - name: GF_INSTALL_PLUGINS
+              value: "grafana-piechart-panel,grafana-clock-panel"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: grafana-storage
+              mountPath: /var/lib/grafana
+            - name: grafana-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+      volumes:
+        - name: grafana-storage
+          persistentVolumeClaim:
+            claimName: grafana-storage
+        - name: grafana-datasources
+          configMap:
+            name: grafana-datasource-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: web
+  selector:
+    app: grafana
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-storage
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi</code></pre>
+
+      <h3>7.2 - Configurer Prometheus comme Data Source</h3>
+
+      <p>La data source peut être provisionnée automatiquement via un ConfigMap :</p>
+
+<pre><code class="language-yaml"># grafana-datasource-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-config
+  namespace: monitoring
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.monitoring.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: 15s
+          httpMethod: POST</code></pre>
+
+      <h3>7.3 - Dashboards pré-construits</h3>
+
+      <p>Grafana dispose d'une bibliothèque de milliers de dashboards communautaires. Voici les plus utiles pour un stack Spring Boot :</p>
+
+      <ul>
+        <li><strong>JVM (Micrometer) - ID 4701</strong> - Heap memory, GC activity, threads, class loading. Le dashboard de référence pour monitorer la JVM.</li>
+        <li><strong>Spring Boot Statistics - ID 12900</strong> - Vue complète des métriques Spring Boot : HTTP requests, HikariCP, Tomcat, cache metrics.</li>
+        <li><strong>Node Exporter Full - ID 1860</strong> - Métriques système du nœud : CPU, RAM, disque, réseau.</li>
+        <li><strong>Kubernetes Cluster - ID 7249</strong> - Vue globale du cluster : pods, deployments, resource usage.</li>
+      </ul>
+
+<pre><code class="language-bash"># Importer un dashboard via l'API Grafana
+# 1. Accéder à Grafana
+kubectl port-forward svc/grafana -n monitoring 3000:3000
+
+# 2. Dans l'interface : Dashboards → Import → Entrer l'ID → Load → Select data source → Import
+
+# Ou via l'API :
+curl -X POST http://admin:password@localhost:3000/api/dashboards/import \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dashboard": { "id": 4701 },
+    "overwrite": true,
+    "inputs": [{
+      "name": "DS_PROMETHEUS",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "value": "Prometheus"
+    }]
+  }'</code></pre>
+
+      <h3>7.4 - Dashboard Fintech personnalisé</h3>
+
+      <p>Les dashboards communautaires couvrent les métriques techniques. Pour les métriques business, créez un dashboard personnalisé. Voici les panels essentiels :</p>
+
+      <h4>Panel 1 - Taux de succès des paiements (Stat Panel)</h4>
+
+<pre><code class="language-yaml"># Requête PromQL :
+# sum(rate(bmis_payments_total{status="success"}[5m]))
+#   /
+# sum(rate(bmis_payments_total[5m]))
+#   * 100
+#
+# Configuration :
+#   Type: Stat
+#   Unit: Percent (0-100)
+#   Thresholds:
+#     - Green: > 99%
+#     - Orange: > 95%
+#     - Red: < 95%
+#   Title: "Taux de succès paiements"</code></pre>
+
+      <h4>Panel 2 - Heatmap temps de réponse API</h4>
+
+<pre><code class="language-yaml"># Requête PromQL :
+# sum(increase(http_server_requests_seconds_bucket{uri=~"/api/.*"}[1m])) by (le)
+#
+# Configuration :
+#   Type: Heatmap
+#   Y Axis: le (bucket boundaries)
+#   Color scheme: Spectral (reversed)
+#   Title: "Distribution latence API"</code></pre>
+
+      <h4>Panel 3 - Utilisateurs actifs (Gauge)</h4>
+
+<pre><code class="language-yaml"># Requête PromQL :
+# bmis_active_users
+#
+# Configuration :
+#   Type: Gauge
+#   Min: 0
+#   Max: 10000
+#   Thresholds:
+#     - Green: 0 - 5000
+#     - Orange: 5000 - 8000
+#     - Red: 8000 - 10000
+#   Title: "Utilisateurs actifs"</code></pre>
+
+      <h4>Panel 4 - Volume de transactions (Time Series)</h4>
+
+<pre><code class="language-yaml"># Requête PromQL :
+# sum(rate(bmis_payments_total[5m])) * 60
+#
+# Configuration :
+#   Type: Time Series
+#   Unit: transactions/min
+#   Legend: Transactions par minute
+#   Fill opacity: 20
+#   Title: "Volume de transactions"</code></pre>
+
+      <h3>7.5 - Dashboard JSON provisionné</h3>
+
+      <p>Pour versionner vos dashboards dans Git et les déployer automatiquement, utilisez le provisioning Grafana :</p>
+
+<pre><code class="language-yaml"># grafana-dashboard-provisioner.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'bmis-fintech'
+        orgId: 1
+        folder: 'BMIS Fintech'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/bmis
+          foldersFromFilesStructure: true
+---
+# grafana-dashboard-fintech.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-fintech
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  bmis-fintech-overview.json: |
+    {
+      "dashboard": {
+        "title": "BMIS Fintech - Vue d'ensemble",
+        "tags": ["bmis", "fintech", "production"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "panels": [
+          {
+            "title": "Taux de succès paiements",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+            "targets": [{
+              "expr": "sum(rate(bmis_payments_total{status=\"success\"}[5m])) / sum(rate(bmis_payments_total[5m])) * 100",
+              "legendFormat": "Success Rate"
+            }],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "thresholds": {
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "orange", "value": 95 },
+                    { "color": "green", "value": 99 }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "title": "Latence p95 API",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+            "targets": [{
+              "expr": "histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_bucket{uri=~\"/api/.*\"}[5m])))",
+              "legendFormat": "{{ uri }}"
+            }],
+            "fieldConfig": {
+              "defaults": { "unit": "s" }
+            }
+          },
+          {
+            "title": "Utilisateurs actifs",
+            "type": "gauge",
+            "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+            "targets": [{
+              "expr": "bmis_active_users",
+              "legendFormat": "Active Users"
+            }],
+            "fieldConfig": {
+              "defaults": {
+                "min": 0,
+                "max": 10000,
+                "thresholds": {
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 5000 },
+                    { "color": "red", "value": 8000 }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "title": "Volume transactions/min",
+            "type": "timeseries",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+            "targets": [{
+              "expr": "sum(rate(bmis_payments_total[5m])) * 60",
+              "legendFormat": "Transactions/min"
+            }],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "custom": { "fillOpacity": 20 }
+              }
+            }
+          }
+        ]
+      }
+    }</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 8. BUSINESS VS TECHNIQUES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>8 - Métriques business vs techniques</h2>
+
+      <div class="callout info">
+        <strong>Les métriques techniques ne suffisent pas.</strong>
+
+        <p>La plupart des équipes se concentrent exclusivement sur les métriques <strong>techniques</strong> : CPU, mémoire, latence, taux d'erreur. Ces métriques sont essentielles pour les ingénieurs, mais elles ne disent rien aux stakeholders business.</p>
+
+        <p><strong>Métriques techniques</strong> (pour l'équipe ops) :</p>
+        <ul>
+          <li>Utilisation CPU/mémoire par pod</li>
+          <li>Latence p95 des requêtes HTTP</li>
+          <li>Taux d'erreurs 5xx</li>
+          <li>Utilisation du pool de connexions DB</li>
+          <li>Temps de pause GC</li>
+        </ul>
+
+        <p><strong>Métriques business</strong> (pour les stakeholders) :</p>
+        <ul>
+          <li>Revenu par heure / par jour</li>
+          <li>Taux de conversion (visiteur → inscription → premier paiement)</li>
+          <li>Taux d'échec des paiements par provider</li>
+          <li>Nombre de transactions par minute</li>
+          <li>Montant moyen des transactions</li>
+          <li>Nombre d'utilisateurs actifs en temps réel</li>
+        </ul>
+
+        <p>Un système peut avoir un CPU à 20%, une latence p95 de 50ms, et zéro erreur 5xx - et pourtant perdre de l'argent parce que le taux d'échec des paiements est à 15% (erreurs gérées côté applicatif, pas des 5xx). Les métriques business détectent les problèmes que les métriques techniques ne voient pas.</p>
+
+        <p><strong>Règle d'or :</strong> Chaque dashboard Grafana devrait avoir une section "Business KPIs" visible en premier. Les dirigeants ne comprendront pas un graphique de pauses GC, mais ils comprendront "Revenu en baisse de 30% depuis 14h".</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 9. RECORDING RULES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>9 - Recording Rules</h2>
+
+      <p>Certaines requêtes PromQL sont <strong>coûteuses</strong> en calcul. Par exemple, calculer le p95 de latence sur toutes les routes, agrégé par service, nécessite de scanner des millions de points de données. Si Grafana exécute cette requête toutes les 30 secondes pour chaque panel, Prometheus sera surchargé.</p>
+
+      <p>Les <strong>Recording Rules</strong> pré-calculent ces requêtes à intervalles réguliers et stockent le résultat comme une nouvelle série temporelle. Les dashboards Grafana requêtent ensuite cette série pré-calculée - instantanément.</p>
+
+      <h3>9.1 - Syntaxe YAML</h3>
+
+<pre><code class="language-yaml"># prometheus-recording-rules.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  recording-rules.yml: |
+    groups:
+      - name: bmis_http_rules
+        interval: 30s
+        rules:
+          # Taux de requêtes HTTP par service (pré-calculé)
+          - record: bmis:http_request_rate:5m
+            expr: sum by (application, uri) (rate(http_server_requests_seconds_count[5m]))
+
+          # Latence p95 par endpoint (pré-calculé)
+          - record: bmis:http_latency_p95:5m
+            expr: |
+              histogram_quantile(0.95,
+                sum by (application, uri, le) (
+                  rate(http_server_requests_seconds_bucket[5m])
+                )
+              )
+
+          # Latence p99 par endpoint (pré-calculé)
+          - record: bmis:http_latency_p99:5m
+            expr: |
+              histogram_quantile(0.99,
+                sum by (application, uri, le) (
+                  rate(http_server_requests_seconds_bucket[5m])
+                )
+              )
+
+          # Taux d'erreurs HTTP global (pré-calculé)
+          - record: bmis:http_error_rate:5m
+            expr: |
+              sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+                /
+              sum by (application) (rate(http_server_requests_seconds_count[5m]))
+
+      - name: bmis_jvm_rules
+        interval: 30s
+        rules:
+          # Utilisation heap en pourcentage (pré-calculé)
+          - record: bmis:jvm_heap_usage_percent
+            expr: |
+              jvm_memory_used_bytes{area="heap"}
+                /
+              jvm_memory_max_bytes{area="heap"}
+                * 100
+
+          # Taux de pauses GC (pré-calculé)
+          - record: bmis:jvm_gc_pause_rate:5m
+            expr: rate(jvm_gc_pause_seconds_sum[5m])
+
+      - name: bmis_business_rules
+        interval: 30s
+        rules:
+          # Taux de succès des paiements (pré-calculé)
+          - record: bmis:payment_success_rate:5m
+            expr: |
+              sum(rate(bmis_payments_total{status="success"}[5m]))
+                /
+              sum(rate(bmis_payments_total[5m]))
+                * 100
+
+          # Volume de transactions par minute (pré-calculé)
+          - record: bmis:transactions_per_minute:5m
+            expr: sum(rate(bmis_payments_total[5m])) * 60</code></pre>
+
+      <h3>9.2 - Quand utiliser les Recording Rules</h3>
+
+      <ul>
+        <li><strong>Requêtes utilisées dans plusieurs dashboards</strong> - Si la même requête PromQL apparaît dans 5 panels différents, pré-calculez-la une seule fois.</li>
+        <li><strong>Requêtes coûteuses avec <code>histogram_quantile</code></strong> - Les percentiles sur les histogrammes sont les plus gourmandes en CPU.</li>
+        <li><strong>Agrégations cross-service</strong> - Les requêtes qui agrègent des données de tous les services à la fois.</li>
+        <li><strong>Requêtes utilisées dans les alertes</strong> - Les alertes sont évaluées fréquemment. Utilisez une recording rule pour éviter de surcharger Prometheus.</li>
+      </ul>
+
+      <p>Dans Grafana, remplacez simplement la requête complexe par le nom de la recording rule :</p>
+
+<pre><code class="language-promql"># Au lieu de :
+histogram_quantile(0.95, sum by (application, uri, le) (rate(http_server_requests_seconds_bucket[5m])))
+
+# Utilisez :
+bmis:http_latency_p95:5m</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 10. ERREURS COURANTES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>10 - Erreurs courantes</h2>
+
+      <div class="callout bad">
+        <strong>Erreurs à éviter absolument :</strong>
+
+        <p><strong>1. Trop de métriques personnalisées</strong> - Chaque métrique consomme de la mémoire dans Prometheus. 100 métriques bien choisies valent mieux que 10 000 métriques jamais consultées. Concentrez-vous sur les métriques qui déclenchent des <strong>actions</strong>. Si une métrique n'a jamais déclenché d'alerte ou d'investigation en 6 mois, supprimez-la.</p>
+
+        <p><strong>2. Pas de Recording Rules</strong> - Les dashboards Grafana avec des requêtes PromQL complexes (notamment <code>histogram_quantile</code>) peuvent mettre Prometheus à genoux. Pré-calculez les requêtes fréquentes avec des recording rules. Votre Prometheus passera de 80% CPU à 15%.</p>
+
+        <p><strong>3. Ignorer les métriques business</strong> - Monitorer CPU et mémoire ne sert à rien si vous ne savez pas que vos paiements échouent à 20%. Les métriques business (revenu, transactions, conversions) sont celles qui comptent pour votre entreprise. Ajoutez-les en premier.</p>
+
+        <p><strong>4. Labels à haute cardinalité</strong> - Ajouter un label <code>user_id</code> à une métrique crée une série temporelle par utilisateur. Avec 100 000 utilisateurs, c'est 100 000 séries - Prometheus sera saturé. Les labels doivent avoir une cardinalité <strong>faible et bornée</strong> : <code>status</code>, <code>method</code>, <code>service</code>, <code>environment</code> - jamais <code>user_id</code>, <code>request_id</code>, ou <code>transaction_id</code>.</p>
+
+        <p><strong>5. Pas de rétention configurée</strong> - Par défaut, Prometheus garde les données 15 jours. En production, configurez une rétention adaptée (30-90 jours) avec <code>--storage.tsdb.retention.time</code> et un <code>--storage.tsdb.retention.size</code> pour éviter de remplir le disque.</p>
+
+        <p><strong>6. Scrape interval trop court</strong> - Un scrape toutes les 5 secondes génère 12× plus de données qu'un scrape toutes les 60 secondes. 15 secondes est un bon compromis pour la plupart des cas. N'utilisez 5 secondes que pour les métriques critiques (paiements en temps réel).</p>
+
+        <p><strong>7. Ignorer les métriques par défaut de Micrometer</strong> - Ne réinventez pas la roue. Spring Boot expose déjà des dizaines de métriques JVM, HTTP et DB. Utilisez-les avant de créer des métriques personnalisées.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 11. BEST PRACTICES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>11 - Best Practices</h2>
+
+      <div class="callout tip">
+        <strong>Méthode USE (Utilization, Saturation, Errors)</strong> - Pour chaque <strong>ressource</strong> (CPU, mémoire, disque, réseau, pool de connexions) :
+        <ul>
+          <li><strong>Utilization</strong> - Quel pourcentage de la ressource est utilisé ? (ex : CPU à 75%)</li>
+          <li><strong>Saturation</strong> - La ressource est-elle en file d'attente ? (ex : 5 threads en attente d'une connexion DB)</li>
+          <li><strong>Errors</strong> - Des erreurs se produisent-elles ? (ex : timeouts de connexion DB)</li>
+        </ul>
+        Appliquez USE à chaque couche : JVM, application, base de données, cache, réseau.
+      </div>
+
+      <div class="callout tip">
+        <strong>Méthode RED (Rate, Errors, Duration)</strong> - Pour chaque <strong>service</strong> (API endpoint, microservice) :
+        <ul>
+          <li><strong>Rate</strong> - Combien de requêtes par seconde ? (ex : 500 req/s sur <code>/api/payments</code>)</li>
+          <li><strong>Errors</strong> - Quel pourcentage de requêtes échoue ? (ex : 2% d'erreurs 5xx)</li>
+          <li><strong>Duration</strong> - Combien de temps prennent les requêtes ? (ex : p95 = 200ms)</li>
+        </ul>
+        RED est complémentaire à USE. USE pour les ressources, RED pour les services.
+      </div>
+
+      <div class="callout tip">
+        <strong>Les 4 Golden Signals (Google SRE)</strong> - Google définit quatre signaux essentiels pour tout système distribué :
+        <ul>
+          <li><strong>Latency</strong> - Le temps pour traiter une requête (distinguer les requêtes réussies des échouées)</li>
+          <li><strong>Traffic</strong> - La demande sur le système (requêtes/seconde, transactions/minute)</li>
+          <li><strong>Errors</strong> - Le taux de requêtes qui échouent (explicites 5xx + implicites comme les timeouts)</li>
+          <li><strong>Saturation</strong> - À quel point le système est "plein" (queue depth, CPU, mémoire)</li>
+        </ul>
+        Si vous ne pouvez monitorer que 4 choses, monitorez les Golden Signals.
+      </div>
+
+      <div class="callout tip">
+        <strong>Nommage des métriques</strong> - Suivez les conventions Prometheus :
+        <ul>
+          <li>Préfixe avec le nom de l'application : <code>bmis_</code></li>
+          <li>Suffixe avec l'unité : <code>_seconds</code>, <code>_bytes</code>, <code>_total</code></li>
+          <li>Les compteurs finissent par <code>_total</code> : <code>bmis_payments_total</code></li>
+          <li>Utilisez des snake_case : <code>http_server_requests_seconds</code></li>
+          <li>Soyez descriptif : <code>bmis_bank_api_duration_seconds</code> plutôt que <code>bank_time</code></li>
+        </ul>
+      </div>
+
+      <div class="callout tip">
+        <strong>Dashboard Hierarchy</strong> - Organisez vos dashboards en 3 niveaux :
+        <ul>
+          <li><strong>Niveau 1 - Overview</strong> : Vue globale du système (tous les services, KPIs business). C'est ce que le CTO regarde.</li>
+          <li><strong>Niveau 2 - Service</strong> : Détails d'un service spécifique (payment-service, user-service). Pour l'équipe du service.</li>
+          <li><strong>Niveau 3 - Debug</strong> : Métriques JVM, GC, pool DB, cache. Pour le debugging et le post-mortem.</li>
+        </ul>
+        Utilisez les variables Grafana (<code>$service</code>, <code>$namespace</code>) pour naviguer entre les niveaux avec des drill-down links.
+      </div>
+
+      <div class="callout tip">
+        <strong>Versionner les dashboards</strong> - Exportez vos dashboards Grafana en JSON et stockez-les dans Git. Provisionnez-les automatiquement via des ConfigMaps Kubernetes. Cela garantit que vos dashboards sont reproductibles, reviewables, et ne sont jamais perdus.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ NAV FOOTER ═══════════════════════════════════════════ -->
+    <div class="lesson-nav">
+      <a href="09-cicd-github-actions.html">
+        <span class="nav-dir">← Leçon précédente</span>
+        <span class="nav-title">Pipeline GitHub Actions</span>
+      </a>
+      <a href="11-observability-logging-alerting.html" class="nav-next">
+        <span class="nav-dir">Leçon suivante →</span>
+        <span class="nav-title">ELK Stack &amp; Alerting</span>
+      </a>
+    </div>
+
+    </div>
+  </main>
+
+  </div>
+
+  <button class="back-to-top" id="back-to-top" aria-label="Retour en haut">↑</button>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>

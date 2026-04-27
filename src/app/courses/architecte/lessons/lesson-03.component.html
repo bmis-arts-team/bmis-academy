@@ -1,0 +1,318 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ Contexte métier ═══════════════ -->
+  <section>
+    <h2>Contexte métier - TaskFlow</h2>
+    <p><strong>TaskFlow</strong> est notre projet fil rouge. C'est une API REST de gestion de tâches qui nous servira à appliquer concrètement chaque concept du parcours : architecture propre, microservices, DevOps et observabilité.</p>
+
+    <h3>Objectifs fonctionnels</h3>
+    <ul>
+      <li>Gérer des <strong>utilisateurs</strong> (inscription, authentification)</li>
+      <li>Créer et organiser des <strong>projets</strong></li>
+      <li>Créer, assigner et suivre des <strong>tâches</strong> avec statuts</li>
+    </ul>
+
+    <h3>Modélisation métier</h3>
+    <table>
+      <thead>
+        <tr><th>Entité</th><th>Attributs</th><th>Relations</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>User</strong></td>
+          <td><code>id</code>, <code>name</code>, <code>email</code>, <code>password</code></td>
+          <td>1 → N Tasks (assignation)</td>
+        </tr>
+        <tr>
+          <td><strong>Project</strong></td>
+          <td><code>id</code>, <code>name</code>, <code>description</code></td>
+          <td>1 → N Tasks</td>
+        </tr>
+        <tr>
+          <td><strong>Task</strong></td>
+          <td><code>id</code>, <code>title</code>, <code>description</code>, <code>status</code></td>
+          <td>N → 1 User, N → 1 Project</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Enum TaskStatus</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>TaskStatus.java</span></div>
+      <pre><code class="language-java">public enum TaskStatus {{ '{' }}
+    TODO,
+    DOING,
+    DONE
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Structure du projet ═══════════════ -->
+  <section>
+    <h2>Structure du projet</h2>
+    <div class="code-block">
+      <div class="code-header"><span>Arborescence TaskFlow</span></div>
+      <pre><code>com.example.taskflow/
+├── domain/
+│   ├── model/              ← Task, Project, User, TaskStatus
+│   └── repository/         ← TaskRepository, ProjectRepository (interfaces)
+├── application/
+│   ├── usecase/            ← CreateTaskUseCase, AssignTaskUseCase...
+│   └── dto/                ← CreateTaskRequest, TaskResponse...
+├── infrastructure/
+│   └── persistence/        ← JpaTaskRepository, JpaProjectRepository
+└── web/
+    ├── controller/         ← TaskController, ProjectController
+    └── exception/          ← GlobalExceptionHandler, ErrorResponse</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Convention</strong>
+      <p>Les interfaces de repository sont dans <code>domain/</code> (ports). Les implémentations JPA sont dans <code>infrastructure/</code> (adaptateurs). C'est le principe de l'architecture hexagonale.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Exercice 1 ═══════════════ -->
+  <section>
+    <h2>Exercices pratiques</h2>
+
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 1</span> - Création d'un Use Case propre</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Implémenter le use case <code>CreateTaskUseCase</code> en respectant la séparation des couches.</p>
+        <p><strong>Consigne :</strong> Créez le DTO de requête, le use case et le contrôleur correspondant.</p>
+
+        <details>
+          <summary>Voir la correction</summary>
+
+          <div class="code-block" ngNonBindable>
+            <div class="code-header"><span>CreateTaskRequest.java</span></div>
+            <pre><code class="language-java">public record CreateTaskRequest(
+    @NotBlank(message = "Le titre est obligatoire")
+    @Size(max = 100)
+    String title,
+    String description,
+    @NotNull Long projectId
+) {{ '{' }} {{ '}' }}</code></pre>
+          </div>
+
+          <div class="code-block" ngNonBindable>
+            <div class="code-header"><span>CreateTaskUseCase.java</span></div>
+            <pre><code class="language-java">@Service
+@RequiredArgsConstructor
+public class CreateTaskUseCase {{ '{' }}
+
+    private final TaskRepository taskRepository;
+    private final ProjectRepository projectRepository;
+
+    public Task execute(CreateTaskRequest request) {{ '{' }}
+        Project project = projectRepository.findById(request.projectId())
+            .orElseThrow(() -&gt; new ProjectNotFoundException(request.projectId()));
+
+        Task task = Task.builder()
+            .title(request.title())
+            .description(request.description())
+            .status(TaskStatus.TODO)
+            .project(project)
+            .build();
+
+        return taskRepository.save(task);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+          </div>
+
+          <div class="code-block" ngNonBindable>
+            <div class="code-header"><span>TaskController.java</span></div>
+            <pre><code class="language-java">@RestController
+@RequestMapping("/api/tasks")
+@RequiredArgsConstructor
+public class TaskController {{ '{' }}
+
+    private final CreateTaskUseCase createTaskUseCase;
+
+    @PostMapping
+    public ResponseEntity&lt;Task&gt; create(@Valid @RequestBody CreateTaskRequest request) {{ '{' }}
+        Task task = createTaskUseCase.execute(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(task);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ═══════════════ Exercice 2 ═══════════════ -->
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 2</span> - Gestion d'erreur métier</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Créer une exception métier et un handler centralisé.</p>
+        <p><strong>Consigne :</strong> Quand un projet n'existe pas, l'API doit retourner un <code>404</code> avec un message clair.</p>
+
+        <details>
+          <summary>Voir la correction</summary>
+
+          <div class="code-block" ngNonBindable>
+            <div class="code-header"><span>ProjectNotFoundException.java</span></div>
+            <pre><code class="language-java">public class ProjectNotFoundException extends RuntimeException {{ '{' }}
+
+    public ProjectNotFoundException(Long id) {{ '{' }}
+        super("Projet non trouvé avec l'id : " + id);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+          </div>
+
+          <div class="code-block" ngNonBindable>
+            <div class="code-header"><span>GlobalExceptionHandler.java</span></div>
+            <pre><code class="language-java">@RestControllerAdvice
+public class GlobalExceptionHandler {{ '{' }}
+
+    @ExceptionHandler(ProjectNotFoundException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleNotFound(ProjectNotFoundException ex) {{ '{' }}
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.NOT_FOUND.value(),
+            ex.getMessage(),
+            LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ═══════════════ Exercice 3 ═══════════════ -->
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 3</span> - Analyse d'une mauvaise architecture</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Identifier les problèmes dans le code ci-dessous.</p>
+
+        <div class="code-block" ngNonBindable>
+          <div class="code-header"><span>TaskController.java - Anti-pattern</span></div>
+          <pre><code class="language-java">@RestController
+public class TaskController {{ '{' }}
+
+    @Autowired
+    private TaskRepository repo;
+
+    @PostMapping("/tasks")
+    public Task create(@RequestBody Task task) {{ '{' }}
+        if (task.getTitle() == null) {{ '{' }}
+            throw new RuntimeException("Titre manquant");
+        {{ '}' }}
+        task.setStatus(TaskStatus.TODO);
+        return repo.save(task);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+        </div>
+
+        <details>
+          <summary>Voir les problèmes identifiés</summary>
+          <ul>
+            <li>❌ <strong>Entité JPA comme DTO</strong> - l'entité <code>Task</code> est reçue directement du client</li>
+            <li>❌ <strong>Logique métier dans le contrôleur</strong> - la validation et le statut initial sont gérés dans le controller</li>
+            <li>❌ <strong>Validation manuelle</strong> - pas d'utilisation de <code>@Valid</code> et Bean Validation</li>
+            <li>❌ <strong>RuntimeException générique</strong> - pas d'exception métier dédiée</li>
+            <li>❌ <strong>Pas de use case</strong> - accès direct au repository depuis le contrôleur</li>
+            <li>❌ <strong>Pas de <code>@RequestMapping</code> au niveau classe</strong> - URLs dispersées</li>
+          </ul>
+        </details>
+      </div>
+    </div>
+
+    <!-- ═══════════════ Exercice 4 ═══════════════ -->
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 4</span> - Ajout d'une règle métier</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Empêcher la création d'une tâche avec un titre vide.</p>
+        <p><strong>Consigne :</strong> Proposez deux approches (impérative et déclarative).</p>
+
+        <details>
+          <summary>Voir la correction</summary>
+
+          <h5>Option 1 : Approche impérative (dans le use case)</h5>
+          <div class="code-block" ngNonBindable>
+            <div class="code-header"><span>CreateTaskUseCase.java - Validation impérative</span></div>
+            <pre><code class="language-java">public Task execute(CreateTaskRequest request) {{ '{' }}
+    if (request.title() == null || request.title().isBlank()) {{ '{' }}
+        throw new IllegalArgumentException("Le titre ne peut pas être vide");
+    {{ '}' }}
+    // ... suite du use case
+{{ '}' }}</code></pre>
+          </div>
+
+          <h5>Option 2 : Approche déclarative (Bean Validation)</h5>
+          <div class="code-block" ngNonBindable>
+            <div class="code-header"><span>CreateTaskRequest.java - @NotBlank</span></div>
+            <pre><code class="language-java">public record CreateTaskRequest(
+    @NotBlank(message = "Le titre est obligatoire")
+    String title,
+    // ...
+) {{ '{' }} {{ '}' }}
+
+// Dans le contrôleur :
+@PostMapping
+public ResponseEntity&lt;Task&gt; create(@Valid @RequestBody CreateTaskRequest request) {{ '{' }}
+    // La validation est automatique grâce à @Valid
+{{ '}' }}</code></pre>
+          </div>
+
+          <div class="callout tip">
+            <strong>Recommandation</strong>
+            <p>Préférez l'approche <strong>déclarative</strong> (<code>@NotBlank</code>) pour les validations de format, et l'approche <strong>impérative</strong> pour les règles métier complexes (ex : vérifier qu'un projet n'a pas atteint sa limite de tâches).</p>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Mini-projet autonome ═══════════════ -->
+  <section>
+    <h2>Mini-projet autonome</h2>
+    <p>Mettez en pratique tout ce que vous avez appris en créant les éléments suivants :</p>
+
+    <h3>Use cases à implémenter</h3>
+    <ol>
+      <li><strong>Création d'un projet</strong> - <code>POST /api/projects</code></li>
+      <li><strong>Création d'une tâche</strong> - <code>POST /api/tasks</code></li>
+      <li><strong>Liste paginée des tâches</strong> - <code>GET /api/tasks?page=0&amp;size=10</code></li>
+    </ol>
+
+    <h3>Contraintes</h3>
+    <ul>
+      <li>Utiliser des <strong>DTOs</strong> pour chaque requête et réponse</li>
+      <li>Chaque opération passe par un <strong>use case</strong> dédié</li>
+      <li><strong>Validation</strong> avec Bean Validation sur tous les DTOs</li>
+      <li><strong>Exception handler</strong> centralisé avec <code>@RestControllerAdvice</code></li>
+    </ul>
+
+    <h3>Bonus</h3>
+    <ul>
+      <li>Pagination avec <code>Pageable</code> de Spring Data</li>
+      <li>Filtrage par statut (<code>?status=TODO</code>)</li>
+      <li>Logs structurés avec SLF4J</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ Auto-évaluation ═══════════════ -->
+  <section>
+    <h2>Auto-évaluation</h2>
+    <p>Vérifiez que vous maîtrisez les points suivants avant de passer au chapitre suivant :</p>
+
+    <table>
+      <thead>
+        <tr><th>✅</th><th>Critère</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>☐</td><td>Je comprends la différence entre structure classique et structure en couches</td></tr>
+        <tr><td>☐</td><td>Je sais créer un DTO de requête avec validation</td></tr>
+        <tr><td>☐</td><td>Je sais implémenter un use case qui délègue au repository</td></tr>
+        <tr><td>☐</td><td>Je sais créer un contrôleur qui utilise <code>@Valid</code></td></tr>
+        <tr><td>☐</td><td>Je sais gérer les erreurs avec <code>@RestControllerAdvice</code></td></tr>
+        <tr><td>☐</td><td>Je sais écrire un test unitaire avec Mockito</td></tr>
+        <tr><td>☐</td><td>Je peux identifier les anti-patterns courants</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</app-lesson-page>

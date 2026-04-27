@@ -1,0 +1,10 @@
+<app-progress-bar />
+<app-navbar (menuToggle)="toggleSidebar()" />
+<div class="app-layout">
+  <app-sidebar [open]="sidebarOpen()" (closed)="closeSidebar()" />
+  <div class="overlay" [class.visible]="sidebarOpen()" (click)="closeSidebar()"></div>
+  <main class="main-content">
+    <router-outlet />
+  </main>
+</div>
+<app-back-to-top />

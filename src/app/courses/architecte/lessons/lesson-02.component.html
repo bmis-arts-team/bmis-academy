@@ -1,0 +1,352 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ 1.1 Pourquoi la plupart des backends deviennent ingérables ═══════════════ -->
+  <section>
+    <h2>1.1 - Pourquoi la plupart des backends deviennent ingérables</h2>
+    <p>Un backend mal structuré accumule rapidement de la <strong>dette technique</strong>. Les symptômes sont reconnaissables :</p>
+
+    <ul>
+      <li><strong>Classes trop longues</strong> - des fichiers de 500+ lignes mélangeant logique métier, accès données et validation</li>
+      <li><strong>Dépendances difficiles à gérer</strong> - modifier un service casse trois autres</li>
+      <li><strong>Modifications cassantes</strong> - chaque feature introduit des régressions</li>
+      <li><strong>Difficulté à tester</strong> - impossible d'écrire un test unitaire sans monter toute la base</li>
+      <li><strong>Peur de toucher au code</strong> - personne n'ose refactorer</li>
+    </ul>
+
+    <div class="callout warning">
+      <strong>Le vrai problème</strong>
+      <p>Ce n'est pas un manque de compétence technique - c'est un <strong>manque de structure</strong>. Sans architecture claire, même les meilleurs développeurs produisent du code difficile à maintenir.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 1.2 Séparer les responsabilités ═══════════════ -->
+  <section>
+    <h2>1.2 - Séparer les responsabilités</h2>
+    <p>Les architectures modernes comme la <strong>Clean Architecture</strong> et l'<strong>architecture hexagonale</strong> partagent un principe fondamental : chaque couche a une responsabilité unique et les dépendances pointent toujours vers le centre (le domaine métier).</p>
+
+    <div class="callout info">
+      <strong>Principe clé</strong>
+      <p>Chaque partie du système doit avoir un rôle clair et unique. Le domaine métier ne doit jamais dépendre de l'infrastructure.</p>
+    </div>
+
+    <div class="arch-diagram">
+      <pre>
+         ┌──────────────────────────────────┐
+         │           Web / API              │  ← Controllers, DTOs
+         ├──────────────────────────────────┤
+         │         Application              │  ← Use Cases, orchestration
+         ├──────────────────────────────────┤
+         │           Domaine                │  ← Entités, règles métier
+         ├──────────────────────────────────┤
+         │        Infrastructure            │  ← JPA, HTTP clients, messaging
+         └──────────────────────────────────┘
+
+         Les dépendances pointent vers le centre (Domaine)</pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 1.3 Structure professionnelle avec Spring Boot ═══════════════ -->
+  <section>
+    <h2>1.3 - Structure professionnelle avec Spring Boot</h2>
+
+    <h3>Structure classique (à éviter en projet complexe)</h3>
+    <div class="code-block">
+      <div class="code-header"><span>Structure classique</span></div>
+      <pre><code>com.example.taskflow/
+├── controller/
+├── service/
+├── repository/
+└── entity/</code></pre>
+    </div>
+    <p>Cette structure fonctionne pour de petits projets, mais elle mélange les responsabilités dès que le projet grandit.</p>
+
+    <h3>Structure professionnelle</h3>
+
+    <div class="comparison-grid">
+      <div class="comparison-card good">
+        <h4>domain/</h4>
+        <p>Entités métier, règles de validation, logique pure. <strong>Aucune dépendance Spring.</strong></p>
+      </div>
+      <div class="comparison-card good">
+        <h4>application/</h4>
+        <p>Use cases, orchestration des opérations métier. Dépend uniquement du domaine.</p>
+      </div>
+      <div class="comparison-card good">
+        <h4>infrastructure/</h4>
+        <p>Implémentations techniques : JPA, clients HTTP, messaging, configuration.</p>
+      </div>
+      <div class="comparison-card good">
+        <h4>web/</h4>
+        <p>Controllers REST, DTOs de requête/réponse. Point d'entrée HTTP.</p>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>Structure professionnelle</span></div>
+      <pre><code>com.example.taskflow/
+├── domain/
+│   ├── model/          ← Entités métier (Task, Project, User)
+│   └── repository/     ← Interfaces (ports)
+├── application/
+│   ├── usecase/        ← CreateTaskUseCase, AssignTaskUseCase
+│   └── dto/            ← CreateTaskRequest, TaskResponse
+├── infrastructure/
+│   └── persistence/    ← JpaTaskRepository, JpaProjectRepository
+└── web/
+    ├── controller/     ← TaskController, ProjectController
+    └── exception/      ← GlobalExceptionHandler</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 1.4 Exemple concret : création d'une tâche ═══════════════ -->
+  <section>
+    <h2>1.4 - Exemple concret : création d'une tâche</h2>
+
+    <div class="comparison-grid">
+      <div class="comparison-card bad">
+        <h4>❌ Approche naïve</h4>
+        <p>Tout dans le contrôleur : validation, accès base, logique métier mélangés.</p>
+      </div>
+      <div class="comparison-card good">
+        <h4>✅ Approche professionnelle</h4>
+        <p>Chaque couche a sa responsabilité. Le contrôleur délègue au use case.</p>
+      </div>
+    </div>
+
+    <h3>❌ Anti-pattern : tout dans le contrôleur</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>TaskController.java - Anti-pattern</span></div>
+      <pre><code class="language-java">@RestController
+@RequestMapping("/api/tasks")
+public class TaskController {{ '{' }}
+
+    @Autowired
+    private TaskRepository taskRepository;
+
+    @PostMapping
+    public Task createTask(@RequestBody Task task) {{ '{' }}
+        // Pas de validation
+        // Pas de vérification du projet
+        // Entité JPA exposée directement
+        return taskRepository.save(task);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+
+    <h3>✅ Approche professionnelle</h3>
+
+    <h4>1. DTO de requête (web/)</h4>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>CreateTaskRequest.java</span></div>
+      <pre><code class="language-java">public record CreateTaskRequest(
+    @NotBlank(message = "Le titre est obligatoire")
+    @Size(max = 100, message = "Le titre ne doit pas dépasser 100 caractères")
+    String title,
+
+    String description,
+
+    @NotNull(message = "Le projet est obligatoire")
+    Long projectId
+) {{ '{' }} {{ '}' }}</code></pre>
+    </div>
+
+    <h4>2. Use Case (application/)</h4>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>CreateTaskUseCase.java</span></div>
+      <pre><code class="language-java">@Service
+@RequiredArgsConstructor
+public class CreateTaskUseCase {{ '{' }}
+
+    private final TaskRepository taskRepository;
+    private final ProjectRepository projectRepository;
+
+    public Task execute(CreateTaskRequest request) {{ '{' }}
+        Project project = projectRepository.findById(request.projectId())
+            .orElseThrow(() -&gt; new ProjectNotFoundException(request.projectId()));
+
+        Task task = Task.builder()
+            .title(request.title())
+            .description(request.description())
+            .status(TaskStatus.TODO)
+            .project(project)
+            .build();
+
+        return taskRepository.save(task);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+
+    <h4>3. Contrôleur (web/)</h4>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>TaskController.java</span></div>
+      <pre><code class="language-java">@RestController
+@RequestMapping("/api/tasks")
+@RequiredArgsConstructor
+public class TaskController {{ '{' }}
+
+    private final CreateTaskUseCase createTaskUseCase;
+
+    @PostMapping
+    public ResponseEntity&lt;Task&gt; createTask(@Valid @RequestBody CreateTaskRequest request) {{ '{' }}
+        Task task = createTaskUseCase.execute(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(task);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 1.5 Validation, sécurité et gestion des erreurs ═══════════════ -->
+  <section>
+    <h2>1.5 - Validation, sécurité et gestion des erreurs</h2>
+
+    <h3>Validation avec Bean Validation</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>CreateTaskRequest.java - Validation complète</span></div>
+      <pre><code class="language-java">public record CreateTaskRequest(
+    @NotBlank(message = "Le titre est obligatoire")
+    @Size(min = 3, max = 100, message = "Le titre doit contenir entre 3 et 100 caractères")
+    String title,
+
+    @Size(max = 500, message = "La description ne doit pas dépasser 500 caractères")
+    String description,
+
+    @NotNull(message = "Le projet est obligatoire")
+    Long projectId
+) {{ '{' }} {{ '}' }}</code></pre>
+    </div>
+
+    <h3>Gestion centralisée des erreurs</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>GlobalExceptionHandler.java</span></div>
+      <pre><code class="language-java">@RestControllerAdvice
+public class GlobalExceptionHandler {{ '{' }}
+
+    @ExceptionHandler(ProjectNotFoundException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleNotFound(ProjectNotFoundException ex) {{ '{' }}
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.NOT_FOUND.value(),
+            ex.getMessage(),
+            LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    {{ '}' }}
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleValidation(MethodArgumentNotValidException ex) {{ '{' }}
+        String message = ex.getBindingResult().getFieldErrors().stream()
+            .map(e -&gt; e.getField() + ": " + e.getDefaultMessage())
+            .collect(Collectors.joining(", "));
+
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.BAD_REQUEST.value(),
+            message,
+            LocalDateTime.now()
+        );
+        return ResponseEntity.badRequest().body(error);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+
+    <h3>Exception métier personnalisée</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>ProjectNotFoundException.java</span></div>
+      <pre><code class="language-java">public class ProjectNotFoundException extends RuntimeException {{ '{' }}
+
+    public ProjectNotFoundException(Long id) {{ '{' }}
+        super("Projet non trouvé avec l'id : " + id);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+
+    <h3>Sécurité JWT et Spring Security</h3>
+    <p>Le flux d'authentification JWT suit un schéma classique en deux temps :</p>
+
+    <div class="arch-diagram">
+      <pre>
+Client ──POST /login──&gt; AuthController ──génère──&gt; JWT Token
+Client ──Authorization: Bearer token──&gt; JwtFilter ──valide &amp; injecte──&gt; SecurityContext</pre>
+    </div>
+
+    <p>Le <code>JwtFilter</code> intercepte chaque requête, valide le token et injecte l'utilisateur authentifié dans le <code>SecurityContext</code> de Spring Security.</p>
+  </section>
+
+  <!-- ═══════════════ 1.6 Erreurs classiques à éviter ═══════════════ -->
+  <section>
+    <h2>1.6 - Erreurs classiques à éviter</h2>
+
+    <table>
+      <thead>
+        <tr><th>❌ Erreur</th><th>✅ Bonne pratique</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Exposer les entités JPA dans les réponses API</td>
+          <td>Utiliser des DTOs de réponse dédiés</td>
+        </tr>
+        <tr>
+          <td>Mettre la logique métier dans les contrôleurs</td>
+          <td>Déléguer aux use cases (couche application)</td>
+        </tr>
+        <tr>
+          <td>Ignorer la validation des entrées</td>
+          <td>Utiliser <code>@Valid</code> + Bean Validation</td>
+        </tr>
+        <tr>
+          <td>Pas de gestion centralisée des erreurs</td>
+          <td>Implémenter un <code>@RestControllerAdvice</code></td>
+        </tr>
+        <tr>
+          <td>Pas de tests unitaires</td>
+          <td>Tester chaque use case avec Mockito</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Exemple de test unitaire</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>CreateTaskUseCaseTest.java</span></div>
+      <pre><code class="language-java">@ExtendWith(MockitoExtension.class)
+class CreateTaskUseCaseTest {{ '{' }}
+
+    @Mock
+    private TaskRepository taskRepository;
+
+    @Mock
+    private ProjectRepository projectRepository;
+
+    @InjectMocks
+    private CreateTaskUseCase useCase;
+
+    @Test
+    void shouldCreateTaskSuccessfully() {{ '{' }}
+        // Given
+        Project project = new Project(1L, "Mon Projet", "Description");
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -&gt; inv.getArgument(0));
+
+        CreateTaskRequest request = new CreateTaskRequest("Ma tâche", "Description", 1L);
+
+        // When
+        Task result = useCase.execute(request);
+
+        // Then
+        assertThat(result.getTitle()).isEqualTo("Ma tâche");
+        assertThat(result.getStatus()).isEqualTo(TaskStatus.TODO);
+        verify(taskRepository).save(any(Task.class));
+    {{ '}' }}
+
+    @Test
+    void shouldThrowWhenProjectNotFound() {{ '{' }}
+        // Given
+        when(projectRepository.findById(99L)).thenReturn(Optional.empty());
+        CreateTaskRequest request = new CreateTaskRequest("Tâche", "Desc", 99L);
+
+        // When / Then
+        assertThatThrownBy(() -&gt; useCase.execute(request))
+            .isInstanceOf(ProjectNotFoundException.class);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+</app-lesson-page>

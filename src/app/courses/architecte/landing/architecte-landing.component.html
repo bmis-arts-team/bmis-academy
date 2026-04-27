@@ -1,0 +1,44 @@
+<div class="landing">
+  <!-- Hero -->
+  <div class="landing-hero">
+    <div class="hero-icon"><app-icon [name]="course.icon" [size]="44"></app-icon></div>
+    <h1>{{ course.title }}</h1>
+    <p class="hero-sub">{{ course.subtitle }}</p>
+    <div class="hero-meta">
+      <span>{{ course.sections.length }} sections</span>
+      <span class="dot">·</span>
+      <span>{{ totalLessons() }} leçons</span>
+      <span class="dot">·</span>
+      <span>Spring Boot 3.x · Java 17+ · Kafka · Redis</span>
+    </div>
+  </div>
+
+  <!-- Stack Overview -->
+  <div class="callout info">
+    <strong>Stack technique utilisée dans les exemples</strong>
+    <p>
+      Les exercices et démos s'appuient sur un backend <strong>Spring Boot 3</strong> avec
+      <strong>PostgreSQL</strong>, <strong>Kafka</strong> et <strong>Redis</strong>.
+      Le projet fil rouge TaskFlow illustre chaque concept de manière concrète et progressive.
+    </p>
+  </div>
+
+  <!-- Sections Grid -->
+  @for (section of course.sections; track section.title) {
+    <div class="section-block">
+      <h2>
+        <span class="section-icon"><app-icon [name]="section.icon" [size]="18"></app-icon></span>
+        {{ section.title }}
+      </h2>
+      <div class="lessons-grid">
+        @for (lesson of section.lessons; track lesson.number) {
+          <a [routerLink]="lesson.route" class="lesson-card">
+            <div class="card-number">{{ lesson.route }}</div>
+            <h3>{{ lesson.title }}</h3>
+            <p>{{ lesson.subtitle }}</p>
+          </a>
+        }
+      </div>
+    </div>
+  }
+</div>

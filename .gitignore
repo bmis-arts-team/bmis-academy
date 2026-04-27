@@ -1,8 +1,12 @@
 # =============================================================
-#  .gitignore — Java dev Pro
+#  .gitignore - Java dev Pro
 #  Cours "De Développeur à Architecte Backend"
 #  Auteur : Gilles Kemgoum
 # =============================================================
+
+# ── Angular ─────────────────────────────────────────────────
+/dist
+.angular/
 
 # ── Node / npm ──────────────────────────────────────────────
 node_modules/

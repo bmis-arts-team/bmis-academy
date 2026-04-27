@@ -1,0 +1,337 @@
+// ── Design Tokens ──────────────────────────────────────────────
+$sb-bg:        #07090f;
+$sb-surface:   #0d1220;
+$sb-border:    rgba(255, 255, 255, 0.07);
+$sb-text-dim:  #7d93a8;   // inactive items  - contrast ~4.8:1 on $sb-bg
+$sb-text-mid:  #9fb5c8;   // medium emphasis - contrast ~6.5:1
+$sb-text-hi:   #c8dcea;   // hover/focus     - contrast ~9:1
+$sb-text-top:  #e8f2fb;   // active/titles   - contrast ~13:1
+
+// ── Sidebar Shell ──────────────────────────────────────────────
+.sidebar {
+  position: fixed;
+  top: var(--navbar-height);
+  left: 0;
+  width: var(--sidebar-width);
+  height: calc(100vh - var(--navbar-height));
+  background: $sb-bg;
+  display: flex;
+  flex-direction: column;
+  z-index: 95;
+  overflow: hidden;
+  border-right: 1px solid $sb-border;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  @media (max-width: 900px) {
+    transform: translateX(-100%);
+    &.open { transform: translateX(0); }
+  }
+}
+
+// ── Brand ──────────────────────────────────────────────────────
+.sidebar-brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  border-bottom: 1px solid $sb-border;
+  flex-shrink: 0;
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-decoration: none;
+    &:hover { text-decoration: none; }
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #1a56db 0%, #60a5fa 100%);
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.25), 0 4px 12px rgba(26, 86, 219, 0.35);
+    font-family: var(--font-ui);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .brand-name {
+    font-family: var(--font-ui);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: $sb-text-top;
+    letter-spacing: -0.01em;
+  }
+}
+
+// ── Navigation Shell ───────────────────────────────────────────
+.sidebar-nav {
+  flex: 1;
+  padding: 0.6rem 0 1rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.06) transparent;
+}
+
+// ── Home Item ──────────────────────────────────────────────────
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0.5rem;
+  padding: 0.44rem 0.65rem;
+  border-radius: 7px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $sb-text-dim;
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+
+  &:hover {
+    color: $sb-text-hi;
+    background: rgba(255,255,255,0.04);
+    text-decoration: none;
+  }
+
+  &.active {
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.08);
+    app-icon { opacity: 1; }
+  }
+}
+
+// ── Divider & Label ────────────────────────────────────────────
+.nav-divider {
+  height: 1px;
+  background: $sb-border;
+  margin: 0.5rem 0;
+}
+
+.nav-label {
+  padding: 0.65rem 1rem 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: rgba(255,255,255,0.35);
+}
+
+// ── Course Block ───────────────────────────────────────────────
+.nav-course {
+  margin: 0.1rem 0;
+
+  &.expanded {
+    .course-toggle { background: rgba(255,255,255,0.025); }
+    .course-toggle .course-title { color: $sb-text-top; font-weight: 600; }
+    .course-toggle .chevron { transform: rotate(90deg); color: $sb-text-mid; }
+    .course-toggle .course-badge {
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--course-color) 40%, transparent);
+    }
+  }
+}
+
+.course-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 0;
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(255,255,255,0.03);
+    .course-title { color: $sb-text-hi; }
+    .chevron { color: $sb-text-dim; }
+  }
+
+  .course-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--course-color) 16%, #111827);
+    border: 1px solid color-mix(in srgb, var(--course-color) 22%, transparent);
+    color: var(--course-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: box-shadow 0.2s, background 0.2s;
+  }
+
+  .course-title {
+    font-family: var(--font-ui);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $sb-text-mid;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.15s;
+    text-align: left;
+  }
+
+  .chevron {
+    color: $sb-text-dim;
+    flex-shrink: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s;
+  }
+}
+
+// ── Course Children ────────────────────────────────────────────
+.course-children {
+  padding-bottom: 0.5rem;
+  border-left: 1px solid $sb-border;
+  margin-left: 1.62rem; // aligns with left edge of .course-badge center
+}
+
+.overview-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.32rem 0.75rem 0.32rem 0.85rem;
+  font-family: var(--font-ui);
+  font-size: 0.825rem;
+  font-weight: 400;
+  color: $sb-text-dim;
+  text-decoration: none;
+  transition: color 0.15s;
+
+  &::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+    opacity: 0.5;
+  }
+
+  &:hover { color: $sb-text-hi; text-decoration: none; }
+  &.active { color: #60a5fa; font-weight: 500; &::before { opacity: 1; } }
+}
+
+// ── Section Toggle ─────────────────────────────────────────────
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem 0.2rem 0.85rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+
+  .section-icon {
+    color: color-mix(in srgb, var(--course-color, #7d93a8) 70%, $sb-text-mid);
+    flex-shrink: 0;
+    opacity: 0.9;
+    transition: opacity 0.15s;
+  }
+
+  span {
+    font-family: var(--font-ui);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.45);
+    flex: 1;
+    transition: color 0.15s;
+  }
+
+  .chevron {
+    color: rgba(255,255,255,0.25);
+    flex-shrink: 0;
+    transition: transform 0.2s;
+    opacity: 0;
+  }
+
+  &:hover {
+    span { color: rgba(255,255,255,0.75); }
+    .section-icon { opacity: 1; }
+    .chevron { opacity: 1; }
+  }
+
+  &.expanded {
+    span { color: rgba(255,255,255,0.65); }
+    .chevron { transform: rotate(90deg); opacity: 0.7; }
+  }
+}
+
+// ── Lesson Links ───────────────────────────────────────────────
+.section-lessons { padding: 0.1rem 0 0.25rem; }
+
+.lesson-link {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.34rem 0.75rem 0.34rem 0.85rem;
+  text-decoration: none;
+  transition: background 0.12s;
+  position: relative;
+
+  .lesson-num {
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.28);
+    min-width: 1.6rem;
+    flex-shrink: 0;
+    transition: color 0.12s;
+    letter-spacing: 0.02em;
+  }
+
+  .lesson-title {
+    font-family: var(--font-ui);
+    font-size: 0.855rem;
+    color: $sb-text-dim;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+    transition: color 0.12s;
+  }
+
+  &:hover {
+    background: rgba(255,255,255,0.025);
+    text-decoration: none;
+    .lesson-title { color: $sb-text-hi; }
+    .lesson-num   { color: rgba(255,255,255,0.3); }
+  }
+
+  &.active {
+    background: color-mix(in srgb, var(--course-color, #3b82f6) 9%, transparent);
+    box-shadow: inset 2px 0 0 var(--course-color, #3b82f6);
+    .lesson-title { color: $sb-text-top; font-weight: 500; }
+    .lesson-num   { color: var(--course-color, #3b82f6); }
+  }
+}
+
+// ── Footer ─────────────────────────────────────────────────────
+.sidebar-footer {
+  padding: 0.7rem 1rem;
+  border-top: 1px solid $sb-border;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.1);
+  flex-shrink: 0;
+  letter-spacing: 0.01em;
+}
+

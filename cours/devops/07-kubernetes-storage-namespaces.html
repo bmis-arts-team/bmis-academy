@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storage &amp; Namespaces - DevOps BMIS Academy</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="progress-bar"></div>
+
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="docs-layout">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <a href="../../index.html" class="sidebar-brand">
+      <div class="brand-logo">BM</div>
+      <div class="brand-text">
+        <span class="brand-name">BMIS Academy</span>
+        <span class="brand-tagline">DevOps &amp; Production</span>
+      </div>
+    </a>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Vue d'ensemble</div>
+        <a href="index.html" class="nav-link">Accueil du cours</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">1 - Fondations Docker</div>
+        <a href="01-docker-images-containers.html" class="nav-link">Images vs Containers</a>
+        <a href="02-docker-volumes-networking.html" class="nav-link">Volumes &amp; Networking</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">2 - Kubernetes Core</div>
+        <a href="03-kubernetes-architecture.html" class="nav-link">Architecture K8s</a>
+        <a href="04-kubernetes-workloads.html" class="nav-link">Deployments &amp; StatefulSets</a>
+        <a href="05-kubernetes-services-ingress.html" class="nav-link">Services &amp; Ingress</a>
+        <a href="06-kubernetes-configmaps-secrets.html" class="nav-link">ConfigMaps &amp; Secrets</a>
+        <a href="07-kubernetes-storage-namespaces.html" class="nav-link active">Storage &amp; Namespaces</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">3 - Déploiement Système</div>
+        <a href="08-deploy-fintech-system.html" class="nav-link">Déployer le Système Fintech</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">4 - CI/CD</div>
+        <a href="09-cicd-github-actions.html" class="nav-link">Pipeline GitHub Actions</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">5 - Observabilité</div>
+        <a href="10-observability-metrics.html" class="nav-link">Prometheus &amp; Grafana</a>
+        <a href="11-observability-logging-alerting.html" class="nav-link">ELK Stack &amp; Alerting</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">6 - Réseau &amp; Sécurité</div>
+        <a href="12-networking-security.html" class="nav-link">Networking &amp; Security</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">7 - CDN &amp; Assets</div>
+        <a href="13-cdn-asset-delivery.html" class="nav-link">CDN &amp; Distribution</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">8 - Production</div>
+        <a href="14-production-best-practices.html" class="nav-link">Best Practices Production</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../../index.html" class="sidebar-footer-link">← Retour au catalogue</a>
+    </div>
+  </aside>
+
+  <main class="docs-main">
+    <div class="docs-content">
+
+    <!-- ═══════════════════════════════════════════ HEADER ═══════════════════════════════════════════ -->
+    <div class="lesson-header">
+      <div class="lesson-meta">
+        <span class="lesson-number">Leçon 7</span>
+        <span class="lesson-section">Section 2 - Kubernetes Core</span>
+      </div>
+      <h1>Persistent Volumes &amp; Namespaces</h1>
+      <p class="lesson-subtitle">Stockage persistant et isolation des environnements - deux concepts essentiels pour la production.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ 1. LE DÉFI DU STOCKAGE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>1 - Le défi du stockage dans Kubernetes</h2>
+
+      <p>Les <strong>Pods sont éphémères</strong>. Quand un Pod est supprimé, recréé ou déplacé vers un autre nœud, tout ce qui se trouve dans son système de fichiers est <strong>perdu définitivement</strong>. C'est le comportement par défaut de Kubernetes, et c'est un problème majeur pour toute application qui stocke des données : bases de données, fichiers uploadés, caches persistants, logs applicatifs.</p>
+
+      <p>Imaginez une base de données PostgreSQL qui s'exécute dans un Pod. Sans stockage persistant, chaque redémarrage du Pod signifie la <strong>perte totale de toutes les données</strong> - utilisateurs, transactions, historiques. C'est évidemment inacceptable en production.</p>
+
+      <h3>1.1 - Différence avec Docker</h3>
+
+      <p>Avec Docker, les <strong>volumes</strong> résolvent ce problème simplement : un volume Docker est monté depuis l'hôte vers le conteneur, et les données persistent même si le conteneur est supprimé. Cependant, Docker fonctionne sur <strong>une seule machine</strong>.</p>
+
+      <p>Kubernetes orchestre des conteneurs sur <strong>plusieurs nœuds</strong>. Un Pod peut être reprogrammé sur un nœud complètement différent. Le volume Docker local du nœud A n'est pas accessible depuis le nœud B. C'est pourquoi Kubernetes a besoin d'un système de stockage plus sophistiqué : les <strong>Persistent Volumes</strong>.</p>
+
+      <div class="callout info">
+        <strong>Le cycle de vie est découplé :</strong> Dans Kubernetes, le stockage a son propre cycle de vie, <strong>indépendant du Pod</strong>. Un PersistentVolume existe avant le Pod, et continue d'exister après sa suppression. C'est la clé de la persistance des données.
+      </div>
+
+      <h3>1.2 - Les types de volumes éphémères</h3>
+
+      <p>Avant de plonger dans les volumes persistants, notons que Kubernetes offre aussi des <strong>volumes éphémères</strong> utiles :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Volumes éphémères - emptyDir et configMap</span>
+        </div>
+        <pre><code class="language-yaml"># emptyDir : volume temporaire partagé entre les conteneurs d'un même Pod
+# Les données sont perdues quand le Pod est supprimé
+spec:
+  containers:
+    - name: app
+      volumeMounts:
+        - name: cache-volume
+          mountPath: /tmp/cache
+    - name: sidecar-logger
+      volumeMounts:
+        - name: cache-volume
+          mountPath: /var/log/app
+  volumes:
+    - name: cache-volume
+      emptyDir: {}          # Créé vide, détruit avec le Pod</code></pre>
+      </div>
+
+      <p><code>emptyDir</code> est utile pour le partage de fichiers temporaires entre conteneurs d'un même Pod (pattern sidecar). Mais pour la persistance réelle, il faut passer aux <strong>PersistentVolumes</strong>.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 2. PERSISTENTVOLUME ═══════════════════════════════════════════ -->
+    <section>
+      <h2>2 - PersistentVolume (PV)</h2>
+
+      <p>Un <strong>PersistentVolume</strong> est une ressource de stockage au niveau du <strong>cluster</strong>, provisionnée par un administrateur ou dynamiquement par une StorageClass. C'est un « morceau » de stockage dans le cluster qui a un cycle de vie indépendant de tout Pod individuel.</p>
+
+      <h3>2.1 - Manifest YAML d'un PersistentVolume</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">pv-example.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-postgres-data
+  labels:
+    type: local
+    app: postgresql
+spec:
+  capacity:
+    storage: 20Gi                      # Taille du volume
+  accessModes:
+    - ReadWriteOnce                    # Un seul nœud en lecture/écriture
+  persistentVolumeReclaimPolicy: Retain # Politique de réclamation
+  storageClassName: manual             # Classe de stockage
+  hostPath:                            # Type de stockage (dev uniquement !)
+    path: /data/postgres               # Chemin sur le nœud hôte</code></pre>
+      </div>
+
+      <h3>2.2 - Access Modes</h3>
+
+      <p>Les <strong>accessModes</strong> définissent comment le volume peut être monté par les nœuds :</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>Abréviation</th>
+            <th>Description</th>
+            <th>Cas d'usage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>ReadWriteOnce</code></td>
+            <td>RWO</td>
+            <td>Lecture/écriture par <strong>un seul nœud</strong></td>
+            <td>Base de données (PostgreSQL, MySQL)</td>
+          </tr>
+          <tr>
+            <td><code>ReadOnlyMany</code></td>
+            <td>ROX</td>
+            <td>Lecture seule par <strong>plusieurs nœuds</strong></td>
+            <td>Fichiers de configuration, assets statiques</td>
+          </tr>
+          <tr>
+            <td><code>ReadWriteMany</code></td>
+            <td>RWX</td>
+            <td>Lecture/écriture par <strong>plusieurs nœuds</strong></td>
+            <td>Fichiers partagés (uploads, documents KYC)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <strong>Attention :</strong> Tous les types de stockage ne supportent pas tous les modes. Par exemple, AWS EBS ne supporte que <code>ReadWriteOnce</code>. Pour <code>ReadWriteMany</code>, il faut utiliser un stockage réseau comme NFS, EFS (AWS), ou Azure Files.
+      </div>
+
+      <h3>2.3 - Reclaim Policies</h3>
+
+      <p>La <strong>reclaim policy</strong> détermine ce qui arrive au PersistentVolume quand le PersistentVolumeClaim associé est supprimé :</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Politique</th>
+            <th>Comportement</th>
+            <th>Usage recommandé</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Retain</code></td>
+            <td>Le PV est conservé avec ses données. L'administrateur doit le nettoyer manuellement.</td>
+            <td><strong>Production</strong> - données critiques</td>
+          </tr>
+          <tr>
+            <td><code>Delete</code></td>
+            <td>Le PV et le stockage sous-jacent sont supprimés automatiquement.</td>
+            <td>Environnements temporaires (dev, test)</td>
+          </tr>
+          <tr>
+            <td><code>Recycle</code></td>
+            <td>Le contenu est effacé (<code>rm -rf /volume/*</code>) et le PV est rendu disponible. <strong>Déprécié.</strong></td>
+            <td>Ne plus utiliser</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2.4 - Types de stockage backend</h3>
+
+      <p>Le <code>spec</code> d'un PV spécifie le type de stockage sous-jacent. Voici les principaux :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Exemples de backends de stockage</span>
+        </div>
+        <pre><code class="language-yaml"># ❌ hostPath - Développement UNIQUEMENT (données sur le nœud local)
+spec:
+  hostPath:
+    path: /data/postgres
+
+# ✅ NFS - Stockage réseau partagé
+spec:
+  nfs:
+    server: 192.168.1.100
+    path: /exports/postgres-data
+
+# ✅ AWS EBS (Elastic Block Store)
+spec:
+  awsElasticBlockStore:
+    volumeID: vol-0a1b2c3d4e5f67890
+    fsType: ext4
+
+# ✅ GCE Persistent Disk
+spec:
+  gcePersistentDisk:
+    pdName: postgres-disk
+    fsType: ext4
+
+# ✅ Azure Disk
+spec:
+  azureDisk:
+    diskName: postgres-disk
+    diskURI: /subscriptions/.../postgres-disk</code></pre>
+      </div>
+
+      <div class="callout bad">
+        <strong>Ne jamais utiliser <code>hostPath</code> en production !</strong> Les données sont liées à un seul nœud. Si le Pod est reprogrammé sur un autre nœud, les données ne suivent pas. <code>hostPath</code> est uniquement pour le développement local avec Minikube ou Kind.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 3. PERSISTENTVOLUMECLAIM ═══════════════════════════════════════════ -->
+    <section>
+      <h2>3 - PersistentVolumeClaim (PVC)</h2>
+
+      <p>Un <strong>PersistentVolumeClaim</strong> est une <strong>demande de stockage</strong> par un utilisateur ou une application. C'est l'interface entre le Pod (qui a besoin de stockage) et le PersistentVolume (qui fournit le stockage). Le PVC décrit ce dont l'application a besoin - taille, mode d'accès, classe de stockage - et Kubernetes trouve un PV correspondant.</p>
+
+      <h3>3.1 - Manifest YAML d'un PVC</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">pvc-postgres.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: fintech
+spec:
+  accessModes:
+    - ReadWriteOnce             # Doit correspondre au PV
+  resources:
+    requests:
+      storage: 20Gi             # Taille demandée (≤ capacité du PV)
+  storageClassName: manual       # Doit correspondre au PV</code></pre>
+      </div>
+
+      <h3>3.2 - Comment le PVC se lie au PV</h3>
+
+      <p>Quand un PVC est créé, Kubernetes cherche un PV qui satisfait les critères :</p>
+
+      <ol>
+        <li>La <strong>capacité</strong> du PV est ≥ à la demande du PVC</li>
+        <li>L'<strong>accessMode</strong> du PV correspond à celui du PVC</li>
+        <li>La <strong>storageClassName</strong> correspond</li>
+        <li>Le PV est dans l'état <strong>Available</strong> (non lié à un autre PVC)</li>
+      </ol>
+
+      <p>Une fois lié, le PVC passe en état <strong>Bound</strong> et le PV ne peut plus être utilisé par un autre PVC. La relation est <strong>1:1</strong>.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Vérifier l'état de liaison</span>
+        </div>
+        <pre><code class="language-bash"># Voir l'état des PV
+kubectl get pv
+# NAME              CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM
+# pv-postgres-data  20Gi       RWO            Retain           Bound    fintech/postgres-pvc
+
+# Voir l'état des PVC
+kubectl get pvc -n fintech
+# NAME           STATUS   VOLUME            CAPACITY   ACCESS MODES   STORAGECLASS
+# postgres-pvc   Bound    pv-postgres-data  20Gi       RWO            manual</code></pre>
+      </div>
+
+      <h3>3.3 - Utiliser un PVC dans un Pod / Deployment</h3>
+
+      <p>Une fois le PVC créé et lié, on le monte dans un Pod via <code>volumes</code> et <code>volumeMounts</code> :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">deployment-postgres-avec-pvc.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  namespace: fintech
+spec:
+  replicas: 1                         # Base de données : 1 seule réplica
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: fintech_db
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data  # Répertoire de données PostgreSQL
+              subPath: pgdata                      # Sous-répertoire (évite les conflits)
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc                # Référence au PVC</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>Le <code>subPath</code> est important pour PostgreSQL :</strong> PostgreSQL exige que le répertoire de données soit vide ou contienne une base valide. Certains types de volume créent un dossier <code>lost+found</code> à la racine. Le <code>subPath: pgdata</code> monte le volume dans un sous-répertoire propre, évitant ce conflit.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 4. STORAGECLASS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>4 - StorageClass - Provisionnement dynamique</h2>
+
+      <p>Créer manuellement des PersistentVolumes avant chaque PVC est fastidieux et ne passe pas à l'échelle. C'est là qu'interviennent les <strong>StorageClasses</strong> : elles permettent le <strong>provisionnement dynamique</strong> - Kubernetes crée automatiquement un PV quand un PVC le demande.</p>
+
+      <h3>4.1 - Qu'est-ce que le provisionnement dynamique ?</h3>
+
+      <p>Avec le provisionnement dynamique :</p>
+
+      <ol>
+        <li>L'administrateur crée une <strong>StorageClass</strong> qui décrit le type de stockage disponible</li>
+        <li>L'utilisateur crée un <strong>PVC</strong> qui référence cette StorageClass</li>
+        <li>Kubernetes appelle automatiquement le <strong>provisioner</strong> de la StorageClass pour créer un PV</li>
+        <li>Le PV est automatiquement lié au PVC</li>
+      </ol>
+
+      <p>Plus besoin de pré-provisionner des PV manuellement. Le workflow devient : <strong>StorageClass → PVC → PV (auto) → Pod</strong>.</p>
+
+      <h3>4.2 - StorageClass pour différents providers</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">storageclass-aws-gp3.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># AWS EBS gp3 - Stockage SSD haute performance
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: ebs.csi.aws.com          # Provisioner CSI pour AWS EBS
+parameters:
+  type: gp3                           # Type de volume EBS
+  iops: "3000"                        # IOPS provisionnées
+  throughput: "125"                    # Mo/s
+  encrypted: "true"                   # Chiffrement au repos
+reclaimPolicy: Retain                  # Conserver les données en production
+allowVolumeExpansion: true             # Permettre l'extension de volume
+volumeBindingMode: WaitForFirstConsumer # Lier au moment du scheduling</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">storageclass-gce-ssd.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># GCE Persistent Disk SSD
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: pd.csi.storage.gke.io    # Provisioner CSI pour GCE
+parameters:
+  type: pd-ssd                        # SSD persistant
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">storageclass-local-path.yaml (développement)</span>
+        </div>
+        <pre><code class="language-yaml"># Rancher local-path - Développement local (Kind, k3s)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-path
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"  # StorageClass par défaut
+provisioner: rancher.io/local-path
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer</code></pre>
+      </div>
+
+      <h3>4.3 - PVC avec StorageClass (provisionnement dynamique)</h3>
+
+      <p>Le PVC référence simplement la StorageClass. Kubernetes s'occupe du reste :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">pvc-dynamique.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: fintech
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd           # Référence la StorageClass
+  resources:
+    requests:
+      storage: 50Gi                    # Taille demandée
+# → Kubernetes crée automatiquement un PV de 50Gi avec un volume EBS gp3</code></pre>
+      </div>
+
+      <h3>4.4 - StorageClass par défaut</h3>
+
+      <p>Si un PVC ne spécifie pas de <code>storageClassName</code>, Kubernetes utilise la <strong>StorageClass par défaut</strong> du cluster. Celle-ci est marquée par l'annotation <code>storageclass.kubernetes.io/is-default-class: "true"</code>.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Voir la StorageClass par défaut</span>
+        </div>
+        <pre><code class="language-bash"># Lister les StorageClasses - celle avec (default) est la classe par défaut
+kubectl get storageclass
+# NAME                   PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE
+# fast-ssd               ebs.csi.aws.com         Retain          WaitForFirstConsumer
+# standard (default)     kubernetes.io/aws-ebs   Delete          Immediate</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Toujours utiliser le provisionnement dynamique en production.</strong> Les StorageClasses automatisent la création de volumes, garantissent la cohérence de la configuration (chiffrement, type de disque, IOPS), et évitent les erreurs humaines. Le provisionnement statique (PV manuels) devrait être réservé aux cas très spécifiques (stockage existant à importer).
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 5. VOLUMES FINTECH ═══════════════════════════════════════════ -->
+    <section>
+      <h2>5 - Volumes dans notre système fintech</h2>
+
+      <p>Notre système fintech a plusieurs composants qui nécessitent du stockage persistant. Voici les manifests complets pour chaque besoin :</p>
+
+      <h3>5.1 - PostgreSQL - Données de la base</h3>
+
+      <p>La base de données est le composant le plus critique. Les données des comptes, transactions et utilisateurs doivent absolument survivre aux redémarrages :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">postgres-storage.yaml</span>
+        </div>
+        <pre><code class="language-yaml">---
+# StorageClass pour les bases de données (SSD haute performance)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: db-fast-ssd
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  iops: "5000"
+  throughput: "250"
+  encrypted: "true"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+# PVC pour PostgreSQL
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: bmis-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: db-fast-ssd
+  resources:
+    requests:
+      storage: 100Gi</code></pre>
+      </div>
+
+      <h3>5.2 - Redis - Persistance du cache</h3>
+
+      <p>Redis est utilisé comme cache et broker de messages. Même si les données peuvent être reconstituées, la persistance évite un cache froid après chaque redémarrage :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">redis-storage.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: bmis-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: db-fast-ssd
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: bmis-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["--appendonly", "yes"]   # Activer la persistance AOF
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      volumes:
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-data</code></pre>
+      </div>
+
+      <h3>5.3 - Uploads de fichiers (documents KYC, images)</h3>
+
+      <p>Les fichiers uploadés par les utilisateurs (documents KYC, pièces d'identité, justificatifs) doivent être accessibles par <strong>plusieurs Pods</strong> simultanément. On utilise <code>ReadWriteMany</code> avec un stockage réseau :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">uploads-storage.yaml</span>
+        </div>
+        <pre><code class="language-yaml">---
+# StorageClass pour les fichiers partagés (EFS sur AWS)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: shared-files
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: fs-0a1b2c3d4e5f67890
+  directoryPerms: "700"
+reclaimPolicy: Retain
+---
+# PVC pour les uploads - ReadWriteMany
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kyc-uploads
+  namespace: bmis-prod
+spec:
+  accessModes:
+    - ReadWriteMany                    # Accessible par plusieurs Pods
+  storageClassName: shared-files
+  resources:
+    requests:
+      storage: 200Gi
+---
+# Deployment du service KYC avec le volume partagé
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kyc-service
+  namespace: bmis-prod
+spec:
+  replicas: 3                          # Plusieurs réplicas accèdent au même volume
+  selector:
+    matchLabels:
+      app: kyc-service
+  template:
+    metadata:
+      labels:
+        app: kyc-service
+    spec:
+      containers:
+        - name: kyc-service
+          image: bmis/kyc-service:1.0.0
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: kyc-uploads</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 6. VOLUMECLAIMTEMPLATES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>6 - volumeClaimTemplates dans StatefulSet</h2>
+
+      <p>Un <strong>StatefulSet</strong> gère les workloads avec état (bases de données, systèmes distribués). Contrairement à un Deployment, chaque Pod d'un StatefulSet a une <strong>identité stable</strong> et un <strong>stockage dédié</strong>. Le mécanisme clé est le <code>volumeClaimTemplates</code> : il crée automatiquement un PVC unique pour chaque Pod.</p>
+
+      <h3>6.1 - PostgreSQL StatefulSet avec volumeClaimTemplates</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">postgres-statefulset.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgresql
+  namespace: bmis-prod
+spec:
+  serviceName: postgresql-headless     # Service headless obligatoire
+  replicas: 3                          # 3 instances PostgreSQL
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: fintech_db
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          volumeMounts:
+            - name: postgres-data      # Correspond au volumeClaimTemplate
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+  volumeClaimTemplates:                # ← Crée un PVC par Pod
+    - metadata:
+        name: postgres-data            # Nom utilisé dans volumeMounts
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: db-fast-ssd
+        resources:
+          requests:
+            storage: 50Gi</code></pre>
+      </div>
+
+      <p>Avec ce StatefulSet, Kubernetes crée automatiquement <strong>3 PVC</strong> distincts :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">PVC créés automatiquement</span>
+        </div>
+        <pre><code class="language-bash">kubectl get pvc -n bmis-prod
+# NAME                          STATUS   VOLUME          CAPACITY   STORAGECLASS
+# postgres-data-postgresql-0    Bound    pvc-abc123...   50Gi       db-fast-ssd
+# postgres-data-postgresql-1    Bound    pvc-def456...   50Gi       db-fast-ssd
+# postgres-data-postgresql-2    Bound    pvc-ghi789...   50Gi       db-fast-ssd
+
+# Chaque Pod a son propre volume persistant :
+# postgresql-0 → postgres-data-postgresql-0
+# postgresql-1 → postgres-data-postgresql-1
+# postgresql-2 → postgres-data-postgresql-2</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>Les PVC des StatefulSets ne sont pas supprimés automatiquement.</strong> Quand un StatefulSet est supprimé ou réduit, les PVC persistent. C'est une protection contre la perte de données. Il faut les supprimer manuellement si nécessaire : <code>kubectl delete pvc postgres-data-postgresql-2 -n bmis-prod</code>.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 7. NAMESPACES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>7 - Namespaces - Isolation logique</h2>
+
+      <p>Un <strong>Namespace</strong> est une division logique du cluster Kubernetes. Il permet de <strong>séparer les ressources</strong> (Pods, Services, Deployments, ConfigMaps, Secrets, PVC) en groupes isolés au sein du même cluster physique. C'est l'équivalent de « dossiers » dans un système de fichiers, mais pour les objets Kubernetes.</p>
+
+      <h3>7.1 - Pourquoi les Namespaces ?</h3>
+
+      <p>Sans namespaces, toutes les ressources cohabitent dans le même espace. Avec des dizaines de microservices, des environnements de dev/staging/prod, et plusieurs équipes, cela devient rapidement ingérable. Les namespaces apportent :</p>
+
+      <ul>
+        <li><strong>Isolation des environnements</strong> - dev, staging et prod dans le même cluster</li>
+        <li><strong>Séparation des équipes</strong> - chaque équipe travaille dans son namespace</li>
+        <li><strong>Quotas de ressources</strong> - limiter les ressources CPU/mémoire par namespace</li>
+        <li><strong>Politiques réseau</strong> - contrôler la communication entre namespaces</li>
+        <li><strong>RBAC</strong> - droits d'accès différenciés par namespace</li>
+      </ul>
+
+      <h3>7.2 - Namespaces par défaut</h3>
+
+      <p>Chaque cluster Kubernetes est créé avec <strong>4 namespaces</strong> par défaut :</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Namespace</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>default</code></td>
+            <td>Namespace par défaut pour les ressources sans namespace explicite</td>
+          </tr>
+          <tr>
+            <td><code>kube-system</code></td>
+            <td>Composants système de Kubernetes (kube-dns, kube-proxy, etcd, scheduler)</td>
+          </tr>
+          <tr>
+            <td><code>kube-public</code></td>
+            <td>Ressources accessibles publiquement (rarement utilisé)</td>
+          </tr>
+          <tr>
+            <td><code>kube-node-lease</code></td>
+            <td>Objets Lease pour la détection de santé des nœuds</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>7.3 - Créer et utiliser des Namespaces</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Commandes kubectl pour les namespaces</span>
+        </div>
+        <pre><code class="language-bash"># Créer un namespace avec kubectl
+kubectl create namespace bmis-dev
+kubectl create namespace bmis-staging
+kubectl create namespace bmis-prod
+
+# Lister les namespaces
+kubectl get namespaces
+# NAME              STATUS   AGE
+# default           Active   30d
+# kube-system       Active   30d
+# kube-public       Active   30d
+# kube-node-lease   Active   30d
+# bmis-dev          Active   5s
+# bmis-staging      Active   4s
+# bmis-prod         Active   3s
+
+# Définir le namespace par défaut pour kubectl
+kubectl config set-context --current --namespace=bmis-prod
+
+# Voir les Pods d'un namespace spécifique
+kubectl get pods -n bmis-staging
+
+# Voir les Pods de TOUS les namespaces
+kubectl get pods --all-namespaces
+kubectl get pods -A              # Raccourci</code></pre>
+      </div>
+
+      <h3>7.4 - Manifest YAML d'un Namespace</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">namespace-prod.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: bmis-prod
+  labels:
+    environment: production
+    team: bmis
+    project: fintech</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Appliquer le namespace</span>
+        </div>
+        <pre><code class="language-bash">kubectl apply -f namespace-prod.yaml
+# namespace/bmis-prod created</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 8. NAMESPACES SYSTÈME ═══════════════════════════════════════════ -->
+    <section>
+      <h2>8 - Namespaces pour notre système</h2>
+
+      <p>Dans notre système fintech BMIS, nous utilisons les namespaces pour séparer les environnements de déploiement. Chaque environnement a son propre namespace avec ses propres ressources, configurations et secrets :</p>
+
+      <h3>8.1 - Structure des namespaces</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">namespaces.yaml</span>
+        </div>
+        <pre><code class="language-yaml">---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bmis-dev
+  labels:
+    environment: development
+    team: bmis
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bmis-staging
+  labels:
+    environment: staging
+    team: bmis
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bmis-prod
+  labels:
+    environment: production
+    team: bmis</code></pre>
+      </div>
+
+      <h3>8.2 - Déployer la même application dans différents namespaces</h3>
+
+      <p>Le même manifest peut être déployé dans différents namespaces en changeant simplement le champ <code>namespace</code> ou en utilisant le flag <code>-n</code> :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Déploiement multi-environnement</span>
+        </div>
+        <pre><code class="language-bash"># Déployer en dev
+kubectl apply -f deployment.yaml -n bmis-dev
+
+# Déployer en staging
+kubectl apply -f deployment.yaml -n bmis-staging
+
+# Déployer en production
+kubectl apply -f deployment.yaml -n bmis-prod
+
+# Voir les Pods dans chaque environnement
+kubectl get pods -n bmis-dev
+kubectl get pods -n bmis-staging
+kubectl get pods -n bmis-prod</code></pre>
+      </div>
+
+      <h3>8.3 - Communication inter-namespace</h3>
+
+      <p>Par défaut, les Pods de différents namespaces <strong>peuvent communiquer</strong> entre eux. Un Service est accessible depuis un autre namespace via son nom DNS complet (FQDN) :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Communication cross-namespace</span>
+        </div>
+        <pre><code class="language-yaml"># Format DNS complet pour accéder à un Service d'un autre namespace :
+# &lt;service-name&gt;.&lt;namespace&gt;.svc.cluster.local
+
+# Exemples dans notre système :
+# Depuis bmis-dev, accéder au PostgreSQL de bmis-prod :
+spring:
+  datasource:
+    url: jdbc:postgresql://postgresql.bmis-prod.svc.cluster.local:5432/fintech_db
+
+# Depuis n'importe quel namespace, accéder au cache Redis de bmis-prod :
+spring:
+  redis:
+    host: redis.bmis-prod.svc.cluster.local
+    port: 6379
+
+# Dans le même namespace, le nom court suffit :
+spring:
+  datasource:
+    url: jdbc:postgresql://postgresql:5432/fintech_db</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>DNS interne Kubernetes :</strong> Chaque Service obtient une entrée DNS automatique au format <code>&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>. Dans le même namespace, le nom court (<code>postgresql</code>) suffit. Pour la communication cross-namespace, utilisez toujours le FQDN.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 9. RESOURCE QUOTAS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>9 - Resource Quotas par namespace</h2>
+
+      <p>Les <strong>Resource Quotas</strong> permettent de limiter la quantité totale de ressources qu'un namespace peut consommer. C'est essentiel pour empêcher un environnement de dev gourmand de monopoliser les ressources du cluster au détriment de la production.</p>
+
+      <h3>9.1 - ResourceQuota</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">resourcequota-staging.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: staging-quota
+  namespace: bmis-staging
+spec:
+  hard:
+    # Limites de calcul
+    requests.cpu: "4"                  # Total CPU demandé max : 4 cores
+    requests.memory: 8Gi              # Total mémoire demandée max : 8 Gi
+    limits.cpu: "8"                   # Total CPU limité max : 8 cores
+    limits.memory: 16Gi              # Total mémoire limitée max : 16 Gi
+
+    # Limites d'objets
+    pods: "20"                        # Maximum 20 Pods dans ce namespace
+    services: "10"                    # Maximum 10 Services
+    persistentvolumeclaims: "5"       # Maximum 5 PVC
+    configmaps: "20"                  # Maximum 20 ConfigMaps
+    secrets: "20"                     # Maximum 20 Secrets
+
+    # Limites de stockage
+    requests.storage: 100Gi           # Total stockage PVC max : 100 Gi</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Vérifier l'utilisation des quotas</span>
+        </div>
+        <pre><code class="language-bash"># Voir les quotas et l'utilisation actuelle
+kubectl describe resourcequota staging-quota -n bmis-staging
+# Name:                    staging-quota
+# Namespace:               bmis-staging
+# Resource                 Used    Hard
+# --------                 ----    ----
+# configmaps               3       20
+# limits.cpu               2       8
+# limits.memory            4Gi     16Gi
+# persistentvolumeclaims   2       5
+# pods                     6       20
+# requests.cpu             1       4
+# requests.memory          2Gi     8Gi
+# requests.storage         30Gi    100Gi
+# secrets                  5       20
+# services                 3       10</code></pre>
+      </div>
+
+      <h3>9.2 - LimitRange</h3>
+
+      <p>Tandis que le ResourceQuota limite le <strong>total</strong> du namespace, le <strong>LimitRange</strong> définit les limites <strong>par conteneur ou Pod individuel</strong>. Il impose des minimums, maximums et valeurs par défaut :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">limitrange-staging.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: LimitRange
+metadata:
+  name: staging-limits
+  namespace: bmis-staging
+spec:
+  limits:
+    - type: Container
+      default:                         # Limites par défaut (si non spécifiées dans le Pod)
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:                  # Requests par défaut
+        cpu: 100m
+        memory: 128Mi
+      max:                             # Maximum par conteneur
+        cpu: "2"
+        memory: 4Gi
+      min:                             # Minimum par conteneur
+        cpu: 50m
+        memory: 64Mi
+    - type: PersistentVolumeClaim
+      max:
+        storage: 50Gi                  # PVC max 50 Gi en staging
+      min:
+        storage: 1Gi                   # PVC min 1 Gi</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>LimitRange et ResourceQuota sont complémentaires :</strong> Le LimitRange garantit que chaque conteneur a des limites raisonnables (empêche un seul Pod de tout consommer). Le ResourceQuota garantit que le namespace entier reste dans ses limites. En production, utilisez toujours les deux ensemble.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 10. KUSTOMIZE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>10 - Kustomize pour la gestion multi-environnement</h2>
+
+      <p><strong>Kustomize</strong> est un outil intégré à <code>kubectl</code> qui permet de personnaliser les manifests Kubernetes sans les dupliquer. Au lieu de copier les mêmes fichiers YAML pour chaque environnement et modifier quelques valeurs, Kustomize utilise un système de <strong>base + overlays</strong>.</p>
+
+      <h3>10.1 - Structure de dossiers</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Arborescence Kustomize</span>
+        </div>
+        <pre><code class="language-bash">k8s/
+├── base/                          # Manifests communs à tous les environnements
+│   ├── kustomization.yaml
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── configmap.yaml
+└── overlays/                      # Personnalisations par environnement
+    ├── dev/
+    │   ├── kustomization.yaml
+    │   ├── namespace.yaml
+    │   └── replica-patch.yaml
+    ├── staging/
+    │   ├── kustomization.yaml
+    │   ├── namespace.yaml
+    │   └── resource-patch.yaml
+    └── prod/
+        ├── kustomization.yaml
+        ├── namespace.yaml
+        ├── replica-patch.yaml
+        └── resource-patch.yaml</code></pre>
+      </div>
+
+      <h3>10.2 - Fichiers Kustomize</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">k8s/base/kustomization.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># Base - ressources communes
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+commonLabels:
+  app: bmis-api
+  managed-by: kustomize</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">k8s/overlays/prod/kustomization.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># Overlay Production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base                        # Référence vers la base
+  - namespace.yaml
+namespace: bmis-prod                  # Applique le namespace à toutes les ressources
+patches:
+  - path: replica-patch.yaml          # Patchs spécifiques à la prod
+  - path: resource-patch.yaml
+images:
+  - name: bmis/api-backend            # Override de l'image
+    newTag: "2.1.0"                   # Version de production</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">k8s/overlays/prod/replica-patch.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># Patch pour augmenter les réplicas en production
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+spec:
+  replicas: 5                         # 5 réplicas en prod (vs 1 en dev)</code></pre>
+      </div>
+
+      <h3>10.3 - Appliquer avec Kustomize</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Commandes Kustomize</span>
+        </div>
+        <pre><code class="language-bash"># Prévisualiser ce qui sera appliqué (dry-run)
+kubectl kustomize overlays/prod
+
+# Appliquer la configuration de production
+kubectl apply -k overlays/prod
+
+# Appliquer la configuration de staging
+kubectl apply -k overlays/staging
+
+# Appliquer la configuration de dev
+kubectl apply -k overlays/dev</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Kustomize vs Helm :</strong> Kustomize est parfait pour les configurations simples à moyennes avec peu de variations entre environnements. Pour des configurations très complexes avec des boucles, des conditions et des templates réutilisables, considérez <strong>Helm</strong>. Les deux peuvent cohabiter dans un même projet.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 11. ERREURS COURANTES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>11 - Erreurs courantes</h2>
+
+      <div class="callout bad">
+        <strong>Utiliser <code>hostPath</code> en production</strong> - Les données sont liées à un seul nœud. Si le Pod est reprogrammé sur un autre nœud, les données sont perdues. Utilisez toujours un stockage réseau (EBS, NFS, EFS, Azure Disk) ou des StorageClasses avec provisionnement dynamique.
+      </div>
+
+      <div class="callout bad">
+        <strong>Ne pas utiliser de StorageClass</strong> - Le provisionnement manuel de PV est une source d'erreurs et ne passe pas à l'échelle. Définissez des StorageClasses pour chaque type de besoin (SSD rapide pour les BDD, stockage partagé pour les fichiers, stockage standard pour les logs) et laissez Kubernetes provisionner dynamiquement.
+      </div>
+
+      <div class="callout bad">
+        <strong>Aucun Resource Quota sur les namespaces</strong> - Sans quotas, un namespace en développement peut consommer toutes les ressources du cluster et impacter la production. Définissez toujours des ResourceQuotas et des LimitRanges, même généreux, sur chaque namespace non critique.
+      </div>
+
+      <div class="callout bad">
+        <strong>Tout déployer dans le namespace <code>default</code></strong> - C'est l'erreur la plus fréquente des débutants. Le namespace <code>default</code> devrait rester presque vide. Créez des namespaces dédiés par environnement, par équipe ou par application pour une meilleure organisation, sécurité et gestion des ressources.
+      </div>
+
+      <div class="callout bad">
+        <strong>Oublier <code>subPath</code> pour PostgreSQL</strong> - Sans <code>subPath</code>, PostgreSQL peut échouer au démarrage à cause du dossier <code>lost+found</code> créé par certains systèmes de fichiers. Utilisez toujours <code>subPath: pgdata</code> pour les volumes PostgreSQL.
+      </div>
+
+      <div class="callout bad">
+        <strong>Ne pas définir de <code>reclaimPolicy: Retain</code> en production</strong> - La politique par défaut des StorageClasses est souvent <code>Delete</code>. Si un PVC est accidentellement supprimé, le volume et toutes les données sont perdus. En production, utilisez toujours <code>Retain</code> pour les données critiques.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 12. BEST PRACTICES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>12 - Best practices</h2>
+
+      <div class="callout tip">
+        <strong>Toujours utiliser le provisionnement dynamique</strong> - Créez des StorageClasses adaptées à chaque besoin et laissez Kubernetes provisionner les PV automatiquement. Réservez le provisionnement statique aux cas très spécifiques (import de stockage existant).
+      </div>
+
+      <div class="callout tip">
+        <strong>Chiffrer les volumes au repos</strong> - Activez le chiffrement dans les paramètres de la StorageClass (<code>encrypted: "true"</code> pour EBS). Les données financières et personnelles doivent toujours être chiffrées, au repos comme en transit.
+      </div>
+
+      <div class="callout tip">
+        <strong>Utiliser <code>volumeBindingMode: WaitForFirstConsumer</code></strong> - Ce mode retarde la création du volume jusqu'au scheduling du Pod. Cela garantit que le volume est créé dans la même zone de disponibilité que le nœud, évitant les problèmes de montage cross-AZ.
+      </div>
+
+      <div class="callout tip">
+        <strong>Activer <code>allowVolumeExpansion</code></strong> - Permettez l'extension des volumes dans vos StorageClasses. Cela vous permettra d'augmenter la taille d'un PVC sans recréer le volume, simplement en modifiant la taille dans le manifest et en réappliquant.
+      </div>
+
+      <div class="callout tip">
+        <strong>Un namespace par environnement, pas par microservice</strong> - Regroupez les microservices d'un même environnement dans un seul namespace (<code>bmis-prod</code>, <code>bmis-staging</code>). Cela simplifie la communication inter-services et la gestion des quotas.
+      </div>
+
+      <div class="callout tip">
+        <strong>Appliquer des labels cohérents aux namespaces</strong> - Utilisez des labels comme <code>environment</code>, <code>team</code>, <code>project</code> sur vos namespaces. Cela facilite les Network Policies, le RBAC et le monitoring (par ex. filtrer les métriques Grafana par label <code>environment</code>).
+      </div>
+
+      <div class="callout tip">
+        <strong>Sauvegarder régulièrement les PV</strong> - Utilisez des outils comme <strong>Velero</strong> pour créer des snapshots réguliers de vos PersistentVolumes. En cas de corruption ou de suppression accidentelle, vous pourrez restaurer les données rapidement.
+      </div>
+
+      <div class="callout tip">
+        <strong>Utiliser Kustomize ou Helm pour le multi-environnement</strong> - Ne dupliquez jamais les manifests YAML entre les environnements. Utilisez Kustomize (base + overlays) ou Helm (charts + values) pour gérer les variations de configuration entre dev, staging et production.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ NAV FOOTER ═══════════════════════════════════════════ -->
+    <div class="lesson-nav">
+      <a href="06-kubernetes-configmaps-secrets.html">
+        <span class="nav-dir">← Leçon précédente</span>
+        <span class="nav-title">ConfigMaps &amp; Secrets</span>
+      </a>
+      <a href="08-deploy-fintech-system.html" class="nav-next">
+        <span class="nav-dir">Leçon suivante →</span>
+        <span class="nav-title">Déployer le Système Fintech</span>
+      </a>
+    </div>
+
+    </div>
+  </main>
+
+  </div>
+
+  <button class="back-to-top" id="back-to-top" aria-label="Retour en haut">↑</button>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>

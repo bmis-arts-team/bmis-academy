@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leçon 2 - Docker Volumes &amp; Networking | BMIS Academy</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/dockerfile.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <div id="progress-bar"></div>
+
+  <button id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+  <div id="sidebar-overlay"></div>
+
+  <div class="docs-layout">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <a href="../../index.html" class="sidebar-brand">
+      <div class="brand-logo">BM</div>
+      <div class="brand-text">
+        <span class="brand-name">BMIS Academy</span>
+        <span class="brand-tagline">DevOps &amp; Production</span>
+      </div>
+    </a>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Vue d'ensemble</div>
+        <a href="index.html" class="nav-link">Accueil du cours</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">1 - Fondations Docker</div>
+        <a href="01-docker-images-containers.html" class="nav-link">Images vs Containers</a>
+        <a href="02-docker-volumes-networking.html" class="nav-link active">Volumes &amp; Networking</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">2 - Kubernetes Core</div>
+        <a href="03-kubernetes-architecture.html" class="nav-link">Architecture K8s</a>
+        <a href="04-kubernetes-workloads.html" class="nav-link">Deployments &amp; StatefulSets</a>
+        <a href="05-kubernetes-services-ingress.html" class="nav-link">Services &amp; Ingress</a>
+        <a href="06-kubernetes-configmaps-secrets.html" class="nav-link">ConfigMaps &amp; Secrets</a>
+        <a href="07-kubernetes-storage-namespaces.html" class="nav-link">Storage &amp; Namespaces</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">3 - Déploiement Système</div>
+        <a href="08-deploy-fintech-system.html" class="nav-link">Déployer le Système Fintech</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">4 - CI/CD</div>
+        <a href="09-cicd-github-actions.html" class="nav-link">Pipeline GitHub Actions</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">5 - Observabilité</div>
+        <a href="10-observability-metrics.html" class="nav-link">Prometheus &amp; Grafana</a>
+        <a href="11-observability-logging-alerting.html" class="nav-link">ELK Stack &amp; Alerting</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">6 - Réseau &amp; Sécurité</div>
+        <a href="12-networking-security.html" class="nav-link">Networking &amp; Security</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">7 - CDN &amp; Assets</div>
+        <a href="13-cdn-asset-delivery.html" class="nav-link">CDN &amp; Distribution</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">8 - Production</div>
+        <a href="14-production-best-practices.html" class="nav-link">Best Practices Production</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../../index.html" class="sidebar-footer-link">← Retour au catalogue</a>
+    </div>
+  </aside>
+
+  <main class="docs-main">
+    <div class="docs-content">
+
+      <!-- ========== HEADER ========== -->
+      <div class="lesson-header">
+        <div class="lesson-meta">
+          <span class="lesson-number">Leçon 2</span>
+          <span class="lesson-section">Section 1 - Fondations Docker</span>
+        </div>
+        <h1>Docker Volumes &amp; Networking</h1>
+        <p class="lesson-subtitle">Persistance des données et communication entre containers - les deux piliers de Docker en production.</p>
+      </div>
+
+      <!-- ========== 1. LE PROBLÈME DE LA PERSISTANCE ========== -->
+      <h3>1 - Le problème de la persistance</h3>
+
+      <p>
+        Dans la leçon précédente, nous avons vu que chaque container possède une <strong>couche en écriture
+        éphémère</strong> (writable layer). Quand un container est supprimé, cette couche disparaît
+        <strong>définitivement</strong> - et avec elle, toutes les données qu'elle contenait.
+      </p>
+
+      <p>
+        Ce comportement est voulu par design : un container doit être <strong>immutable</strong> et
+        <strong>remplaçable</strong>. Mais en production, vos applications ont besoin de persister des données :
+        bases de données, fichiers uploadés, logs, caches, sessions utilisateur…
+      </p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Démonstration : la perte de données</span>
+        </div>
+        <pre><code class="language-bash"># Créer un container PostgreSQL sans volume
+docker run -d --name pg-sans-volume \
+  -e POSTGRES_PASSWORD=secret \
+  postgres:16-alpine
+
+# Créer une base et insérer des données
+docker exec -it pg-sans-volume psql -U postgres -c "
+  CREATE DATABASE fintech;
+"
+docker exec -it pg-sans-volume psql -U postgres -d fintech -c "
+  CREATE TABLE transactions (
+    id SERIAL PRIMARY KEY,
+    montant DECIMAL(15,2),
+    devise VARCHAR(3),
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+  INSERT INTO transactions (montant, devise) VALUES (1500.00, 'EUR');
+  INSERT INTO transactions (montant, devise) VALUES (2300.50, 'USD');
+"
+
+# Vérifier : les données existent
+docker exec -it pg-sans-volume psql -U postgres -d fintech -c "
+  SELECT * FROM transactions;
+"
+#  id | montant  | devise |         created_at
+# ----+----------+--------+----------------------------
+#   1 |  1500.00 | EUR    | 2026-04-27 10:30:00.123456
+#   2 |  2300.50 | USD    | 2026-04-27 10:30:00.234567
+
+# Supprimer et recréer le container
+docker rm -f pg-sans-volume
+docker run -d --name pg-sans-volume \
+  -e POSTGRES_PASSWORD=secret \
+  postgres:16-alpine
+
+# Les données ont DISPARU
+docker exec -it pg-sans-volume psql -U postgres -c "\l"
+# La base "fintech" n'existe plus !</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <strong>Réalité en production :</strong> Sans volumes, un simple <code>docker-compose down</code> suivi
+        d'un <code>docker-compose up</code> détruirait l'intégralité de votre base de données. Toutes les
+        transactions financières, les comptes utilisateurs, les historiques - tout serait perdu.
+      </div>
+
+      <p>
+        C'est précisément pour résoudre ce problème que Docker propose les <strong>volumes</strong> - un
+        mécanisme de persistance qui découple le cycle de vie des données de celui des containers.
+      </p>
+
+      <!-- ========== 2. TYPES DE VOLUMES ========== -->
+      <h3>2 - Types de volumes Docker</h3>
+
+      <p>
+        Docker propose trois mécanismes de montage pour persister ou partager des données entre l'hôte et les
+        containers. Chacun a des cas d'usage spécifiques et des compromis différents.
+      </p>
+
+      <h4>2.1 - Bind Mounts</h4>
+
+      <p>
+        Un <strong>bind mount</strong> lie un répertoire ou fichier <strong>spécifique de l'hôte</strong> à un
+        chemin dans le container. Le chemin hôte doit exister au préalable.
+      </p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Bind mount - Syntaxe classique et moderne</span>
+        </div>
+        <pre><code class="language-bash"># Syntaxe classique avec -v
+docker run -d --name spring-app \
+  -v /home/dev/app/config:/app/config:ro \
+  -v /home/dev/app/logs:/app/logs \
+  fintech-api:latest
+
+# Syntaxe moderne avec --mount (plus explicite, recommandée)
+docker run -d --name spring-app \
+  --mount type=bind,source=/home/dev/app/config,target=/app/config,readonly \
+  --mount type=bind,source=/home/dev/app/logs,target=/app/logs \
+  fintech-api:latest</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>Cas d'usage typique :</strong> Les bind mounts sont parfaits en <strong>développement</strong> pour
+        monter votre code source dans le container et voir les changements en temps réel (hot-reload).
+        En production, préférez les named volumes.
+      </div>
+
+      <h4>2.2 - Named Volumes (volumes nommés)</h4>
+
+      <p>
+        Les <strong>named volumes</strong> sont gérés entièrement par Docker. Ils sont stockés dans le répertoire
+        Docker de l'hôte (<code>/var/lib/docker/volumes/</code>) et identifiés par un nom logique. C'est la
+        méthode <strong>recommandée pour la production</strong>.
+      </p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Gestion des named volumes</span>
+        </div>
+        <pre><code class="language-bash"># Créer un volume nommé
+docker volume create postgres-data
+
+# Inspecter le volume
+docker volume inspect postgres-data
+# [
+#   {
+#     "CreatedAt": "2026-04-27T10:00:00Z",
+#     "Driver": "local",
+#     "Labels": {},
+#     "Mountpoint": "/var/lib/docker/volumes/postgres-data/_data",
+#     "Name": "postgres-data",
+#     "Options": {},
+#     "Scope": "local"
+#   }
+# ]
+
+# Utiliser le volume avec un container
+docker run -d --name postgres \
+  -v postgres-data:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=secret \
+  postgres:16-alpine
+
+# Lister tous les volumes
+docker volume ls
+# DRIVER    VOLUME NAME
+# local     postgres-data
+# local     redis-data
+
+# Supprimer un volume (ATTENTION : irréversible)
+docker volume rm postgres-data
+
+# Supprimer les volumes orphelins (non utilisés)
+docker volume prune</code></pre>
+      </div>
+
+      <h4>2.3 - tmpfs Mounts</h4>
+
+      <p>
+        Un <strong>tmpfs mount</strong> stocke les données <strong>uniquement en mémoire RAM</strong>. Aucune
+        donnée n'est écrite sur le disque de l'hôte. Idéal pour les données sensibles temporaires comme les
+        tokens, les secrets en cours de traitement, ou les caches à haute performance.
+      </p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">tmpfs mount</span>
+        </div>
+        <pre><code class="language-bash"># Monter un tmpfs de 100 Mo
+docker run -d --name secure-processor \
+  --tmpfs /app/temp:rw,size=104857600,noexec \
+  --mount type=tmpfs,destination=/app/secrets,tmpfs-size=52428800 \
+  fintech-processor:latest
+
+# Le contenu disparaît dès que le container s'arrête
+# Aucune trace sur le disque de l'hôte</code></pre>
+      </div>
+
+      <h4>Comparaison des trois types</h4>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Caractéristique</th>
+              <th>Bind Mount</th>
+              <th>Named Volume</th>
+              <th>tmpfs Mount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Emplacement</td>
+              <td>Chemin spécifique sur l'hôte</td>
+              <td>Géré par Docker (<code>/var/lib/docker/volumes/</code>)</td>
+              <td>Mémoire RAM uniquement</td>
+            </tr>
+            <tr>
+              <td>Persistance</td>
+              <td>Oui (lié au filesystem hôte)</td>
+              <td>Oui (survit au container)</td>
+              <td>Non (perdu à l'arrêt)</td>
+            </tr>
+            <tr>
+              <td>Portabilité</td>
+              <td>Faible (chemin absolu)</td>
+              <td>Haute (nom logique)</td>
+              <td>N/A</td>
+            </tr>
+            <tr>
+              <td>Permissions</td>
+              <td>Hérite du filesystem hôte</td>
+              <td>Géré par Docker</td>
+              <td>Configurable</td>
+            </tr>
+            <tr>
+              <td>Performance</td>
+              <td>Native (sauf macOS/Windows)</td>
+              <td>Native</td>
+              <td>Très haute (RAM)</td>
+            </tr>
+            <tr>
+              <td>Backup</td>
+              <td>Outils hôte standards</td>
+              <td>Via container auxiliaire</td>
+              <td>Impossible</td>
+            </tr>
+            <tr>
+              <td>Cas d'usage</td>
+              <td>Développement, config</td>
+              <td>Production, BDD, fichiers</td>
+              <td>Secrets, cache temporaire</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="compare">
+        <div class="compare-col">
+          <div class="compare-header bad">Bind Mounts en Production</div>
+          <ul>
+            <li>Chemin absolu = couplage à l'hôte</li>
+            <li>Problèmes de permissions fréquents</li>
+            <li>Pas portable entre environnements</li>
+            <li>Risque de sécurité (accès au filesystem hôte)</li>
+            <li>Difficile à gérer en cluster</li>
+          </ul>
+        </div>
+        <div class="compare-col">
+          <div class="compare-header good">Named Volumes en Production</div>
+          <ul>
+            <li>Nom logique = portable et découplé</li>
+            <li>Docker gère les permissions</li>
+            <li>Compatible avec tous les environnements</li>
+            <li>Isolation du filesystem hôte</li>
+            <li>Drivers pour stockage distant (NFS, AWS EBS)</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ========== 3. VOLUMES POSTGRESQL ========== -->
+      <h3>3 - Volumes en pratique - PostgreSQL</h3>
+
+      <p>
+        PostgreSQL stocke toutes ses données dans le répertoire <code>/var/lib/postgresql/data</code>. Pour
+        persister la base de données entre les redémarrages et les mises à jour du container, il est
+        <strong>impératif</strong> de monter un volume sur ce chemin.
+      </p>
+
+      <h4>Configuration avec named volume</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">PostgreSQL avec volume persistant</span>
+        </div>
+        <pre><code class="language-bash"># Créer le volume dédié
+docker volume create fintech-postgres-data
+
+# Lancer PostgreSQL avec le volume
+docker run -d \
+  --name fintech-db \
+  -v fintech-postgres-data:/var/lib/postgresql/data \
+  -e POSTGRES_DB=fintech \
+  -e POSTGRES_USER=fintech_app \
+  -e POSTGRES_PASSWORD=S3cur3P@ssw0rd \
+  -e PGDATA=/var/lib/postgresql/data/pgdata \
+  -p 5432:5432 \
+  --restart unless-stopped \
+  postgres:16-alpine
+
+# Vérifier que le volume est monté
+docker inspect fintech-db --format '{{json .Mounts}}' | python -m json.tool
+# [
+#   {
+#     "Type": "volume",
+#     "Name": "fintech-postgres-data",
+#     "Source": "/var/lib/docker/volumes/fintech-postgres-data/_data",
+#     "Destination": "/var/lib/postgresql/data",
+#     "Driver": "local",
+#     "Mode": "z",
+#     "RW": true
+#   }
+# ]</code></pre>
+      </div>
+
+      <h4>Stratégie de backup avec volumes</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Backup et restauration PostgreSQL</span>
+        </div>
+        <pre><code class="language-bash"># ─── BACKUP ───────────────────────────────────────────────
+# Méthode 1 : pg_dump via docker exec
+docker exec fintech-db pg_dump -U fintech_app -d fintech \
+  --format=custom \
+  --file=/var/lib/postgresql/data/backup_$(date +%Y%m%d_%H%M%S).dump
+
+# Méthode 2 : pg_dump vers l'hôte directement
+docker exec fintech-db pg_dump -U fintech_app -d fintech \
+  --format=custom > /backups/fintech_$(date +%Y%m%d_%H%M%S).dump
+
+# Méthode 3 : Backup complet via container auxiliaire
+docker run --rm \
+  -v fintech-postgres-data:/source:ro \
+  -v /backups:/backup \
+  alpine tar czf /backup/pg-data-$(date +%Y%m%d).tar.gz -C /source .
+
+# ─── RESTAURATION ─────────────────────────────────────────
+# Restaurer depuis un dump
+docker exec -i fintech-db pg_restore -U fintech_app -d fintech \
+  --clean --if-exists < /backups/fintech_20260427_103000.dump
+
+# Restaurer depuis une archive tar
+docker run --rm \
+  -v fintech-postgres-data:/target \
+  -v /backups:/backup:ro \
+  alpine sh -c "rm -rf /target/* && tar xzf /backup/pg-data-20260427.tar.gz -C /target"</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Automatisation :</strong> En production, planifiez vos backups avec un cron job ou un container
+        dédié qui tourne un <code>pg_dump</code> quotidien. Stockez les backups sur un stockage distant
+        (S3, Azure Blob) pour la résilience.
+      </div>
+
+      <!-- ========== 4. VOLUMES REDIS ========== -->
+      <h3>4 - Volumes en pratique - Redis</h3>
+
+      <p>
+        Redis stocke ses données en mémoire mais propose deux mécanismes de persistance sur disque :
+        les <strong>snapshots RDB</strong> et l'<strong>Append-Only File (AOF)</strong>. Pour que ces fichiers
+        survivent au redémarrage du container, un volume est indispensable.
+      </p>
+
+      <h4>Persistance RDB (Snapshots)</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Redis avec persistance RDB</span>
+        </div>
+        <pre><code class="language-bash"># Créer le volume Redis
+docker volume create fintech-redis-data
+
+# Lancer Redis avec snapshots RDB
+docker run -d \
+  --name fintech-redis \
+  -v fintech-redis-data:/data \
+  -p 6379:6379 \
+  --restart unless-stopped \
+  redis:7-alpine \
+  redis-server \
+    --save 60 1000 \
+    --save 300 100 \
+    --save 900 1 \
+    --maxmemory 256mb \
+    --maxmemory-policy allkeys-lru
+
+# Explication des paramètres --save :
+# --save 60 1000  → Snapshot toutes les 60s si 1000+ clés modifiées
+# --save 300 100  → Snapshot toutes les 5min si 100+ clés modifiées
+# --save 900 1    → Snapshot toutes les 15min si 1+ clé modifiée</code></pre>
+      </div>
+
+      <h4>Persistance AOF (Append-Only File)</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Redis avec AOF pour durabilité maximale</span>
+        </div>
+        <pre><code class="language-bash"># Redis avec AOF activé (recommandé pour les données critiques)
+docker run -d \
+  --name fintech-redis \
+  -v fintech-redis-data:/data \
+  -p 6379:6379 \
+  redis:7-alpine \
+  redis-server \
+    --appendonly yes \
+    --appendfsync everysec \
+    --auto-aof-rewrite-percentage 100 \
+    --auto-aof-rewrite-min-size 64mb
+
+# Explication :
+# --appendonly yes       → Active l'AOF
+# --appendfsync everysec → Sync sur disque chaque seconde (bon compromis)
+# Alternatives : always (chaque écriture, lent) | no (géré par l'OS)</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>RDB vs AOF :</strong> Pour le système fintech, utilisez les <strong>deux en combiné</strong>.
+        RDB pour les backups rapides et le redémarrage efficace, AOF pour minimiser la perte de données
+        (maximum 1 seconde avec <code>appendfsync everysec</code>).
+      </div>
+
+      <!-- ========== 5. VOLUMES FICHIERS ========== -->
+      <h3>5 - Volumes pour le stockage de fichiers</h3>
+
+      <p>
+        Dans un système fintech, plusieurs services génèrent ou reçoivent des fichiers : documents KYC
+        (Know Your Customer), relevés de compte PDF, justificatifs de transaction, logos des entreprises…
+        Ces fichiers doivent persister indépendamment du cycle de vie des containers.
+      </p>
+
+      <h4>Architecture de stockage fichiers</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">TEXT</span>
+          <span class="file-label">Organisation des volumes de fichiers</span>
+        </div>
+        <pre><code class="language-bash">fintech-uploads/
+├── kyc-documents/          ← Documents d'identité (sensibles)
+│   ├── user-1001/
+│   │   ├── passport.pdf
+│   │   └── proof-of-address.pdf
+│   └── user-1002/
+│       └── id-card.jpg
+├── transaction-receipts/   ← Reçus générés automatiquement
+│   ├── 2026/04/
+│   │   ├── TX-00001.pdf
+│   │   └── TX-00002.pdf
+├── reports/                ← Rapports financiers
+│   ├── monthly-2026-03.pdf
+│   └── quarterly-Q1-2026.pdf
+└── temp/                   ← Fichiers temporaires (traitement en cours)
+    └── processing-batch-42/</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">YAML</span>
+          <span class="file-label">docker-compose.yml - Volumes de fichiers</span>
+        </div>
+        <pre><code class="language-yaml">services:
+  fintech-api:
+    image: fintech-api:latest
+    volumes:
+      # Documents persistants (named volume)
+      - fintech-uploads:/app/uploads
+      # Logs de l'application
+      - fintech-logs:/app/logs
+      # Fichiers temporaires en RAM (performances)
+      - type: tmpfs
+        target: /app/temp
+        tmpfs:
+          size: 104857600  # 100 Mo
+
+  document-processor:
+    image: fintech-doc-processor:latest
+    volumes:
+      # Même volume partagé avec l'API
+      - fintech-uploads:/app/uploads
+      # Volume dédié pour le traitement OCR
+      - ocr-workspace:/app/ocr-temp
+
+volumes:
+  fintech-uploads:
+    name: fintech-uploads
+  fintech-logs:
+    name: fintech-logs
+  ocr-workspace:
+    name: ocr-workspace</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <strong>Sécurité des fichiers KYC :</strong> Les documents d'identité sont des données personnelles
+        sensibles (RGPD). Assurez-vous que le volume est chiffré au niveau du filesystem hôte, que l'accès
+        est restreint au minimum de services nécessaires, et que les fichiers temporaires sont purgés après
+        traitement.
+      </div>
+
+      <!-- ========== 6. DOCKER NETWORKING FONDAMENTAUX ========== -->
+      <h3>6 - Docker Networking - Les fondamentaux</h3>
+
+      <p>
+        Le réseau Docker permet aux containers de communiquer entre eux et avec le monde extérieur. Comprendre
+        le modèle réseau de Docker est <strong>essentiel</strong> pour concevoir des architectures microservices
+        sécurisées et performantes.
+      </p>
+
+      <h4>Architecture réseau Docker</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">TEXT</span>
+          <span class="file-label">Vue d'ensemble de l'architecture réseau</span>
+        </div>
+        <pre><code class="language-bash">┌─────────────────────────────────────────────────────────────────┐
+│                        HÔTE DOCKER                              │
+│                                                                 │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              Bridge Network "fintech-net"                  │ │
+│  │                   (172.20.0.0/16)                          │ │
+│  │                                                            │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │ │
+│  │  │ spring   │  │ postgres │  │  redis   │  │ angular  │  │ │
+│  │  │  boot    │  │          │  │          │  │   app    │  │ │
+│  │  │ :8080    │  │ :5432    │  │ :6379    │  │  :4200   │  │ │
+│  │  │172.20.   │  │172.20.   │  │172.20.   │  │172.20.   │  │ │
+│  │  │  0.2     │  │  0.3     │  │  0.4     │  │  0.5     │  │ │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │ │
+│  │       │              │             │             │         │ │
+│  │       └──────────────┴─────────────┴─────────────┘         │ │
+│  │                    docker0 / br-xxxx                       │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                          │                                      │
+│                    ┌─────┴─────┐                                │
+│                    │   iptables │  ← NAT + Port mapping         │
+│                    │   / nftables│                               │
+│                    └─────┬─────┘                                │
+│                          │                                      │
+├──────────────────────────┼──────────────────────────────────────┤
+│                     eth0 │ (IP hôte)                            │
+└──────────────────────────┼──────────────────────────────────────┘
+                           │
+                      Internet</code></pre>
+      </div>
+
+      <h4>Les quatre types de réseaux Docker</h4>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Isolation</th>
+              <th>Cas d'usage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>bridge</strong></td>
+              <td>Réseau virtuel interne avec NAT. Les containers communiquent via un bridge Linux.</td>
+              <td>Haute</td>
+              <td>Par défaut. Idéal pour la plupart des cas sur un seul hôte.</td>
+            </tr>
+            <tr>
+              <td><strong>host</strong></td>
+              <td>Le container utilise directement la stack réseau de l'hôte. Pas d'isolation réseau.</td>
+              <td>Aucune</td>
+              <td>Performance maximale, monitoring, outils réseau.</td>
+            </tr>
+            <tr>
+              <td><strong>none</strong></td>
+              <td>Aucune connectivité réseau. Le container n'a que l'interface loopback.</td>
+              <td>Totale</td>
+              <td>Traitement batch isolé, sécurité maximale.</td>
+            </tr>
+            <tr>
+              <td><strong>overlay</strong></td>
+              <td>Réseau distribué entre plusieurs hôtes Docker (Swarm / Kubernetes).</td>
+              <td>Haute</td>
+              <td>Clusters multi-nœuds, Docker Swarm.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Explorer les réseaux Docker</span>
+        </div>
+        <pre><code class="language-bash"># Lister les réseaux existants
+docker network ls
+# NETWORK ID     NAME              DRIVER    SCOPE
+# a1b2c3d4e5f6   bridge            bridge    local
+# f6e5d4c3b2a1   host              host      local
+# 1a2b3c4d5e6f   none              null      local
+
+# Inspecter le réseau bridge par défaut
+docker network inspect bridge
+# → Montre la configuration, les containers connectés, le subnet
+
+# Créer un réseau personnalisé
+docker network create --driver bridge fintech-network
+
+# Créer un réseau avec subnet spécifique
+docker network create \
+  --driver bridge \
+  --subnet 172.20.0.0/16 \
+  --gateway 172.20.0.1 \
+  --ip-range 172.20.1.0/24 \
+  fintech-network</code></pre>
+      </div>
+
+      <!-- ========== 7. BRIDGE NETWORK EN DÉTAIL ========== -->
+      <h3>7 - Bridge Network en détail</h3>
+
+      <p>
+        Le réseau <strong>bridge</strong> est le driver par défaut de Docker. Lorsque vous créez un
+        <strong>réseau bridge personnalisé</strong> (user-defined bridge), vous bénéficiez de fonctionnalités
+        supplémentaires cruciales par rapport au bridge par défaut (<code>docker0</code>).
+      </p>
+
+      <div class="compare">
+        <div class="compare-col">
+          <div class="compare-header bad">Bridge par défaut (docker0)</div>
+          <ul>
+            <li>Pas de résolution DNS automatique entre containers</li>
+            <li>Communication uniquement par adresses IP</li>
+            <li>Tous les containers sur le même réseau</li>
+            <li>Pas d'isolation entre applications</li>
+            <li>Nécessite <code>--link</code> (déprécié)</li>
+          </ul>
+        </div>
+        <div class="compare-col">
+          <div class="compare-header good">Bridge personnalisé (user-defined)</div>
+          <ul>
+            <li>Résolution DNS par nom de container</li>
+            <li><code>ping postgres</code> fonctionne directement</li>
+            <li>Isolation entre réseaux différents</li>
+            <li>Containers connectés/déconnectés à chaud</li>
+            <li>Meilleure sécurité par défaut</li>
+          </ul>
+        </div>
+      </div>
+
+      <h4>Résolution DNS par nom de container</h4>
+
+      <p>
+        C'est la fonctionnalité la plus importante des bridges personnalisés. Docker intègre un serveur DNS
+        interne qui résout automatiquement le nom du container en son adresse IP sur le réseau.
+      </p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">DNS automatique entre containers</span>
+        </div>
+        <pre><code class="language-bash"># Créer un réseau personnalisé
+docker network create fintech-backend
+
+# Lancer PostgreSQL sur ce réseau
+docker run -d \
+  --name fintech-db \
+  --network fintech-backend \
+  -v fintech-postgres-data:/var/lib/postgresql/data \
+  -e POSTGRES_DB=fintech \
+  -e POSTGRES_USER=fintech_app \
+  -e POSTGRES_PASSWORD=S3cur3P@ssw0rd \
+  postgres:16-alpine
+
+# Lancer Redis sur le même réseau
+docker run -d \
+  --name fintech-redis \
+  --network fintech-backend \
+  -v fintech-redis-data:/data \
+  redis:7-alpine
+
+# Lancer Spring Boot - il peut résoudre "fintech-db" et "fintech-redis" par DNS
+docker run -d \
+  --name fintech-api \
+  --network fintech-backend \
+  -p 8080:8080 \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://fintech-db:5432/fintech \
+  -e SPRING_DATASOURCE_USERNAME=fintech_app \
+  -e SPRING_DATASOURCE_PASSWORD=S3cur3P@ssw0rd \
+  -e SPRING_DATA_REDIS_HOST=fintech-redis \
+  -e SPRING_DATA_REDIS_PORT=6379 \
+  fintech-api:latest
+
+# Vérifier la résolution DNS depuis le container Spring Boot
+docker exec fintech-api nslookup fintech-db
+# Server:    127.0.0.11     ← DNS interne Docker
+# Address:   127.0.0.11#53
+#
+# Non-authoritative answer:
+# Name:      fintech-db
+# Address:   172.20.0.2
+
+docker exec fintech-api ping -c 3 fintech-redis
+# PING fintech-redis (172.20.0.3): 56 data bytes
+# 64 bytes from 172.20.0.3: seq=0 ttl=64 time=0.089 ms</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Bonne pratique :</strong> Utilisez <strong>toujours</strong> le nom du container (ou le nom
+        du service dans docker-compose) comme hostname dans vos configurations. Ne hardcodez jamais une
+        adresse IP - elle changera à chaque redémarrage du container.
+      </div>
+
+      <h4>Isolation par réseau</h4>
+
+      <p>
+        Les containers sur des réseaux différents <strong>ne peuvent pas communiquer entre eux</strong>.
+        C'est le mécanisme fondamental d'isolation réseau dans Docker.
+      </p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Isolation entre réseaux</span>
+        </div>
+        <pre><code class="language-bash"># Créer deux réseaux isolés
+docker network create frontend-net
+docker network create backend-net
+
+# Le frontend ne peut PAS accéder à la base de données
+docker run -d --name angular-app --network frontend-net nginx:alpine
+docker run -d --name postgres-db --network backend-net postgres:16-alpine
+
+# Test : le frontend ne peut pas joindre la base
+docker exec angular-app ping -c 1 postgres-db
+# ping: bad address 'postgres-db'   ← ÉCHEC : pas de résolution DNS
+
+# Un container peut être sur PLUSIEURS réseaux
+docker network connect frontend-net fintech-api
+docker network connect backend-net fintech-api
+# → fintech-api peut parler au frontend ET au backend</code></pre>
+      </div>
+
+      <!-- ========== 8. COMMUNICATION SPRING BOOT → POSTGRESQL → REDIS ========== -->
+      <h3>8 - Communication Spring Boot → PostgreSQL → Redis</h3>
+
+      <p>
+        Voici l'architecture réseau complète de notre système fintech avec Docker Compose. Nous utilisons
+        <strong>deux réseaux distincts</strong> pour isoler le frontend du backend et appliquer le
+        principe de moindre privilège.
+      </p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">TEXT</span>
+          <span class="file-label">Architecture réseau multi-tier</span>
+        </div>
+        <pre><code class="language-bash">┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│   frontend-net (172.21.0.0/16)         backend-net (172.22.0.0/16)
+│                                                                 │
+│   ┌───────────┐  ┌───────────┐         ┌───────────┐           │
+│   │  Angular  │  │ API       │         │ PostgreSQL│           │
+│   │  (Nginx)  │──│ Gateway   │────┐    │   :5432   │           │
+│   │  :80      │  │  :8080    │    │    │           │           │
+│   └───────────┘  └───────────┘    │    └───────────┘           │
+│                                   │                             │
+│                       ┌───────────┴──────────┐                  │
+│                       │   fintech-api         │                  │
+│                       │   (Spring Boot)       │─────────────────│
+│                       │   :8081               │                  │
+│                       └───────────┬──────────┘                  │
+│                                   │                             │
+│                                   │    ┌───────────┐           │
+│                                   └────│   Redis   │           │
+│                                        │   :6379   │           │
+│                                        └───────────┘           │
+│                                                                 │
+│  ← Le frontend ne peut PAS accéder directement à PostgreSQL    │
+│     ni à Redis. Seul l'API Gateway et fintech-api le peuvent.  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">YAML</span>
+          <span class="file-label">docker-compose.yml - Architecture complète</span>
+        </div>
+        <pre><code class="language-yaml">version: "3.9"
+
+services:
+  # ─── BASE DE DONNÉES ──────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: fintech-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fintech
+      POSTGRES_USER: fintech_app
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fintech_app -d fintech"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    secrets:
+      - db_password
+
+  # ─── CACHE / SESSION STORE ────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fintech-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+        --appendonly yes
+        --appendfsync everysec
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --requirepass $${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "$${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─── API SPRING BOOT ─────────────────────────────────
+  fintech-api:
+    image: fintech-api:latest
+    container_name: fintech-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://fintech-db:5432/fintech
+      SPRING_DATASOURCE_USERNAME: fintech_app
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/db_password
+      SPRING_DATA_REDIS_HOST: fintech-redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC"
+    volumes:
+      - app-logs:/app/logs
+      - fintech-uploads:/app/uploads
+      - type: tmpfs
+        target: /app/temp
+        tmpfs:
+          size: 104857600
+    networks:
+      - backend-net
+      - frontend-net
+    expose:
+      - "8081"
+    secrets:
+      - db_password
+      - redis_password
+
+  # ─── API GATEWAY ──────────────────────────────────────
+  api-gateway:
+    image: fintech-gateway:latest
+    container_name: fintech-gateway
+    restart: unless-stopped
+    depends_on:
+      - fintech-api
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      FINTECH_API_URL: http://fintech-api:8081
+    ports:
+      - "8080:8080"
+    networks:
+      - frontend-net
+
+  # ─── FRONTEND ANGULAR ────────────────────────────────
+  angular-app:
+    image: fintech-frontend:latest
+    container_name: fintech-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - frontend-net
+    depends_on:
+      - api-gateway
+
+# ─── RÉSEAUX ─────────────────────────────────────────────
+networks:
+  backend-net:
+    name: fintech-backend
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+  frontend-net:
+    name: fintech-frontend
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+# ─── VOLUMES ─────────────────────────────────────────────
+volumes:
+  postgres-data:
+    name: fintech-postgres-data
+  redis-data:
+    name: fintech-redis-data
+  app-logs:
+    name: fintech-app-logs
+  fintech-uploads:
+    name: fintech-uploads
+
+# ─── SECRETS ─────────────────────────────────────────────
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Points importants de cette configuration :</strong>
+        <ul>
+          <li><strong>Deux réseaux</strong> : <code>frontend-net</code> et <code>backend-net</code> isolent les tiers</li>
+          <li><strong>fintech-api</strong> est sur les deux réseaux - il sert de pont entre le frontend et le backend</li>
+          <li><strong>PostgreSQL et Redis</strong> ne sont accessibles que depuis <code>backend-net</code></li>
+          <li><strong>expose vs ports</strong> : <code>expose</code> rend le port disponible aux autres containers sur le réseau,
+              <code>ports</code> le publie sur l'hôte</li>
+          <li><strong>Secrets</strong> : les mots de passe sont injectés via des fichiers montés, pas des variables en clair</li>
+          <li><strong>Healthchecks</strong> : <code>depends_on</code> avec <code>condition: service_healthy</code> garantit l'ordre de démarrage</li>
+        </ul>
+      </div>
+
+      <h4>Lancement et vérification</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Démarrer et vérifier l'infrastructure</span>
+        </div>
+        <pre><code class="language-bash"># Démarrer toute l'infrastructure
+docker compose up -d
+
+# Vérifier l'état des services
+docker compose ps
+# NAME               STATUS              PORTS
+# fintech-db         Up (healthy)
+# fintech-redis      Up (healthy)
+# fintech-api        Up                  8081/tcp
+# fintech-gateway    Up                  0.0.0.0:8080->8080/tcp
+# fintech-frontend   Up                  0.0.0.0:80->80/tcp
+
+# Vérifier les réseaux créés
+docker network ls | grep fintech
+# abc123   fintech-backend    bridge    local
+# def456   fintech-frontend   bridge    local
+
+# Vérifier les volumes créés
+docker volume ls | grep fintech
+# local    fintech-postgres-data
+# local    fintech-redis-data
+# local    fintech-app-logs
+# local    fintech-uploads
+
+# Tester la connectivité interne
+docker exec fintech-api curl -s http://fintech-db:5432 || echo "Port ouvert"
+docker exec fintech-api redis-cli -h fintech-redis ping
+# PONG</code></pre>
+      </div>
+
+      <!-- ========== 9. DEBUGGING RÉSEAU ========== -->
+      <h3>9 - Debugging réseau Docker</h3>
+
+      <p>
+        Quand un container n'arrive pas à communiquer avec un autre, suivez cette méthodologie de
+        debugging systématique. Les problèmes réseau sont les plus fréquents lors du déploiement
+        d'architectures multi-containers.
+      </p>
+
+      <h4>Étape 1 : Vérifier les réseaux</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Inspecter la configuration réseau</span>
+        </div>
+        <pre><code class="language-bash"># Lister les réseaux et leurs containers
+docker network inspect fintech-backend --format '{{range .Containers}}{{.Name}}: {{.IPv4Address}}{{"\n"}}{{end}}'
+# fintech-db: 172.22.0.2/16
+# fintech-redis: 172.22.0.3/16
+# fintech-api: 172.22.0.4/16
+
+# Vérifier sur quels réseaux se trouve un container
+docker inspect fintech-api --format '{{range $net, $config := .NetworkSettings.Networks}}{{$net}}: {{$config.IPAddress}}{{"\n"}}{{end}}'
+# fintech-backend: 172.22.0.4
+# fintech-frontend: 172.21.0.3
+
+# Voir les ports exposés et mappés
+docker port fintech-gateway
+# 8080/tcp -> 0.0.0.0:8080</code></pre>
+      </div>
+
+      <h4>Étape 2 : Tester la connectivité</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Diagnostiquer les problèmes de connexion</span>
+        </div>
+        <pre><code class="language-bash"># Résolution DNS
+docker exec fintech-api nslookup fintech-db
+# Si échec → les containers ne sont pas sur le même réseau
+
+# Ping entre containers
+docker exec fintech-api ping -c 3 fintech-db
+# Si échec → problème de connectivité réseau
+
+# Test de port TCP
+docker exec fintech-api sh -c "nc -zv fintech-db 5432"
+# fintech-db (172.22.0.2:5432) open
+# Si échec → le service n'écoute pas ou le port n'est pas exposé
+
+# Vérifier les processus qui écoutent dans un container
+docker exec fintech-db ss -tlnp
+# State    Recv-Q   Send-Q   Local Address:Port   Process
+# LISTEN   0        128      0.0.0.0:5432          users:(("postgres",pid=1,...))
+
+# Utiliser un container de debug avec des outils réseau
+docker run --rm -it --network fintech-backend \
+  nicolaka/netshoot \
+  bash -c "nslookup fintech-db && curl -v telnet://fintech-db:5432"</code></pre>
+      </div>
+
+      <h4>Étape 3 : Analyser les logs</h4>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">BASH</span>
+          <span class="file-label">Logs et diagnostics avancés</span>
+        </div>
+        <pre><code class="language-bash"># Logs du container qui échoue
+docker logs fintech-api --tail 50 --follow
+
+# Logs filtrés par timestamp
+docker logs fintech-api --since "2026-04-27T10:00:00" --until "2026-04-27T11:00:00"
+
+# Vérifier les règles iptables de Docker (sur l'hôte)
+sudo iptables -t nat -L -n | grep 8080
+# DNAT tcp -- 0.0.0.0/0 0.0.0.0/0 tcp dpt:8080 to:172.21.0.2:8080
+
+# Tracer les paquets réseau dans un container
+docker exec fintech-api tcpdump -i eth0 -n port 5432 -c 10</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>Outil indispensable :</strong> L'image <code>nicolaka/netshoot</code> contient tous les
+        outils de diagnostic réseau (curl, nslookup, dig, ping, traceroute, tcpdump, iperf, netstat…).
+        Lancez-la sur le réseau à diagnostiquer pour un debugging efficace.
+      </div>
+
+      <!-- ========== 10. ERREURS COURANTES ========== -->
+      <h3>10 - Erreurs courantes</h3>
+
+      <p>
+        Voici les erreurs les plus fréquentes liées aux volumes et au networking Docker, avec les solutions
+        pour chacune.
+      </p>
+
+      <div class="callout bad">
+        <strong>Erreur #1 : Utiliser des bind mounts en production</strong>
+        <p>
+          Les bind mounts créent un couplage fort avec le filesystem de l'hôte. Les chemins absolus varient
+          entre les environnements de développement, staging et production, rendant le déploiement fragile.
+        </p>
+        <pre><code class="language-bash"># ❌ MAUVAIS - Chemin absolu, non portable
+docker run -v /home/dev/data/postgres:/var/lib/postgresql/data postgres:16
+
+# ✅ BON - Named volume, portable et géré par Docker
+docker run -v postgres-data:/var/lib/postgresql/data postgres:16</code></pre>
+      </div>
+
+      <div class="callout bad">
+        <strong>Erreur #2 : Problèmes de permissions sur les volumes</strong>
+        <p>
+          L'utilisateur à l'intérieur du container (souvent <code>root</code> ou un user spécifique comme
+          <code>postgres</code>) doit avoir les permissions de lecture/écriture sur le volume monté.
+        </p>
+        <pre><code class="language-bash"># ❌ Le container PostgreSQL tourne avec l'user "postgres" (UID 999)
+# mais le répertoire hôte appartient à "root"
+ls -la /data/postgres/
+# drwxr-xr-x root root  ← postgres ne peut pas écrire !
+
+# ✅ Solution 1 : Laisser Docker gérer avec un named volume
+docker volume create postgres-data
+
+# ✅ Solution 2 : Si bind mount nécessaire, ajuster les permissions
+sudo chown -R 999:999 /data/postgres/
+
+# ✅ Solution 3 : Dans le Dockerfile, utiliser le bon UID
+RUN mkdir -p /app/data && chown -R 1001:1001 /app/data
+USER 1001</code></pre>
+      </div>
+
+      <div class="callout bad">
+        <strong>Erreur #3 : Volumes orphelins qui consomment de l'espace disque</strong>
+        <p>
+          Chaque <code>docker-compose down</code> sans l'option <code>-v</code> préserve les volumes.
+          Au fil du temps, des volumes non référencés (dangling) s'accumulent et consomment de l'espace.
+        </p>
+        <pre><code class="language-bash"># Voir l'espace utilisé par Docker
+docker system df
+# TYPE            TOTAL   ACTIVE  SIZE      RECLAIMABLE
+# Volumes         15      3       8.234GB   6.891GB (83%)
+
+# Lister les volumes orphelins
+docker volume ls -f dangling=true
+
+# Supprimer les volumes orphelins
+docker volume prune
+# WARNING! This will remove all local volumes not used by at least one container.
+# Are you sure you want to continue? [y/N]
+
+# ⚠️ ATTENTION : Ne PAS utiliser docker-compose down -v en production
+# Cela supprime les volumes ET vos données !</code></pre>
+      </div>
+
+      <div class="callout bad">
+        <strong>Erreur #4 : Pas d'isolation réseau entre services</strong>
+        <p>
+          Par défaut, Docker Compose crée un seul réseau pour tous les services. Cela signifie que le
+          frontend peut accéder directement à la base de données - un risque de sécurité majeur.
+        </p>
+        <pre><code class="language-yaml"># ❌ MAUVAIS - Tous les services sur le même réseau
+services:
+  frontend:
+    image: frontend:latest
+  api:
+    image: api:latest
+  database:
+    image: postgres:16
+  # → Le frontend peut directement accéder à PostgreSQL !
+
+# ✅ BON - Réseaux séparés avec isolation
+services:
+  frontend:
+    networks: [frontend-net]
+  api:
+    networks: [frontend-net, backend-net]  # pont entre les deux
+  database:
+    networks: [backend-net]               # isolé du frontend
+networks:
+  frontend-net:
+  backend-net:</code></pre>
+      </div>
+
+      <div class="callout bad">
+        <strong>Erreur #5 : Utiliser le réseau bridge par défaut</strong>
+        <p>
+          Le réseau bridge par défaut (<code>docker0</code>) ne fournit pas de résolution DNS entre
+          containers. Les containers doivent communiquer par IP, ce qui est fragile.
+        </p>
+        <pre><code class="language-bash"># ❌ MAUVAIS - Réseau par défaut, pas de DNS
+docker run -d --name db postgres:16
+docker run -d --name api \
+  -e DB_HOST=172.17.0.2 \   # IP qui changera au prochain redémarrage !
+  myapi:latest
+
+# ✅ BON - Réseau personnalisé avec DNS
+docker network create myapp-net
+docker run -d --name db --network myapp-net postgres:16
+docker run -d --name api --network myapp-net \
+  -e DB_HOST=db \           # Résolu automatiquement par DNS Docker
+  myapi:latest</code></pre>
+      </div>
+
+      <!-- ========== 11. BEST PRACTICES PRODUCTION ========== -->
+      <h3>11 - Best practices en production</h3>
+
+      <h4>Volumes</h4>
+
+      <div class="callout tip">
+        <strong>Règle #1 - Toujours utiliser des named volumes pour les données critiques</strong>
+        <p>
+          Les named volumes sont portables, gérés par Docker, et survivent aux mises à jour des containers.
+          Nommez-les de manière explicite avec le nom du projet en préfixe.
+        </p>
+        <pre><code class="language-yaml">volumes:
+  fintech-postgres-data:     # ✅ Nom explicite
+    name: fintech-postgres-data
+  fintech-redis-data:
+    name: fintech-redis-data</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Règle #2 - Mettre en place des backups automatiques</strong>
+        <p>
+          Les volumes ne sont pas sauvegardés automatiquement. Planifiez des backups réguliers vers un
+          stockage externe (S3, Azure Blob, NFS).
+        </p>
+        <pre><code class="language-yaml"># Service de backup automatique dans docker-compose
+services:
+  db-backup:
+    image: prodrigestivill/postgres-backup-local
+    restart: unless-stopped
+    volumes:
+      - /backups/postgres:/backups
+    environment:
+      POSTGRES_HOST: fintech-db
+      POSTGRES_DB: fintech
+      POSTGRES_USER: fintech_app
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+    networks:
+      - backend-net
+    secrets:
+      - db_password</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Règle #3 - Utiliser des healthchecks pour gérer les dépendances</strong>
+        <p>
+          Ne lancez jamais un service qui dépend d'un autre sans vérifier que la dépendance est prête.
+          Utilisez les healthchecks avec <code>depends_on: condition: service_healthy</code>.
+        </p>
+      </div>
+
+      <h4>Networking</h4>
+
+      <div class="callout tip">
+        <strong>Règle #4 - Isoler les réseaux par tier</strong>
+        <p>
+          Séparez au minimum le frontend du backend. Dans les architectures complexes, créez un réseau
+          par domaine métier. Seuls les services qui doivent communiquer partagent un réseau.
+        </p>
+      </div>
+
+      <div class="callout tip">
+        <strong>Règle #5 - Ne jamais exposer les ports des bases de données sur l'hôte</strong>
+        <p>
+          En production, les bases de données ne doivent être accessibles que depuis le réseau Docker
+          interne. Utilisez <code>expose</code> au lieu de <code>ports</code>.
+        </p>
+        <pre><code class="language-yaml"># ❌ En production, ne faites PAS ça :
+services:
+  postgres:
+    ports:
+      - "5432:5432"    # Accessible depuis l'extérieur !
+
+# ✅ Faites plutôt :
+services:
+  postgres:
+    expose:
+      - "5432"         # Accessible uniquement sur le réseau Docker</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Règle #6 - Utiliser des secrets Docker, pas des variables d'environnement</strong>
+        <p>
+          Les variables d'environnement sont visibles via <code>docker inspect</code> et dans
+          <code>/proc/&lt;PID&gt;/environ</code>. Les secrets Docker sont montés comme fichiers
+          dans <code>/run/secrets/</code> et sont plus sécurisés.
+        </p>
+        <pre><code class="language-yaml"># ❌ MAUVAIS
+environment:
+  POSTGRES_PASSWORD: "MonM0tD3P@sse!"
+
+# ✅ BON
+environment:
+  POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+secrets:
+  - db_password
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Règle #7 - Limiter les ressources réseau et mémoire</strong>
+        <p>
+          Définissez des limites de ressources pour éviter qu'un container défaillant ne consomme
+          toutes les ressources de l'hôte.
+        </p>
+        <pre><code class="language-yaml">services:
+  fintech-api:
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M</code></pre>
+      </div>
+
+      <!-- ========== RÉSUMÉ ========== -->
+      <h3>Résumé de la leçon</h3>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Concept</th>
+              <th>Commandes clés</th>
+              <th>En production</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Volumes nommés</td>
+              <td><code>docker volume create</code>, <code>-v nom:/chemin</code></td>
+              <td>Toujours pour les données persistantes</td>
+            </tr>
+            <tr>
+              <td>Bind mounts</td>
+              <td><code>-v /hôte:/container</code></td>
+              <td>Uniquement pour config en lecture seule</td>
+            </tr>
+            <tr>
+              <td>tmpfs</td>
+              <td><code>--tmpfs /chemin</code></td>
+              <td>Secrets temporaires, cache en RAM</td>
+            </tr>
+            <tr>
+              <td>Réseaux bridge</td>
+              <td><code>docker network create</code></td>
+              <td>Toujours des bridges personnalisés</td>
+            </tr>
+            <tr>
+              <td>Isolation réseau</td>
+              <td>Réseaux séparés dans compose</td>
+              <td>Frontend / backend / data séparés</td>
+            </tr>
+            <tr>
+              <td>DNS interne</td>
+              <td>Nom du container comme hostname</td>
+              <td>Jamais d'IP hardcodée</td>
+            </tr>
+            <tr>
+              <td>Backup volumes</td>
+              <td><code>pg_dump</code>, container auxiliaire</td>
+              <td>Automatisé, stockage externe</td>
+            </tr>
+            <tr>
+              <td>Sécurité</td>
+              <td>Secrets Docker, <code>expose</code> vs <code>ports</code></td>
+              <td>Moindre privilège, pas de ports exposés</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ========== NAVIGATION ========== -->
+      <div class="lesson-nav">
+        <a href="01-docker-images-containers.html">
+          <span class="nav-dir">← Leçon précédente</span>
+          <span class="nav-title">Images vs Containers</span>
+        </a>
+        <a href="03-kubernetes-architecture.html" class="nav-next">
+          <span class="nav-dir">Leçon suivante →</span>
+          <span class="nav-title">Architecture Kubernetes</span>
+        </a>
+      </div>
+
+    </div>
+  </main>
+
+  </div>
+
+  <button id="back-to-top" aria-label="Retour en haut">↑</button>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>

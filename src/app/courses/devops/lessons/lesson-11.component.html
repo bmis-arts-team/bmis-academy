@@ -1,0 +1,134 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Pourquoi le logging centralisé ?</h2>
+    <p>Avec des dizaines de pods répartis sur plusieurs nodes, lire les logs un par un avec <code>kubectl logs</code> n'est pas viable. Le logging centralisé agrège tous les logs dans un seul endroit, permet la recherche et génère des alertes.</p>
+
+    <div class="arch-diagram">
+      <pre>
+  Pod A ──┐                    ┌─── Elasticsearch ──── Kibana
+  Pod B ──┼──▶ Filebeat/       │    (stockage +        (UI +
+  Pod C ──┤   Fluentd    ──▶  │     indexation)        recherche)
+  Pod D ──┘   (collecte)       └───────────────────────────────</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Logging structuré avec Spring Boot</h2>
+    <p>Les logs structurés (JSON) sont essentiels pour une indexation efficace dans Elasticsearch.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>pom.xml</span></div>
+      <pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;net.logstash.logback&lt;/groupId&gt;
+    &lt;artifactId&gt;logstash-logback-encoder&lt;/artifactId&gt;
+    &lt;version&gt;7.4&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>logback-spring.xml</span></div>
+      <pre><code class="language-xml">&lt;configuration&gt;
+  &lt;springProfile name="production"&gt;
+    &lt;appender name="JSON" class="ch.qos.logback.core.ConsoleAppender"&gt;
+      &lt;encoder class="net.logstash.logback.encoder.LogstashEncoder"&gt;
+        &lt;customFields&gt;
+          {{ '{' }}"service":"api-backend","environment":"production"{{ '}' }}
+        &lt;/customFields&gt;
+      &lt;/encoder&gt;
+    &lt;/appender&gt;
+    &lt;root level="INFO"&gt;
+      &lt;appender-ref ref="JSON" /&gt;
+    &lt;/root&gt;
+  &lt;/springProfile&gt;
+&lt;/configuration&gt;</code></pre>
+    </div>
+
+    <p>Résultat - chaque ligne de log est un objet JSON :</p>
+    <div class="code-block">
+      <div class="code-header"><span>JSON log output</span></div>
+      <pre><code class="language-json">{{ '{' }}
+  "timestamp": "2026-04-27T10:15:30.123Z",
+  "level": "INFO",
+  "logger": "com.example.app.OrderService",
+  "message": "Commande traitée avec succès",
+  "service": "api-backend",
+  "environment": "production",
+  "orderId": "ORD-12345",
+  "duration_ms": 142
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Elasticsearch sur Kubernetes</h2>
+    <div class="code-block">
+      <div class="code-header"><span>bash - Installation via Helm</span></div>
+      <pre><code class="language-bash"># Elasticsearch
+helm repo add elastic https://helm.elastic.co
+helm install elasticsearch elastic/elasticsearch \
+  --namespace logging --create-namespace \
+  --set replicas=1 \
+  --set resources.requests.memory=1Gi \
+  --set volumeClaimTemplate.resources.requests.storage=30Gi
+
+# Kibana
+helm install kibana elastic/kibana \
+  --namespace logging
+
+# Filebeat (collecteur de logs)
+helm install filebeat elastic/filebeat \
+  --namespace logging</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Alerting - Prometheus Alertmanager</h2>
+    <div class="code-block">
+      <div class="code-header"><span>alert-rules.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: application
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count{{ '{' }}status=~"5.."{{ '}' }}[5m]))
+            / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Taux d'erreur > 5%"
+            description: "Le taux d'erreurs 5xx dépasse 5% depuis 5 minutes."
+
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Latence P99 > 2s"
+
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total[15m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod en CrashLoopBackOff"</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Canaux de notification</strong>
+      <p>Alertmanager peut envoyer des alertes via Slack, PagerDuty, email, webhook ou Microsoft Teams. Configurez au minimum deux canaux : un pour les alertes critiques (PagerDuty/téléphone) et un pour les warnings (Slack/email).</p>
+    </div>
+  </section>
+
+</app-lesson-page>

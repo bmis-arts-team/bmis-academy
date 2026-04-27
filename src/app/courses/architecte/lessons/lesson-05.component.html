@@ -1,0 +1,303 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ 3.1 Pourquoi DevOps est indispensable ═══════════════ -->
+  <section>
+    <h2>3.1 Pourquoi DevOps est indispensable</h2>
+    <p>Sans DevOps, un projet microservices comme <strong>TaskFlow</strong> accumule rapidement les problèmes :</p>
+
+    <ul>
+      <li><strong>Déploiements risqués et manuels</strong> - chaque mise en production est un événement stressant, source d'erreurs humaines</li>
+      <li><strong>Services qui tombent sans alerte</strong> - un microservice peut crasher silencieusement pendant des heures avant que quelqu'un ne s'en aperçoive</li>
+      <li><strong>Bugs qui passent inaperçus</strong> - sans tests automatisés ni pipeline, les régressions arrivent en production</li>
+      <li><strong>Temps perdu en tâches répétitives</strong> - build manuel, copie de fichiers, configuration serveur à la main</li>
+    </ul>
+
+    <div class="callout info">
+      <strong>DevOps en une phrase</strong>
+      <p>DevOps = <strong>automatisation</strong> + <strong>surveillance</strong> + <strong>livraison continue</strong>. L'objectif est de déployer rapidement, en toute confiance, avec une visibilité totale sur le système.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 3.2 Infrastructure as Code (IaC) ═══════════════ -->
+  <section>
+    <h2>3.2 Infrastructure as Code (IaC)</h2>
+    <p>L'Infrastructure as Code consiste à décrire toute l'infrastructure dans des fichiers versionnés. Plus besoin de configurer manuellement des serveurs - tout est reproductible et versionné.</p>
+
+    <h3>Docker Compose pour TaskFlow</h3>
+    <p>Voici le fichier <code>docker-compose.yml</code> qui orchestre l'ensemble des services TaskFlow :</p>
+
+    <div class="code-block">
+      <div class="code-header">docker-compose.yml</div>
+      <pre><code class="language-yaml">version: "3.8"
+
+services:
+  user-service:
+    build: ./user-service
+    ports:
+      - "8081:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - kafka
+      - redis
+
+  project-service:
+    build: ./project-service
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - kafka
+
+  task-service:
+    build: ./task-service
+    ports:
+      - "8083:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - kafka
+      - redis
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8084:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - kafka
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"</code></pre>
+    </div>
+
+    <h3>Dockerfile pour task-service</h3>
+    <div class="code-block">
+      <div class="code-header">task-service/Dockerfile</div>
+      <pre><code class="language-dockerfile">FROM eclipse-temurin:17-jdk-alpine AS build
+WORKDIR /app
+COPY build.gradle settings.gradle ./
+COPY gradle ./gradle
+COPY gradlew .
+RUN ./gradlew dependencies --no-daemon
+COPY src ./src
+RUN ./gradlew bootJar --no-daemon
+
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=build /app/build/libs/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Multi-stage build</strong>
+      <p>Le Dockerfile utilise un <strong>multi-stage build</strong> : la première étape compile le projet, la seconde ne copie que le JAR final. Résultat : une image légère (~200 Mo au lieu de ~800 Mo).</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 3.3 Pipeline CI/CD ═══════════════ -->
+  <section>
+    <h2>3.3 Pipeline CI/CD</h2>
+    <p>Un pipeline CI/CD automatise tout le chemin entre le code source et la production :</p>
+
+    <div class="arch-diagram">
+      <pre>
+  Push main → Build + Tests → Scan sécurité → Docker build → Push registry → Deploy
+       │            │              │               │              │            │
+       ▼            ▼              ▼               ▼              ▼            ▼
+   Développeur   Gradle       Trivy/Snyk    docker build    ghcr.io      staging
+   git push     ./gradlew     CVE scan      multi-stage     registry   → prod</pre>
+    </div>
+
+    <h3>GitHub Actions - Pipeline complet</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header">.github/workflows/ci-cd.yml</div>
+      <pre><code class="language-yaml">name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build project
+        run: ./gradlew build --no-daemon
+
+      - name: Run tests
+        run: ./gradlew test --no-daemon
+
+  docker-build:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images
+        run: |
+          docker-compose build
+          docker-compose push</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Sécurité des secrets</strong>
+      <p>Les secrets (tokens, mots de passe) ne sont jamais stockés dans le code. GitHub Actions les injecte via <code>secrets.GITHUB_TOKEN</code> qui est automatiquement disponible dans chaque workflow.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 3.4 Déploiement sur Kubernetes ═══════════════ -->
+  <section>
+    <h2>3.4 Déploiement sur Kubernetes</h2>
+    <p>Une fois les images Docker construites et poussées dans le registry, Kubernetes les déploie et les gère automatiquement.</p>
+
+    <div class="code-block">
+      <div class="code-header">k8s/task-service-deployment.yaml</div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-service
+  labels:
+    app: task-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: task-service
+  template:
+    metadata:
+      labels:
+        app: task-service
+    spec:
+      containers:
+        - name: task-service
+          image: ghcr.io/taskflow/task-service:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Résilience automatique</strong>
+      <p>Avec <code>replicas: 3</code>, Kubernetes maintient toujours 3 instances du service. Si un pod crashe, il est automatiquement redémarré. Si un nœud tombe, les pods sont reschédulés sur un autre nœud.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 3.5 Observabilité et métriques ═══════════════ -->
+  <section>
+    <h2>3.5 Observabilité et métriques</h2>
+    <p>L'observabilité est la capacité à comprendre l'état interne d'un système à partir de ses sorties. Elle repose sur trois piliers :</p>
+
+    <table>
+      <thead>
+        <tr><th>Pilier</th><th>Outil</th><th>Rôle</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Logs centralisés</strong></td>
+          <td>ELK Stack (Elasticsearch, Logstash, Kibana)</td>
+          <td>Collecter, indexer et rechercher les logs de tous les services</td>
+        </tr>
+        <tr>
+          <td><strong>Métriques</strong></td>
+          <td>Prometheus + Grafana</td>
+          <td>Collecter des métriques numériques (CPU, mémoire, requêtes/s) et les visualiser</td>
+        </tr>
+        <tr>
+          <td><strong>Tracing distribué</strong></td>
+          <td>Jaeger / Zipkin</td>
+          <td>Suivre une requête à travers tous les microservices qu'elle traverse</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Configuration Spring Boot pour l'observabilité</h3>
+    <div class="code-block">
+      <div class="code-header">application.yml - Observabilité</div>
+      <pre><code class="language-yaml">management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: task-service
+
+logging:
+  level:
+    root: INFO
+    com.taskflow: DEBUG
+  pattern:
+    console: "%d{{ '{' }}yyyy-MM-dd HH:mm:ss{{ '}' }} [%thread] %-5level %logger - %msg%n"</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Endpoint Prometheus</strong>
+      <p>L'endpoint <code>/actuator/prometheus</code> expose toutes les métriques au format Prometheus. Grafana se connecte à Prometheus pour créer des dashboards visuels en temps réel.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

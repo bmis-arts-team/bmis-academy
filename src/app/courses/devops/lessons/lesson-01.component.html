@@ -1,0 +1,259 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ Section 1: Qu'est-ce que Docker ? ═══════════════ -->
+  <section>
+    <h2>Qu'est-ce que Docker ?</h2>
+    <p>Docker est une plateforme de <strong>conteneurisation</strong> qui permet d'empaqueter une application et toutes ses dépendances dans une unité standardisée appelée <em>conteneur</em>. Contrairement aux machines virtuelles, les conteneurs partagent le kernel de l'hôte, ce qui les rend beaucoup plus légers.</p>
+
+    <h3>Les trois piliers de l'isolation</h3>
+    <table>
+      <thead>
+        <tr><th>Technologie</th><th>Rôle</th><th>Exemple</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Namespaces</code></td><td>Isoler les processus, réseau, filesystem</td><td>PID, NET, MNT, UTS, IPC</td></tr>
+        <tr><td><code>cgroups</code></td><td>Limiter CPU, mémoire, I/O</td><td>Max 512 Mo RAM, 0.5 CPU</td></tr>
+        <tr><td><code>OverlayFS</code></td><td>Système de fichiers en couches</td><td>Layers empilés, copy-on-write</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Conteneur vs Machine Virtuelle</h3>
+    <div class="arch-diagram">
+      <pre>
+  Machine Virtuelle                    Conteneur Docker
+┌─────────────────────┐          ┌─────────────────────┐
+│   Application       │          │   Application       │
+├─────────────────────┤          ├─────────────────────┤
+│   Bins/Libs         │          │   Bins/Libs         │
+├─────────────────────┤          ├─────────────────────┤
+│   Guest OS          │          │  (pas d'OS invité)  │
+├─────────────────────┤          ├─────────────────────┤
+│   Hypervisor        │          │   Docker Engine     │
+├─────────────────────┤          ├─────────────────────┤
+│   Host OS           │          │   Host OS           │
+└─────────────────────┘          └─────────────────────┘
+  ~Go de RAM, minutes              ~Mo de RAM, secondes</pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Section 2: Images Docker ═══════════════ -->
+  <section>
+    <h2>Images Docker en profondeur</h2>
+    <p>Une image Docker est un <strong>template en lecture seule</strong> composé de couches (layers) empilées. Chaque instruction dans un Dockerfile crée une nouvelle couche.</p>
+
+    <h3>Le système de layers</h3>
+    <div class="arch-diagram">
+      <pre>
+  Layer 4 (R/W)  ─── Container Layer (éphémère)
+  Layer 3 (R/O)  ─── COPY app.jar → /app/app.jar
+  Layer 2 (R/O)  ─── RUN apt-get install curl
+  Layer 1 (R/O)  ─── FROM eclipse-temurin:21-jre-alpine</pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Optimisation du cache</strong>
+      <p>Docker met en cache chaque layer. Si une instruction n'a pas changé, Docker réutilise le cache. Placez les instructions qui changent rarement en haut du Dockerfile.</p>
+    </div>
+
+    <h3>Inspecter les layers</h3>
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre ngNonBindable><code class="language-bash"># Voir l'historique des layers
+docker history my-api:1.0.0
+
+# Taille détaillée
+docker image inspect my-api:1.0.0 --format='{{.Size}}'</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Section 3: Dockerfile Production ═══════════════ -->
+  <section>
+    <h2>Dockerfile - Production Grade</h2>
+    <p>Un bon Dockerfile suit le principe du <strong>multi-stage build</strong> : une étape pour compiler, une étape minimale pour exécuter.</p>
+
+    <div class="comparison-grid">
+      <div class="comparison-card bad">
+        <h4>❌ Mauvaise pratique</h4>
+        <div class="code-block">
+          <div class="code-header"><span>Dockerfile</span></div>
+          <pre><code class="language-dockerfile">FROM eclipse-temurin:21-jdk
+COPY . /app
+WORKDIR /app
+RUN ./mvnw package
+EXPOSE 8080
+CMD ["java", "-jar", "target/app.jar"]</code></pre>
+        </div>
+        <p>Image de ~800 Mo avec JDK + sources + Maven cache.</p>
+      </div>
+      <div class="comparison-card good">
+        <h4>✅ Bonne pratique</h4>
+        <div class="code-block">
+          <div class="code-header"><span>Dockerfile</span></div>
+          <pre><code class="language-dockerfile">FROM eclipse-temurin:21-jdk-alpine AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline
+COPY src ./src
+RUN mvn package -DskipTests
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]</code></pre>
+        </div>
+        <p>Image de ~180 Mo avec JRE uniquement.</p>
+      </div>
+    </div>
+
+    <h3>Le fichier .dockerignore</h3>
+    <div class="code-block">
+      <div class="code-header"><span>.dockerignore</span></div>
+      <pre><code class="language-bash">.git
+.gitignore
+*.md
+target/
+.idea/
+.vscode/
+docker-compose*.yml
+node_modules/</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Section 4: Cycle de vie ═══════════════ -->
+  <section>
+    <h2>Cycle de vie des Containers</h2>
+    <div class="arch-diagram">
+      <pre>
+  Created ──▶ Running ──▶ Paused
+     │           │           │
+     │           ▼           │
+     │        Stopped ◀──────┘
+     │           │
+     ▼           ▼
+   Removed    Removed</pre>
+    </div>
+
+    <h3>Commandes essentielles</h3>
+    <div class="code-block">
+      <div class="code-header"><span>bash - Gestion des conteneurs</span></div>
+      <pre><code class="language-bash"># Créer et démarrer
+docker run -d --name my-api -p 8080:8080 my-api:1.0.0
+
+# Voir les logs en temps réel
+docker logs -f my-api
+
+# Exécuter une commande dans le conteneur
+docker exec -it my-api /bin/sh
+
+# Arrêter proprement (SIGTERM → SIGKILL après 10s)
+docker stop my-api
+
+# Supprimer
+docker rm my-api
+
+# Tout nettoyer (conteneurs arrêtés, images orphelines)
+docker system prune -f</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Section 5: Dockeriser Spring Boot ═══════════════ -->
+  <section>
+    <h2>Dockeriser Spring Boot + PostgreSQL + Redis</h2>
+    <p>Voici un <code>docker-compose.yml</code> complet pour une architecture classique :</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>docker-compose.yml</span></div>
+      <pre><code class="language-yaml">services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/app_db
+      SPRING_DATASOURCE_USERNAME: app_user
+      SPRING_DATASOURCE_PASSWORD: secret
+      SPRING_DATA_REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - backend
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app_db
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d app_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  backend:
+    driver: bridge</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Healthcheck</strong>
+      <p>Utilisez <code>depends_on</code> avec <code>condition: service_healthy</code> pour que l'API attende que PostgreSQL soit réellement prêt avant de démarrer.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Section 6: Registry ═══════════════ -->
+  <section>
+    <h2>Registry &amp; Distribution</h2>
+    <p>Une fois votre image construite, vous devez la stocker dans un <strong>registry</strong> pour la rendre disponible aux autres environnements.</p>
+
+    <table>
+      <thead>
+        <tr><th>Registry</th><th>Type</th><th>Usage</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Docker Hub</td><td>Public / Privé</td><td>Images open-source, projets personnels</td></tr>
+        <tr><td>GitHub GHCR</td><td>Privé / Public</td><td>Intégré à GitHub Actions</td></tr>
+        <tr><td>AWS ECR</td><td>Privé</td><td>Intégré à EKS, Fargate</td></tr>
+        <tr><td>Harbor</td><td>Self-hosted</td><td>Entreprises, scanning de vulnérabilités</td></tr>
+      </tbody>
+    </table>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash - Push vers un registry</span></div>
+      <pre><code class="language-bash"># Tagger l'image
+docker tag my-api:1.0.0 ghcr.io/my-org/my-api:1.0.0
+
+# Se connecter au registry
+echo $GHCR_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+
+# Pousser l'image
+docker push ghcr.io/my-org/my-api:1.0.0</code></pre>
+    </div>
+
+    <div class="callout warning">
+      <strong>Ne jamais utiliser :latest en production</strong>
+      <p>Le tag <code>:latest</code> est mutable et rend les rollbacks impossibles. Utilisez des tags sémantiques : <code>1.0.0</code>, <code>1.0.1</code>, ou le SHA du commit.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logging &amp; Alerting - DevOps BMIS Academy</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="progress-bar"></div>
+
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="docs-layout">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <a href="../../index.html" class="sidebar-brand">
+      <div class="brand-logo">BM</div>
+      <div class="brand-text">
+        <span class="brand-name">BMIS Academy</span>
+        <span class="brand-tagline">DevOps &amp; Production</span>
+      </div>
+    </a>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Vue d'ensemble</div>
+        <a href="index.html" class="nav-link">Accueil du cours</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">1 - Fondations Docker</div>
+        <a href="01-docker-images-containers.html" class="nav-link">Images vs Containers</a>
+        <a href="02-docker-volumes-networking.html" class="nav-link">Volumes &amp; Networking</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">2 - Kubernetes Core</div>
+        <a href="03-kubernetes-architecture.html" class="nav-link">Architecture K8s</a>
+        <a href="04-kubernetes-workloads.html" class="nav-link">Deployments &amp; StatefulSets</a>
+        <a href="05-kubernetes-services-ingress.html" class="nav-link">Services &amp; Ingress</a>
+        <a href="06-kubernetes-configmaps-secrets.html" class="nav-link">ConfigMaps &amp; Secrets</a>
+        <a href="07-kubernetes-storage-namespaces.html" class="nav-link">Storage &amp; Namespaces</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">3 - Déploiement Système</div>
+        <a href="08-deploy-fintech-system.html" class="nav-link">Déployer le Système Fintech</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">4 - CI/CD</div>
+        <a href="09-cicd-github-actions.html" class="nav-link">Pipeline GitHub Actions</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">5 - Observabilité</div>
+        <a href="10-observability-metrics.html" class="nav-link">Prometheus &amp; Grafana</a>
+        <a href="11-observability-logging-alerting.html" class="nav-link active">ELK Stack &amp; Alerting</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">6 - Réseau &amp; Sécurité</div>
+        <a href="12-networking-security.html" class="nav-link">Networking &amp; Security</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">7 - CDN &amp; Assets</div>
+        <a href="13-cdn-asset-delivery.html" class="nav-link">CDN &amp; Distribution</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">8 - Production</div>
+        <a href="14-production-best-practices.html" class="nav-link">Best Practices Production</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../../index.html" class="sidebar-footer-link">← Retour au catalogue</a>
+    </div>
+  </aside>
+
+  <main class="docs-main">
+    <div class="docs-content">
+
+    <!-- ═══════════════════════════════════════════ HEADER ═══════════════════════════════════════════ -->
+    <div class="lesson-header">
+      <div class="lesson-meta">
+        <span class="lesson-number">Leçon 11</span>
+        <span class="lesson-section">Section 5 - Observabilité</span>
+      </div>
+      <h1>Logging &amp; Alerting - ELK Stack</h1>
+      <p class="lesson-subtitle">Logging centralisé avec Elasticsearch, Logstash et Kibana - Alerting production avec AlertManager.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ 1. POURQUOI LE LOGGING CENTRALISÉ ═══════════════════════════════════════════ -->
+    <section>
+      <h2>1 - Pourquoi le logging centralisé ?</h2>
+
+      <p>Dans un système distribué déployé sur Kubernetes, les logs sont <strong>éparpillés</strong> à travers des dizaines - voire des centaines - de pods. Chaque microservice produit ses propres logs, chaque pod a son propre cycle de vie, et quand un pod redémarre ou est remplacé, <strong>ses logs disparaissent définitivement</strong>.</p>
+
+      <p>La commande <code>kubectl logs</code> ne suffit pas :</p>
+
+      <ul>
+        <li><strong>Éphémère</strong> - Les logs sont perdus dès qu'un pod est supprimé, crashé ou redémarré. Impossible d'enquêter sur un incident passé.</li>
+        <li><strong>Un pod à la fois</strong> - Vous ne pouvez consulter les logs que d'un seul pod. Tracer une requête qui traverse 5 microservices est un cauchemar.</li>
+        <li><strong>Pas de recherche</strong> - Aucune possibilité de filtrer, rechercher ou agréger. Vous êtes limité à <code>grep</code> sur du texte brut.</li>
+        <li><strong>Pas de rétention</strong> - Kubernetes ne conserve pas un historique configurable. Vous n'avez accès qu'aux logs récents.</li>
+        <li><strong>Pas de corrélation</strong> - Impossible de relier les logs d'un service de paiement à ceux du service de notification pour une même transaction.</li>
+      </ul>
+
+      <p>Le <strong>logging centralisé</strong> résout tous ces problèmes en collectant, stockant et indexant les logs de tous les services dans un système unique, consultable et durable.</p>
+
+      <div class="callout tip">
+        <strong>Règle fondamentale</strong> - Si vous ne pouvez pas rechercher un log de la semaine dernière en moins de 30 secondes, votre système de logging est insuffisant pour la production.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 2. ELK STACK - ARCHITECTURE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>2 - ELK Stack - Architecture</h2>
+
+      <p>L'ELK Stack est la solution de logging centralisé la plus populaire. Elle se compose de trois composants principaux, souvent accompagnés de Filebeat comme agent de collecte :</p>
+
+      <div class="arch-diagram">
+<pre>
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         APPLICATIONS (Pods K8s)                              │
+│                                                                              │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│   │ Payment  │  │  Users   │  │  Orders  │  │ Notif.   │  │ Gateway  │     │
+│   │ Service  │  │ Service  │  │ Service  │  │ Service  │  │ Service  │     │
+│   └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘     │
+│        │              │             │              │              │           │
+│        ▼              ▼             ▼              ▼              ▼           │
+│   ┌──────────────────────────────────────────────────────────────────┐       │
+│   │              stdout / fichiers logs (JSON)                       │       │
+│   └──────────────────────────────┬───────────────────────────────────┘       │
+└──────────────────────────────────┼───────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    FILEBEAT (DaemonSet - un par nœud)                        │
+│                                                                              │
+│   Collecte les logs depuis /var/log/containers/*                             │
+│   Ajoute les métadonnées Kubernetes (pod, namespace, labels)                 │
+│   Envoie à Logstash ou directement à Elasticsearch                          │
+└──────────────────────────────────┬───────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    LOGSTASH (Deployment - traitement)                        │
+│                                                                              │
+│   input { beats { port => 5044 } }                                           │
+│   filter { json, grok, mutate, date }                                        │
+│   output { elasticsearch { hosts => ["es:9200"] } }                          │
+└──────────────────────────────────┬───────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    ELASTICSEARCH (StatefulSet - stockage)                    │
+│                                                                              │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐                                  │
+│   │  Node 0  │  │  Node 1  │  │  Node 2  │   ← Cluster 3 nœuds             │
+│   │  Master  │  │  Data    │  │  Data    │   ← Répliqué &amp; distribué     │
+│   └──────────┘  └──────────┘  └──────────┘                                  │
+│                                                                              │
+│   Indexation full-text, rétention configurable, API REST                     │
+└──────────────────────────────────┬───────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    KIBANA (Deployment - visualisation)                       │
+│                                                                              │
+│   Dashboards, recherche de logs, visualisations                              │
+│   Alerting intégré, Discover, Lens                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+</pre>
+      </div>
+
+      <h3>2.1 - Rôle de chaque composant</h3>
+
+      <ul>
+        <li><strong>Filebeat</strong> - Agent léger déployé en DaemonSet (un par nœud Kubernetes). Lit les fichiers de logs des conteneurs, enrichit chaque entrée avec les métadonnées Kubernetes (nom du pod, namespace, labels), et transmet à Logstash ou directement à Elasticsearch.</li>
+        <li><strong>Logstash</strong> - Moteur de traitement de données. Reçoit les logs de Filebeat, les parse (JSON, grok patterns), les transforme (ajout de champs, normalisation des dates, enrichissement), et les envoie à Elasticsearch. C'est le « ETL » de vos logs.</li>
+        <li><strong>Elasticsearch</strong> - Moteur de recherche et d'indexation distribué. Stocke les logs dans des index, les indexe pour une recherche full-text ultra-rapide. Supporte des requêtes complexes, l'agrégation et la rétention configurable.</li>
+        <li><strong>Kibana</strong> - Interface web de visualisation. Permet de rechercher des logs, créer des dashboards, configurer des alertes, et visualiser des patterns dans vos données.</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 3. SPRING BOOT LOGGING STRUCTURÉ ═══════════════════════════════════════════ -->
+    <section>
+      <h2>3 - Configurer Spring Boot pour le logging structuré</h2>
+
+      <p>Le premier prérequis pour un logging centralisé efficace est de produire des <strong>logs structurés en JSON</strong>. Les logs en texte brut (<code>2024-01-15 ERROR Something went wrong</code>) sont difficiles à parser et source d'erreurs. Le JSON est natif pour Elasticsearch.</p>
+
+      <h3>3.1 - Dépendances Maven</h3>
+
+<pre><code class="language-xml">&lt;!-- pom.xml --&gt;
+&lt;dependencies&gt;
+    &lt;!-- Logstash Logback Encoder - produit du JSON --&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;net.logstash.logback&lt;/groupId&gt;
+        &lt;artifactId&gt;logstash-logback-encoder&lt;/artifactId&gt;
+        &lt;version&gt;7.4&lt;/version&gt;
+    &lt;/dependency&gt;
+
+    &lt;!-- Micrometer Tracing - distributed tracing --&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
+        &lt;artifactId&gt;micrometer-tracing-bridge-brave&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+&lt;/dependencies&gt;</code></pre>
+
+      <h3>3.2 - logback-spring.xml complet</h3>
+
+      <p>Ce fichier configure Logback pour produire du JSON structuré avec tous les champs nécessaires pour la corrélation distribuée :</p>
+
+<pre><code class="language-xml">&lt;!-- src/main/resources/logback-spring.xml --&gt;
+&lt;configuration&gt;
+
+    &lt;!-- ══════ Variables d'environnement ══════ --&gt;
+    &lt;springProperty scope="context" name="APP_NAME"
+                    source="spring.application.name"
+                    defaultValue="unknown-service"/&gt;
+    &lt;springProperty scope="context" name="APP_ENV"
+                    source="spring.profiles.active"
+                    defaultValue="default"/&gt;
+
+    &lt;!-- ══════ Appender Console JSON (Production) ══════ --&gt;
+    &lt;appender name="JSON_CONSOLE"
+              class="ch.qos.logback.core.ConsoleAppender"&gt;
+        &lt;encoder class="net.logstash.logback.encoder.LogstashEncoder"&gt;
+            &lt;!-- Champs personnalisés ajoutés à chaque log --&gt;
+            &lt;customFields&gt;
+                {"service":"${APP_NAME}","environment":"${APP_ENV}"}
+            &lt;/customFields&gt;
+
+            &lt;!-- Inclure les informations du MDC (traceId, spanId) --&gt;
+            &lt;includeMdcKeyName&gt;traceId&lt;/includeMdcKeyName&gt;
+            &lt;includeMdcKeyName&gt;spanId&lt;/includeMdcKeyName&gt;
+            &lt;includeMdcKeyName&gt;userId&lt;/includeMdcKeyName&gt;
+            &lt;includeMdcKeyName&gt;requestId&lt;/includeMdcKeyName&gt;
+
+            &lt;!-- Format du timestamp --&gt;
+            &lt;timestampPattern&gt;yyyy-MM-dd'T'HH:mm:ss.SSSZ&lt;/timestampPattern&gt;
+
+            &lt;!-- Inclure le stack trace complet pour les exceptions --&gt;
+            &lt;throwableConverter
+                class="net.logstash.logback.stacktrace.ShortenedThrowableConverter"&gt;
+                &lt;maxDepthPerThrowable&gt;30&lt;/maxDepthPerThrowable&gt;
+                &lt;maxLength&gt;2048&lt;/maxLength&gt;
+                &lt;shortenedClassNameLength&gt;20&lt;/shortenedClassNameLength&gt;
+            &lt;/throwableConverter&gt;
+        &lt;/encoder&gt;
+    &lt;/appender&gt;
+
+    &lt;!-- ══════ Appender Console Lisible (Développement) ══════ --&gt;
+    &lt;appender name="CONSOLE"
+              class="ch.qos.logback.core.ConsoleAppender"&gt;
+        &lt;encoder&gt;
+            &lt;pattern&gt;
+                %d{HH:mm:ss.SSS} %highlight(%-5level) [%thread]
+                %cyan(%logger{36}) - %msg%n
+            &lt;/pattern&gt;
+        &lt;/encoder&gt;
+    &lt;/appender&gt;
+
+    &lt;!-- ══════ Profils Spring ══════ --&gt;
+    &lt;springProfile name="dev"&gt;
+        &lt;root level="DEBUG"&gt;
+            &lt;appender-ref ref="CONSOLE"/&gt;
+        &lt;/root&gt;
+    &lt;/springProfile&gt;
+
+    &lt;springProfile name="staging | prod"&gt;
+        &lt;root level="INFO"&gt;
+            &lt;appender-ref ref="JSON_CONSOLE"/&gt;
+        &lt;/root&gt;
+        &lt;!-- Réduire le bruit des librairies --&gt;
+        &lt;logger name="org.hibernate.SQL" level="WARN"/&gt;
+        &lt;logger name="org.springframework.web" level="WARN"/&gt;
+        &lt;logger name="org.apache.kafka" level="WARN"/&gt;
+    &lt;/springProfile&gt;
+
+&lt;/configuration&gt;</code></pre>
+
+      <h3>3.3 - MDC (Mapped Diagnostic Context)</h3>
+
+      <p>Le MDC permet d'attacher des informations contextuelles à chaque log produit dans le cadre d'une requête. C'est <strong>essentiel</strong> pour la corrélation :</p>
+
+<pre><code class="language-java">// Filtre HTTP pour injecter le MDC
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class MdcFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest request,
+                         ServletResponse response,
+                         FilterChain chain) throws IOException, ServletException {
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+
+        try {
+            // Récupérer ou générer un requestId
+            String requestId = httpRequest.getHeader("X-Request-ID");
+            if (requestId == null || requestId.isBlank()) {
+                requestId = UUID.randomUUID().toString();
+            }
+
+            // Injecter dans le MDC - disponible dans tous les logs
+            MDC.put("requestId", requestId);
+            MDC.put("userId", extractUserId(httpRequest));
+            MDC.put("clientIp", httpRequest.getRemoteAddr());
+            MDC.put("httpMethod", httpRequest.getMethod());
+            MDC.put("uri", httpRequest.getRequestURI());
+
+            // Propager le requestId dans la réponse
+            HttpServletResponse httpResponse = (HttpServletResponse) response;
+            httpResponse.setHeader("X-Request-ID", requestId);
+
+            chain.doFilter(request, response);
+        } finally {
+            // TOUJOURS nettoyer le MDC pour éviter les fuites
+            MDC.clear();
+        }
+    }
+
+    private String extractUserId(HttpServletRequest request) {
+        // Extraire l'userId du token JWT si présent
+        String auth = request.getHeader("Authorization");
+        if (auth != null &amp;&amp; auth.startsWith("Bearer ")) {
+            // Décoder le JWT et extraire le subject
+            return JwtUtil.extractSubject(auth.substring(7));
+        }
+        return "anonymous";
+    }
+}</code></pre>
+
+      <p>Chaque log produit contiendra automatiquement ces champs :</p>
+
+<pre><code class="language-json">{
+  "@timestamp": "2024-06-15T14:23:45.123+0000",
+  "level": "INFO",
+  "logger_name": "com.bmis.payment.PaymentService",
+  "message": "Paiement traité avec succès",
+  "service": "payment-service",
+  "environment": "prod",
+  "traceId": "abc123def456",
+  "spanId": "789ghi012",
+  "requestId": "req-550e8400-e29b",
+  "userId": "user-42",
+  "clientIp": "10.0.2.15",
+  "httpMethod": "POST",
+  "uri": "/api/v1/payments"
+}</code></pre>
+
+      <h3>3.4 - application.yml - Configuration logging</h3>
+
+<pre><code class="language-yaml"># application.yml
+spring:
+  application:
+    name: payment-service
+
+logging:
+  level:
+    root: INFO
+    com.bmis: DEBUG
+    org.hibernate.SQL: WARN
+    org.springframework.web: WARN
+
+# Micrometer Tracing - propagation du traceId
+management:
+  tracing:
+    sampling:
+      probability: 1.0   # 100% en dev/staging, réduire en prod
+    propagation:
+      type: b3            # Format B3 compatible Zipkin
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,loggers</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 4. ELASTICSEARCH SUR KUBERNETES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>4 - Elasticsearch sur Kubernetes</h2>
+
+      <p>Elasticsearch est le cœur du système ELK. C'est un moteur de recherche distribué qui stocke et indexe vos logs. En production, on déploie un <strong>cluster de 3 nœuds minimum</strong> pour assurer la haute disponibilité et la réplication des données.</p>
+
+      <div class="callout warning">
+        <strong>Attention - Elasticsearch est gourmand en mémoire</strong> - Chaque nœud Elasticsearch nécessite au minimum 2 Go de RAM (heap JVM), et en production on recommande 4 à 8 Go. Prévoyez des nœuds Kubernetes avec suffisamment de ressources.
+      </div>
+
+      <h3>4.1 - Headless Service (découverte interne)</h3>
+
+<pre><code class="language-yaml"># elasticsearch-headless-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-headless
+  namespace: logging
+  labels:
+    app: elasticsearch
+spec:
+  clusterIP: None       # Headless - pour la découverte StatefulSet
+  selector:
+    app: elasticsearch
+  ports:
+    - name: transport
+      port: 9300         # Communication inter-nœuds
+      targetPort: 9300
+    - name: http
+      port: 9200         # API REST
+      targetPort: 9200</code></pre>
+
+      <h3>4.2 - Service HTTP (accès clients)</h3>
+
+<pre><code class="language-yaml"># elasticsearch-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: logging
+  labels:
+    app: elasticsearch
+spec:
+  type: ClusterIP
+  selector:
+    app: elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200</code></pre>
+
+      <h3>4.3 - StatefulSet (cluster 3 nœuds)</h3>
+
+<pre><code class="language-yaml"># elasticsearch-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: logging
+spec:
+  serviceName: elasticsearch-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      # Empêcher deux nœuds ES sur le même nœud K8s
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - elasticsearch
+              topologyKey: kubernetes.io/hostname
+
+      initContainers:
+        # ES nécessite vm.max_map_count >= 262144
+        - name: sysctl
+          image: busybox:1.36
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+          securityContext:
+            privileged: true
+
+        # Fixer les permissions du répertoire de données
+        - name: fix-permissions
+          image: busybox:1.36
+          command: ["sh", "-c", "chown -R 1000:1000 /usr/share/elasticsearch/data"]
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          env:
+            - name: node.name
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: cluster.name
+              value: "bmis-logs"
+            - name: discovery.seed_hosts
+              value: "elasticsearch-headless"
+            - name: cluster.initial_master_nodes
+              value: "elasticsearch-0,elasticsearch-1,elasticsearch-2"
+            - name: ES_JAVA_OPTS
+              value: "-Xms2g -Xmx2g"     # Heap JVM - 50% de la RAM dispo
+            - name: xpack.security.enabled
+              value: "false"              # Simplification - activer en prod
+          resources:
+            requests:
+              memory: "3Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health?local=true
+              port: 9200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health?local=true
+              port: 9200
+            initialDelaySeconds: 60
+            periodSeconds: 15
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 50Gi      # Adapter selon le volume de logs</code></pre>
+
+      <h3>4.4 - Vérifier le cluster</h3>
+
+<pre><code class="language-bash"># Vérifier la santé du cluster
+kubectl -n logging port-forward svc/elasticsearch 9200:9200
+curl http://localhost:9200/_cluster/health?pretty
+
+# Résultat attendu :
+# {
+#   "cluster_name": "bmis-logs",
+#   "status": "green",        ← Les 3 nœuds sont opérationnels
+#   "number_of_nodes": 3,
+#   "number_of_data_nodes": 3
+# }</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 5. LOGSTASH ═══════════════════════════════════════════ -->
+    <section>
+      <h2>5 - Logstash - Pipeline de traitement</h2>
+
+      <p>Logstash reçoit les logs bruts de Filebeat, les transforme (parsing JSON, enrichissement, normalisation), et les envoie à Elasticsearch. C'est le composant de <strong>traitement</strong> de la stack.</p>
+
+      <h3>5.1 - ConfigMap pour la pipeline</h3>
+
+<pre><code class="language-yaml"># logstash-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  namespace: logging
+data:
+  logstash.conf: |
+    # ══════════════════════════════════════════════
+    # INPUT - Réception des logs depuis Filebeat
+    # ══════════════════════════════════════════════
+    input {
+      beats {
+        port => 5044
+      }
+    }
+
+    # ══════════════════════════════════════════════
+    # FILTER - Traitement et enrichissement
+    # ══════════════════════════════════════════════
+    filter {
+      # Parser le message JSON de Spring Boot
+      if [message] =~ /^\{/ {
+        json {
+          source => "message"
+          target => "app"
+          skip_on_invalid_json => true
+        }
+      }
+
+      # Extraire le niveau de log si absent
+      if [app][level] {
+        mutate {
+          add_field => { "log_level" => "%{[app][level]}" }
+        }
+      }
+
+      # Parser les logs non-JSON (legacy)
+      if ![app] {
+        grok {
+          match => {
+            "message" => "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:log_level} \[%{DATA:thread}\] %{JAVACLASS:logger} - %{GREEDYDATA:log_message}"
+          }
+          tag_on_failure => ["_grok_parse_failure"]
+        }
+      }
+
+      # Normaliser le timestamp
+      date {
+        match => ["[app][@timestamp]", "ISO8601"]
+        target => "@timestamp"
+        remove_field => ["[app][@timestamp]"]
+      }
+
+      # Ajouter des métadonnées utiles
+      mutate {
+        # Supprimer les champs inutiles
+        remove_field => ["agent", "ecs", "input", "host"]
+
+        # Renommer pour cohérence
+        rename => {
+          "[kubernetes][namespace]" => "k8s_namespace"
+          "[kubernetes][pod][name]" => "k8s_pod"
+          "[kubernetes][labels][app]" => "k8s_app"
+        }
+      }
+
+      # Identifier les erreurs pour un index séparé
+      if [log_level] =~ /ERROR|FATAL/ {
+        mutate {
+          add_tag => ["error"]
+        }
+      }
+    }
+
+    # ══════════════════════════════════════════════
+    # OUTPUT - Envoi vers Elasticsearch
+    # ══════════════════════════════════════════════
+    output {
+      elasticsearch {
+        hosts => ["http://elasticsearch:9200"]
+        # Index par jour pour faciliter la rétention
+        index => "logs-%{k8s_namespace}-%{+YYYY.MM.dd}"
+        # Index séparé pour les erreurs
+        # (permet des alertes spécifiques)
+      }
+
+      # Debug - décommenter pour voir les logs traités
+      # stdout { codec => rubydebug }
+    }</code></pre>
+
+      <h3>5.2 - Deployment Logstash</h3>
+
+<pre><code class="language-yaml"># logstash-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: logging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:8.12.0
+          ports:
+            - containerPort: 5044
+              name: beats
+          env:
+            - name: LS_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "250m"
+            limits:
+              memory: "1.5Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: pipeline
+              mountPath: /usr/share/logstash/pipeline
+              readOnly: true
+      volumes:
+        - name: pipeline
+          configMap:
+            name: logstash-pipeline
+---
+# Service pour recevoir les logs de Filebeat
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: logging
+spec:
+  selector:
+    app: logstash
+  ports:
+    - name: beats
+      port: 5044
+      targetPort: 5044</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 6. FILEBEAT ═══════════════════════════════════════════ -->
+    <section>
+      <h2>6 - Filebeat - Agent de collecte</h2>
+
+      <p>Filebeat est déployé en <strong>DaemonSet</strong> : un pod Filebeat tourne sur <strong>chaque nœud</strong> du cluster Kubernetes. Il lit les fichiers de logs des conteneurs depuis <code>/var/log/containers/</code> et les envoie à Logstash.</p>
+
+      <h3>6.1 - ConfigMap Filebeat</h3>
+
+<pre><code class="language-yaml"># filebeat-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: logging
+data:
+  filebeat.yml: |
+    # ══════ Input - Logs des conteneurs ══════
+    filebeat.inputs:
+      - type: container
+        paths:
+          - /var/log/containers/*.log
+        # Parser le format Docker/containerd
+        processors:
+          - add_kubernetes_metadata:
+              host: ${NODE_NAME}
+              matchers:
+                - logs_path:
+                    logs_path: "/var/log/containers/"
+
+    # ══════ Filtrage par namespace ══════
+    # Ne collecter que les namespaces pertinents
+    processors:
+      - drop_event:
+          when:
+            or:
+              - equals:
+                  kubernetes.namespace: "kube-system"
+              - equals:
+                  kubernetes.namespace: "kube-public"
+              - equals:
+                  kubernetes.namespace: "logging"
+
+    # ══════ Output - Envoi vers Logstash ══════
+    output.logstash:
+      hosts: ["logstash.logging.svc.cluster.local:5044"]
+      # Loadbalance entre les instances Logstash
+      loadbalance: true
+
+    # ══════ Alternative - Envoi direct à Elasticsearch ══════
+    # output.elasticsearch:
+    #   hosts: ["elasticsearch.logging.svc.cluster.local:9200"]
+    #   index: "filebeat-%{+yyyy.MM.dd}"
+
+    # ══════ Logging interne Filebeat ══════
+    logging.level: warning
+    logging.to_files: false</code></pre>
+
+      <h3>6.2 - DaemonSet Filebeat</h3>
+
+<pre><code class="language-yaml"># filebeat-daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat
+  namespace: logging
+  labels:
+    app: filebeat
+spec:
+  selector:
+    matchLabels:
+      app: filebeat
+  template:
+    metadata:
+      labels:
+        app: filebeat
+    spec:
+      serviceAccountName: filebeat
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:8.12.0
+          args:
+            - "-c"
+            - "/etc/filebeat/filebeat.yml"
+            - "-e"    # Log to stderr
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/filebeat
+              readOnly: true
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: containerlog
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: data
+              mountPath: /usr/share/filebeat/data
+      volumes:
+        - name: config
+          configMap:
+            name: filebeat-config
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: containerlog
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: data
+          hostPath:
+            path: /var/lib/filebeat-data
+            type: DirectoryOrCreate
+---
+# ServiceAccount + RBAC pour accéder aux métadonnées K8s
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: filebeat
+  namespace: logging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filebeat
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: filebeat
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: filebeat
+subjects:
+  - kind: ServiceAccount
+    name: filebeat
+    namespace: logging</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 7. KIBANA ═══════════════════════════════════════════ -->
+    <section>
+      <h2>7 - Kibana - Visualisation</h2>
+
+      <p>Kibana est l'interface graphique qui se connecte à Elasticsearch et permet de rechercher, visualiser et analyser vos logs.</p>
+
+      <h3>7.1 - Deployment + Service</h3>
+
+<pre><code class="language-yaml"># kibana.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: logging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana:8.12.0
+          ports:
+            - containerPort: 5601
+          env:
+            - name: ELASTICSEARCH_HOSTS
+              value: '["http://elasticsearch:9200"]'
+            - name: SERVER_NAME
+              value: "kibana.bmis.local"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 5601
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: logging
+spec:
+  selector:
+    app: kibana
+  ports:
+    - port: 5601
+      targetPort: 5601</code></pre>
+
+      <h3>7.2 - Configurer les Index Patterns</h3>
+
+      <p>Après le déploiement, accédez à Kibana et configurez les index patterns :</p>
+
+<pre><code class="language-bash"># Accéder à Kibana
+kubectl -n logging port-forward svc/kibana 5601:5601
+
+# Ouvrir http://localhost:5601 dans le navigateur
+# Aller dans Management → Stack Management → Index Patterns
+# Créer un pattern : logs-*
+# Sélectionner @timestamp comme champ de temps</code></pre>
+
+      <h3>7.3 - Requêtes utiles dans Kibana Discover</h3>
+
+      <p>Voici les requêtes KQL (Kibana Query Language) les plus courantes pour diagnostiquer des problèmes :</p>
+
+<pre><code class="language-bash"># Trouver toutes les erreurs du service de paiement
+log_level: "ERROR" AND k8s_app: "payment-service"
+
+# Chercher une requête spécifique par requestId
+app.requestId: "req-550e8400-e29b"
+
+# Tracer une transaction complète via traceId
+app.traceId: "abc123def456"
+
+# Erreurs dans les dernières 15 minutes
+log_level: "ERROR" AND @timestamp >= now-15m
+
+# Exceptions Java spécifiques
+message: "NullPointerException" OR message: "OutOfMemoryError"
+
+# Logs d'un pod spécifique
+k8s_pod: "payment-service-7d4f5b6c8-abc12"
+
+# Paiements échoués
+app.message: "paiement" AND app.message: "échoué"
+
+# Requêtes lentes (> 2 secondes)
+app.duration: [2000 TO *]</code></pre>
+
+      <h3>7.4 - Créer des visualisations</h3>
+
+      <p>Dans Kibana, créez des dashboards avec les visualisations suivantes :</p>
+
+      <ul>
+        <li><strong>Histogramme d'erreurs</strong> - Nombre d'erreurs par service au fil du temps. Permet de détecter les pics d'erreurs.</li>
+        <li><strong>Top 10 des exceptions</strong> - Tableau des exceptions les plus fréquentes. Aide à prioriser les corrections.</li>
+        <li><strong>Logs par namespace</strong> - Pie chart montrant la répartition des logs par namespace Kubernetes.</li>
+        <li><strong>Latence des requêtes</strong> - Graphique de la distribution des temps de réponse par service.</li>
+        <li><strong>Taux d'erreur</strong> - Gauge montrant le pourcentage d'erreurs sur les dernières 5 minutes.</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 8. CORRÉLATION DE LOGS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>8 - Corrélation de logs</h2>
+
+      <p>Dans un système de microservices, une seule requête utilisateur peut traverser <strong>5 à 10 services</strong>. Sans corrélation, il est impossible de reconstituer le parcours complet d'une requête. C'est le problème le plus critique du logging distribué.</p>
+
+      <h3>8.1 - Request ID across services</h3>
+
+      <p>Le principe est simple : chaque requête entrante reçoit un <strong>identifiant unique</strong> qui est propagé à travers tous les appels inter-services :</p>
+
+<pre><code class="language-java">// Intercepteur RestTemplate/WebClient pour propager le requestId
+@Component
+public class CorrelationInterceptor implements ClientHttpRequestInterceptor {
+
+    @Override
+    public ClientHttpResponse intercept(HttpRequest request,
+                                         byte[] body,
+                                         ClientHttpRequestExecution execution)
+                                         throws IOException {
+        // Récupérer le requestId du MDC (injecté par le MdcFilter)
+        String requestId = MDC.get("requestId");
+        String traceId = MDC.get("traceId");
+
+        if (requestId != null) {
+            request.getHeaders().set("X-Request-ID", requestId);
+        }
+        if (traceId != null) {
+            request.getHeaders().set("X-Trace-ID", traceId);
+        }
+
+        return execution.execute(request, body);
+    }
+}
+
+// Configuration du RestTemplate
+@Configuration
+public class RestTemplateConfig {
+    @Bean
+    public RestTemplate restTemplate(CorrelationInterceptor interceptor) {
+        RestTemplate restTemplate = new RestTemplate();
+        restTemplate.setInterceptors(List.of(interceptor));
+        return restTemplate;
+    }
+}</code></pre>
+
+      <h3>8.2 - Micrometer Tracing (ex-Spring Cloud Sleuth)</h3>
+
+      <p>Micrometer Tracing (qui remplace Spring Cloud Sleuth) ajoute automatiquement un <code>traceId</code> et un <code>spanId</code> à chaque requête. Chaque service dans la chaîne partage le même <code>traceId</code>, mais a un <code>spanId</code> unique :</p>
+
+<pre><code class="language-yaml"># application.yml - Configuration Micrometer Tracing
+management:
+  tracing:
+    sampling:
+      probability: 1.0    # 100% des requêtes tracées
+    propagation:
+      type: b3             # Compatible Zipkin/Brave
+      consume: [b3, w3c]
+      produce: [b3, w3c]</code></pre>
+
+      <p>Flux d'une requête de paiement :</p>
+
+      <div class="arch-diagram">
+<pre>
+Requête Client → API Gateway → Payment Service → User Service → Notification Service
+                 │                │                 │                │
+traceId:         abc123           abc123             abc123           abc123
+spanId:          span-01          span-02            span-03          span-04
+</pre>
+      </div>
+
+      <h3>8.3 - Rechercher par traceId dans Kibana</h3>
+
+<pre><code class="language-bash"># Dans Kibana Discover - KQL :
+app.traceId: "abc123def456"
+
+# Résultat : TOUS les logs de TOUS les services pour cette requête
+# Triés par @timestamp, vous voyez le parcours complet :
+#
+# 14:23:45.100  api-gateway        → Requête reçue POST /api/payments
+# 14:23:45.105  payment-service    → Validation du paiement
+# 14:23:45.150  user-service       → Vérification du solde utilisateur
+# 14:23:45.200  payment-service    → Paiement approuvé, montant: 150.00€
+# 14:23:45.210  notification-svc   → Email de confirmation envoyé
+# 14:23:45.220  api-gateway        → Réponse 200 OK (120ms)</code></pre>
+
+      <div class="callout tip">
+        <strong>Toujours inclure des IDs de corrélation</strong> - Chaque log doit contenir au minimum : <code>traceId</code>, <code>requestId</code>, <code>userId</code>. Sans ces champs, vos logs sont inutilisables pour le debugging en production. Configurez-les dès le début du projet, pas en urgence après un incident.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 9. ALERTMANAGER ═══════════════════════════════════════════ -->
+    <section>
+      <h2>9 - AlertManager</h2>
+
+      <p>Le logging centralisé permet de <strong>diagnostiquer</strong> les problèmes. Mais comment <strong>détecter</strong> qu'un problème existe avant que les utilisateurs ne le signalent ? C'est le rôle de l'alerting.</p>
+
+      <p>AlertManager est le composant de <strong>Prometheus</strong> responsable de la gestion des alertes. Il reçoit les alertes déclenchées par Prometheus, les <strong>groupe</strong>, les <strong>déduplique</strong>, les <strong>achemine</strong> vers les bons canaux de notification, et gère les <strong>silences</strong> et les <strong>inhibitions</strong>.</p>
+
+      <h3>9.1 - Architecture de l'alerting</h3>
+
+      <div class="arch-diagram">
+<pre>
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│                  │     │                  │     │                  │
+│   Prometheus     │────▶│  AlertManager    │────▶│  Notification    │
+│                  │     │                  │     │                  │
+│  - Évalue les    │     │  - Groupement    │     │  - Slack         │
+│    règles        │     │  - Déduplication │     │  - Email         │
+│  - Déclenche     │     │  - Routage       │     │  - PagerDuty     │
+│    les alertes   │     │  - Inhibition    │     │  - Webhook       │
+│                  │     │  - Silences      │     │                  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+</pre>
+      </div>
+
+      <h3>9.2 - Concepts clés</h3>
+
+      <ul>
+        <li><strong>Groupement</strong> - Les alertes similaires sont regroupées en une seule notification. Si 50 pods ont le même problème, vous recevez UNE notification, pas 50.</li>
+        <li><strong>Déduplication</strong> - Une alerte déjà envoyée n'est pas renvoyée tant qu'elle est active.</li>
+        <li><strong>Routage</strong> - Chaque alerte est acheminée vers le bon canal selon sa sévérité et son type. Les alertes critiques vont à PagerDuty, les warnings à Slack.</li>
+        <li><strong>Inhibition</strong> - Si le cluster entier est down (alerte critique), les alertes individuelles de chaque service sont supprimées pour éviter le bruit.</li>
+        <li><strong>Silences</strong> - Permet de désactiver temporairement une alerte pendant une maintenance planifiée.</li>
+      </ul>
+
+      <h3>9.3 - Deployment AlertManager</h3>
+
+<pre><code class="language-yaml"># alertmanager-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+            - "--storage.path=/alertmanager"
+            - "--web.external-url=http://alertmanager.bmis.local"
+          ports:
+            - containerPort: 9093
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: storage
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  selector:
+    app: alertmanager
+  ports:
+    - port: 9093
+      targetPort: 9093</code></pre>
+
+      <h3>9.4 - ConfigMap AlertManager - Routage complet</h3>
+
+<pre><code class="language-yaml"># alertmanager-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    # ══════════════════════════════════════════════
+    # Configuration globale
+    # ══════════════════════════════════════════════
+    global:
+      resolve_timeout: 5m
+      smtp_from: 'alerts@bmis-academy.com'
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_auth_username: 'alerts@bmis-academy.com'
+      smtp_auth_password: 'app-password-here'
+      smtp_require_tls: true
+      slack_api_url: 'https://hooks.slack.com/services/T00/B00/xxxx'
+
+    # ══════════════════════════════════════════════
+    # Templates de notification
+    # ══════════════════════════════════════════════
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'
+
+    # ══════════════════════════════════════════════
+    # Arbre de routage
+    # ══════════════════════════════════════════════
+    route:
+      # Route par défaut
+      receiver: 'slack-warnings'
+      group_by: ['alertname', 'namespace', 'service']
+      group_wait: 30s           # Attendre 30s avant d'envoyer (groupement)
+      group_interval: 5m        # Intervalle entre les notifications groupées
+      repeat_interval: 4h       # Re-notifier après 4h si toujours actif
+
+      routes:
+        # ── Alertes critiques → PagerDuty + Slack ──
+        - match:
+            severity: critical
+          receiver: 'pagerduty-critical'
+          group_wait: 10s        # Envoyer rapidement
+          repeat_interval: 1h
+          continue: true         # Continuer pour aussi envoyer à Slack
+
+        - match:
+            severity: critical
+          receiver: 'slack-critical'
+
+        # ── Alertes de paiement → Canal dédié ──
+        - match_re:
+            alertname: 'Payment.*'
+          receiver: 'slack-payments'
+          group_wait: 15s
+
+        # ── Alertes warning → Slack général ──
+        - match:
+            severity: warning
+          receiver: 'slack-warnings'
+
+        # ── Alertes info → Email uniquement ──
+        - match:
+            severity: info
+          receiver: 'email-team'
+          repeat_interval: 12h
+
+    # ══════════════════════════════════════════════
+    # Inhibition - Supprimer le bruit
+    # ══════════════════════════════════════════════
+    inhibit_rules:
+      # Si le cluster est down, ne pas alerter sur les services individuels
+      - source_match:
+          alertname: 'KubeClusterDown'
+        target_match_re:
+          alertname: '.*'
+        equal: ['cluster']
+
+      # Si un nœud est down, ne pas alerter sur ses pods
+      - source_match:
+          alertname: 'KubeNodeNotReady'
+        target_match_re:
+          alertname: 'KubePod.*'
+        equal: ['node']
+
+    # ══════════════════════════════════════════════
+    # Receivers - Canaux de notification
+    # ══════════════════════════════════════════════
+    receivers:
+      - name: 'slack-critical'
+        slack_configs:
+          - channel: '#alerts-critical'
+            color: 'danger'
+            title: '🚨 CRITIQUE - {{ .GroupLabels.alertname }}'
+            text: >-
+              *Alerte :* {{ .GroupLabels.alertname }}
+              *Service :* {{ .GroupLabels.service }}
+              *Namespace :* {{ .GroupLabels.namespace }}
+              *Description :* {{ .CommonAnnotations.description }}
+              *Runbook :* {{ .CommonAnnotations.runbook_url }}
+
+      - name: 'slack-warnings'
+        slack_configs:
+          - channel: '#alerts-warnings'
+            color: 'warning'
+            title: '⚠️ WARNING - {{ .GroupLabels.alertname }}'
+            text: >-
+              {{ .CommonAnnotations.summary }}
+
+      - name: 'slack-payments'
+        slack_configs:
+          - channel: '#alerts-payments'
+            color: 'danger'
+            title: '💳 Alerte Paiement - {{ .GroupLabels.alertname }}'
+            text: >-
+              {{ .CommonAnnotations.description }}
+
+      - name: 'pagerduty-critical'
+        pagerduty_configs:
+          - service_key: 'your-pagerduty-service-key'
+            severity: 'critical'
+            description: '{{ .GroupLabels.alertname }} - {{ .CommonAnnotations.summary }}'
+
+      - name: 'email-team'
+        email_configs:
+          - to: 'devops-team@bmis-academy.com'
+            send_resolved: true</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 10. ALERTING RULES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>10 - Alerting Rules</h2>
+
+      <p>Les règles d'alerte sont définies dans Prometheus et évaluées en continu. Quand une condition est remplie pendant la durée spécifiée (<code>for</code>), l'alerte est déclenchée et envoyée à AlertManager.</p>
+
+      <p>En utilisant le <strong>Prometheus Operator</strong>, les règles sont définies via le CRD <code>PrometheusRule</code> :</p>
+
+      <h3>10.1 - Règles d'infrastructure</h3>
+
+<pre><code class="language-yaml"># prometheus-rules-infrastructure.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: infrastructure-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus     # Label requis par le Prometheus Operator
+spec:
+  groups:
+    # ══════════════════════════════════════════════
+    # CPU / Mémoire
+    # ══════════════════════════════════════════════
+    - name: resource-alerts
+      rules:
+        # CPU élevé pendant 5 minutes
+        - alert: HighCpuUsage
+          expr: |
+            (
+              sum(rate(container_cpu_usage_seconds_total{
+                namespace!="kube-system"
+              }[5m])) by (pod, namespace)
+              /
+              sum(kube_pod_container_resource_limits{
+                resource="cpu",
+                namespace!="kube-system"
+              }) by (pod, namespace)
+            ) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CPU élevé sur {{ $labels.pod }}"
+            description: >-
+              Le pod {{ $labels.pod }} dans {{ $labels.namespace }}
+              utilise plus de 80% de sa limite CPU depuis 5 minutes.
+              Valeur actuelle : {{ $value | humanizePercentage }}.
+            runbook_url: "https://wiki.bmis.local/runbooks/high-cpu"
+
+        # Mémoire proche de la limite
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              container_memory_working_set_bytes{
+                namespace!="kube-system"
+              }
+              /
+              kube_pod_container_resource_limits{
+                resource="memory",
+                namespace!="kube-system"
+              }
+            ) > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mémoire élevée sur {{ $labels.pod }}"
+            description: >-
+              Le pod {{ $labels.pod }} utilise plus de 85% de sa
+              limite mémoire. Risque d'OOMKill imminent.
+
+    # ══════════════════════════════════════════════
+    # Stockage
+    # ══════════════════════════════════════════════
+    - name: storage-alerts
+      rules:
+        - alert: DiskSpaceLow
+          expr: |
+            (
+              kubelet_volume_stats_available_bytes
+              /
+              kubelet_volume_stats_capacity_bytes
+            ) < 0.15
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Espace disque faible sur {{ $labels.persistentvolumeclaim }}"
+            description: >-
+              Le PVC {{ $labels.persistentvolumeclaim }} dans
+              {{ $labels.namespace }} a moins de 15% d'espace libre.
+              Capacité restante : {{ $value | humanizePercentage }}.
+
+        - alert: DiskSpaceCritical
+          expr: |
+            (
+              kubelet_volume_stats_available_bytes
+              /
+              kubelet_volume_stats_capacity_bytes
+            ) < 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CRITIQUE - Espace disque < 5% sur {{ $labels.persistentvolumeclaim }}"
+            description: >-
+              Action immédiate requise. Le PVC {{ $labels.persistentvolumeclaim }}
+              est presque plein.</code></pre>
+
+      <h3>10.2 - Règles applicatives</h3>
+
+<pre><code class="language-yaml"># prometheus-rules-application.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: application-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # ══════════════════════════════════════════════
+    # Taux d'erreur HTTP
+    # ══════════════════════════════════════════════
+    - name: http-error-alerts
+      rules:
+        # Taux d'erreur 5xx élevé
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(http_server_requests_seconds_count{
+                status=~"5..",
+                namespace="production"
+              }[5m])) by (service)
+              /
+              sum(rate(http_server_requests_seconds_count{
+                namespace="production"
+              }[5m])) by (service)
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Taux d'erreur 5xx > 5% sur {{ $labels.service }}"
+            description: >-
+              Le service {{ $labels.service }} retourne plus de 5%
+              de réponses 5xx depuis 5 minutes. Taux actuel :
+              {{ $value | humanizePercentage }}.
+            runbook_url: "https://wiki.bmis.local/runbooks/high-error-rate"
+
+        # Latence élevée
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_server_requests_seconds_bucket{
+                namespace="production"
+              }[5m])) by (le, service)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Latence P95 > 2s sur {{ $labels.service }}"
+            description: >-
+              Le percentile 95 de la latence du service
+              {{ $labels.service }} dépasse 2 secondes.
+
+    # ══════════════════════════════════════════════
+    # Pods - CrashLoop et disponibilité
+    # ══════════════════════════════════════════════
+    - name: pod-alerts
+      rules:
+        # Pod en CrashLoopBackOff
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total[15m])
+            * 60 * 5 > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} en CrashLoopBackOff"
+            description: >-
+              Le pod {{ $labels.pod }} dans {{ $labels.namespace }}
+              redémarre en boucle. Vérifiez les logs avec :
+              kubectl logs {{ $labels.pod }} -n {{ $labels.namespace }}
+            runbook_url: "https://wiki.bmis.local/runbooks/crashloop"
+
+        # Application down (target Prometheus inaccessible)
+        - alert: ApplicationDown
+          expr: up == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Application {{ $labels.job }} DOWN"
+            description: >-
+              La target Prometheus {{ $labels.instance }} du job
+              {{ $labels.job }} ne répond plus depuis 2 minutes.
+
+    # ══════════════════════════════════════════════
+    # Paiements - Alertes métier
+    # ══════════════════════════════════════════════
+    - name: payment-alerts
+      rules:
+        # Pic de paiements échoués
+        - alert: PaymentFailureRateSpike
+          expr: |
+            (
+              sum(rate(payment_transactions_total{
+                status="failed"
+              }[5m]))
+              /
+              sum(rate(payment_transactions_total[5m]))
+            ) > 0.1
+          for: 3m
+          labels:
+            severity: critical
+            team: payments
+          annotations:
+            summary: "Taux d'échec des paiements > 10%"
+            description: >-
+              Plus de 10% des paiements échouent depuis 3 minutes.
+              Taux actuel : {{ $value | humanizePercentage }}.
+              Vérifiez le provider de paiement et les logs du
+              payment-service.
+            runbook_url: "https://wiki.bmis.local/runbooks/payment-failures"
+
+        # Aucun paiement traité (service potentiellement bloqué)
+        - alert: NoPaymentsProcessed
+          expr: |
+            sum(rate(payment_transactions_total[10m])) == 0
+          for: 10m
+          labels:
+            severity: critical
+            team: payments
+          annotations:
+            summary: "Aucun paiement traité depuis 10 minutes"
+            description: >-
+              Le système de paiement ne traite aucune transaction.
+              Vérifiez si le service est opérationnel et si le
+              provider de paiement est accessible.</code></pre>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 11. NOTIFICATION CHANNELS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>11 - Canaux de notification</h2>
+
+      <p>AlertManager supporte de nombreux canaux de notification. Voici la configuration détaillée pour chacun.</p>
+
+      <h3>11.1 - Slack</h3>
+
+      <p>Le canal le plus utilisé. Les alertes apparaissent directement dans les channels de l'équipe :</p>
+
+<pre><code class="language-yaml"># Dans alertmanager.yml → receivers
+- name: 'slack-devops'
+  slack_configs:
+    - api_url: 'https://hooks.slack.com/services/T00/B00/xxxx'
+      channel: '#devops-alerts'
+      send_resolved: true       # Notifier quand l'alerte est résolue
+      color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+      title: '{{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} {{ .GroupLabels.alertname }}'
+      text: >-
+        *Status :* {{ .Status | toUpper }}
+        *Sévérité :* {{ .CommonLabels.severity }}
+        *Description :* {{ .CommonAnnotations.description }}
+        *Début :* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+        {{ if eq .Status "resolved" }}*Résolu :* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+        *Runbook :* {{ .CommonAnnotations.runbook_url }}
+      fallback: '{{ .GroupLabels.alertname }} - {{ .Status }}'</code></pre>
+
+      <h3>11.2 - Email</h3>
+
+<pre><code class="language-yaml"># Receiver email avec SMTP
+- name: 'email-ops'
+  email_configs:
+    - to: 'ops-team@bmis-academy.com'
+      from: 'alertmanager@bmis-academy.com'
+      smarthost: 'smtp.gmail.com:587'
+      auth_username: 'alertmanager@bmis-academy.com'
+      auth_password: 'app-specific-password'
+      send_resolved: true
+      headers:
+        Subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+      html: |
+        &lt;h2&gt;Alerte {{ .Status }}&lt;/h2&gt;
+        &lt;p&gt;&lt;strong&gt;{{ .GroupLabels.alertname }}&lt;/strong&gt;&lt;/p&gt;
+        &lt;p&gt;{{ .CommonAnnotations.description }}&lt;/p&gt;
+        &lt;p&gt;Nombre d'alertes : {{ .Alerts | len }}&lt;/p&gt;</code></pre>
+
+      <h3>11.3 - PagerDuty</h3>
+
+<pre><code class="language-yaml"># PagerDuty - Pour les astreintes (on-call)
+- name: 'pagerduty-oncall'
+  pagerduty_configs:
+    - service_key: 'your-pagerduty-integration-key'
+      severity: '{{ .CommonLabels.severity }}'
+      description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+      details:
+        namespace: '{{ .GroupLabels.namespace }}'
+        service: '{{ .GroupLabels.service }}'
+        runbook: '{{ .CommonAnnotations.runbook_url }}'</code></pre>
+
+      <h3>11.4 - Webhook (intégration personnalisée)</h3>
+
+<pre><code class="language-yaml"># Webhook - Appeler une API personnalisée
+- name: 'webhook-custom'
+  webhook_configs:
+    - url: 'https://api.bmis-academy.com/webhooks/alerts'
+      send_resolved: true
+      max_alerts: 10
+      http_config:
+        bearer_token: 'your-bearer-token'
+        tls_config:
+          insecure_skip_verify: false</code></pre>
+
+      <p>Le payload JSON envoyé par AlertManager au webhook contient toutes les informations de l'alerte (labels, annotations, status, etc.). Vous pouvez l'utiliser pour déclencher des actions automatisées (créer un ticket Jira, notifier sur Teams, etc.).</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 12. RUNBOOKS ET INCIDENTS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>12 - Runbooks et réponse aux incidents</h2>
+
+      <p>Une alerte sans procédure de réponse est inutile. Les <strong>runbooks</strong> sont des guides étape par étape qui décrivent comment diagnostiquer et résoudre un problème spécifique.</p>
+
+      <h3>12.1 - Lier les alertes aux runbooks</h3>
+
+      <p>Chaque règle d'alerte doit inclure un lien vers son runbook dans les annotations :</p>
+
+<pre><code class="language-yaml"># Dans les alerting rules
+annotations:
+  summary: "Taux d'erreur élevé"
+  description: "Le service {{ $labels.service }} a un taux d'erreur de {{ $value }}"
+  runbook_url: "https://wiki.bmis.local/runbooks/high-error-rate"</code></pre>
+
+      <p>Quand un ingénieur reçoit l'alerte (Slack, PagerDuty), il clique sur le lien du runbook et suit les étapes :</p>
+
+      <ol>
+        <li><strong>Évaluer la sévérité</strong> - L'alerte affecte-t-elle les utilisateurs ? Quel est l'impact business ?</li>
+        <li><strong>Diagnostiquer</strong> - Consulter les logs (Kibana), les métriques (Grafana), les événements Kubernetes.</li>
+        <li><strong>Résoudre</strong> - Appliquer le correctif (rollback, scale up, redémarrage, fix de config).</li>
+        <li><strong>Documenter</strong> - Écrire un post-mortem si l'incident était significatif.</li>
+      </ol>
+
+      <h3>12.2 - Politique d'escalade</h3>
+
+      <p>Définissez clairement qui est notifié et quand :</p>
+
+      <ul>
+        <li><strong>Niveau 1 (0-5 min)</strong> - L'ingénieur d'astreinte reçoit l'alerte via PagerDuty. Il a 5 minutes pour acquitter.</li>
+        <li><strong>Niveau 2 (5-15 min)</strong> - Si pas d'acquittement, l'alerte est escaladée au second on-call et au tech lead.</li>
+        <li><strong>Niveau 3 (15-30 min)</strong> - Si toujours pas de réponse, le manager engineering et le CTO sont notifiés.</li>
+        <li><strong>Niveau 4 (30+ min)</strong> - Incident majeur. War room, communication aux stakeholders.</li>
+      </ul>
+
+      <h3>12.3 - Rotation d'astreinte (On-Call)</h3>
+
+      <p>L'astreinte est une responsabilité partagée. Les bonnes pratiques :</p>
+
+      <ul>
+        <li><strong>Rotation hebdomadaire</strong> - Chaque ingénieur est d'astreinte une semaine par mois maximum.</li>
+        <li><strong>Binôme primaire/secondaire</strong> - Toujours deux personnes d'astreinte pour la redondance.</li>
+        <li><strong>Compensation</strong> - Les heures d'astreinte et les interventions nocturnes sont compensées (repos, prime).</li>
+        <li><strong>Handoff documenté</strong> - À chaque rotation, un handoff avec les incidents en cours et les points d'attention.</li>
+        <li><strong>Post-mortems</strong> - Après chaque incident, un post-mortem sans blame est rédigé et partagé.</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 13. ALTERNATIVES LÉGÈRES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>13 - Alternatives légères - Loki + Promtail</h2>
+
+      <p>L'ELK Stack est puissante mais <strong>gourmande en ressources</strong>. Elasticsearch seul nécessite plusieurs gigaoctets de RAM. Pour les équipes avec des ressources limitées ou des besoins plus simples, <strong>Grafana Loki</strong> est une alternative intéressante.</p>
+
+      <h3>13.1 - Loki vs ELK</h3>
+
+      <ul>
+        <li><strong>Loki</strong> n'indexe <strong>que les labels</strong> (namespace, pod, service), pas le contenu complet des logs. Cela le rend beaucoup plus léger et moins cher à opérer.</li>
+        <li><strong>Promtail</strong> remplace Filebeat - c'est l'agent qui collecte les logs et les envoie à Loki.</li>
+        <li><strong>Grafana</strong> sert d'interface de visualisation (au lieu de Kibana), ce qui permet d'avoir métriques + logs dans le même outil.</li>
+        <li><strong>Trade-off</strong> - Les recherches full-text sont plus lentes qu'avec Elasticsearch, mais la plupart des recherches se font par labels (service, namespace, level), ce qui est très rapide avec Loki.</li>
+      </ul>
+
+      <h3>13.2 - Architecture Loki</h3>
+
+      <div class="arch-diagram">
+<pre>
+Applications → Promtail (DaemonSet) → Loki (stockage S3/MinIO) → Grafana (UI)
+</pre>
+      </div>
+
+<pre><code class="language-yaml"># Installer Loki avec Helm (approche recommandée)
+# Ajouter le repo Grafana
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+# Installer Loki + Promtail
+helm install loki grafana/loki-stack \
+  --namespace logging \
+  --set promtail.enabled=true \
+  --set grafana.enabled=false     # Si Grafana existe déjà</code></pre>
+
+      <p>Pour les petites équipes et les environnements de développement, Loki est souvent le meilleur choix. Réservez l'ELK Stack aux systèmes qui nécessitent une recherche full-text avancée et un volume de logs important.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 14. ERREURS COURANTES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>14 - Erreurs courantes</h2>
+
+      <div class="callout bad">
+        <strong>Pas de logging structuré</strong> - Envoyer des logs en texte brut à Elasticsearch. Le parsing est fragile, les champs sont incohérents entre les services, et les recherches sont peu fiables. <strong>Toujours utiliser JSON structuré.</strong>
+      </div>
+
+      <div class="callout bad">
+        <strong>Pas d'IDs de corrélation</strong> - Sans <code>traceId</code> et <code>requestId</code>, chaque log est isolé. Impossible de suivre une requête à travers les microservices. C'est comme essayer de résoudre un puzzle sans les bords.
+      </div>
+
+      <div class="callout bad">
+        <strong>Alert fatigue</strong> - Configurer trop d'alertes, ou des seuils trop bas, noie l'équipe sous les notifications. Après quelques semaines, les ingénieurs ignorent les alertes - y compris les vraies. Chaque alerte doit être <em>actionnable</em> et nécessiter une <em>intervention humaine</em>.
+      </div>
+
+      <div class="callout bad">
+        <strong>Pas de runbooks</strong> - Recevoir une alerte « HighErrorRate » à 3h du matin sans documentation de résolution. L'ingénieur d'astreinte perd du temps à chercher quoi faire au lieu de résoudre le problème. Chaque alerte doit avoir un runbook associé.
+      </div>
+
+      <div class="callout bad">
+        <strong>Logs excessifs en production</strong> - Logger en niveau <code>DEBUG</code> en production. Le volume de logs explose, Elasticsearch rame, les coûts de stockage augmentent, et les vrais problèmes sont noyés dans le bruit. Utilisez <code>INFO</code> minimum en production.
+      </div>
+
+      <div class="callout bad">
+        <strong>Pas de rétention configurée</strong> - Laisser Elasticsearch stocker les logs indéfiniment. L'espace disque finit par se remplir, et le cluster devient instable. Configurez des politiques de rétention (ex : 30 jours pour les logs applicatifs, 90 jours pour les logs d'audit).
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 15. BEST PRACTICES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>15 - Best practices</h2>
+
+      <div class="callout tip">
+        <strong>Logging structuré dès le jour 1</strong> - Configurez le format JSON et les IDs de corrélation dès le début du projet. Les ajouter après coup est douloureux et nécessite de re-déployer tous les services.
+      </div>
+
+      <div class="callout tip">
+        <strong>Séparer les logs par niveau</strong> - Envoyez les logs <code>ERROR</code> dans un index séparé pour un accès rapide. Les erreurs représentent moins de 1% du volume mais 99% des investigations.
+      </div>
+
+      <div class="callout tip">
+        <strong>Alertes actionnables uniquement</strong> - Si une alerte ne nécessite pas d'action humaine immédiate, c'est une métrique, pas une alerte. Réservez les notifications pour les situations qui requièrent une intervention.
+      </div>
+
+      <div class="callout tip">
+        <strong>Tester vos alertes</strong> - Déclenchez volontairement chaque alerte pour vérifier qu'elle fonctionne : le routage est correct, la notification arrive, le runbook est accessible, et l'équipe sait quoi faire.
+      </div>
+
+      <div class="callout tip">
+        <strong>Politique de rétention</strong> - Configurez Index Lifecycle Management (ILM) dans Elasticsearch : hot (7 jours, SSD), warm (30 jours, HDD), cold (90 jours, archivage), delete (après 90 jours).
+      </div>
+
+      <div class="callout tip">
+        <strong>Dashboard de santé globale</strong> - Créez un dashboard Kibana/Grafana qui montre en un coup d'œil : nombre d'erreurs, services up/down, latence P95, et alertes actives. C'est la première chose qu'un ingénieur doit consulter le matin.
+      </div>
+
+      <div class="callout tip">
+        <strong>Ne logguez jamais de données sensibles</strong> - Mots de passe, tokens, numéros de carte bancaire, données personnelles (RGPD) ne doivent <strong>jamais</strong> apparaître dans les logs. Utilisez le masquage ou le filtrage dans Logstash.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ NAV FOOTER ═══════════════════════════════════════════ -->
+    <div class="lesson-nav">
+      <a href="10-observability-metrics.html">
+        <span class="nav-dir">← Leçon précédente</span>
+        <span class="nav-title">Prometheus &amp; Grafana</span>
+      </a>
+      <a href="12-networking-security.html" class="nav-next">
+        <span class="nav-dir">Leçon suivante →</span>
+        <span class="nav-title">Networking &amp; Security</span>
+      </a>
+    </div>
+
+    </div>
+  </main>
+
+  </div>
+
+  <button class="back-to-top" id="back-to-top" aria-label="Retour en haut">↑</button>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>

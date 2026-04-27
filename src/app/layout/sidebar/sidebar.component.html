@@ -1,0 +1,81 @@
+<aside class="sidebar" [class.open]="open()">
+
+  <!-- Brand -->
+  <div class="sidebar-brand">
+    <a routerLink="/" (click)="onNavigate()">
+      <span class="brand-mark">BM</span>
+      <span class="brand-name">BMIS Academy</span>
+    </a>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="sidebar-nav">
+
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}"
+       class="nav-item" (click)="onNavigate()">
+      <app-icon name="home" [size]="16"></app-icon>
+      <span>Accueil</span>
+    </a>
+
+    <div class="nav-divider"></div>
+    <div class="nav-label">Cours</div>
+
+    @for (course of courses; track course.id) {
+      <div class="nav-course"
+           [class.expanded]="isCourseExpanded(course.id)"
+           [style.--course-color]="course.color">
+
+        <button class="course-toggle" (click)="toggleCourse(course.id)">
+          <span class="course-badge">
+            <app-icon [name]="course.icon" [size]="14"></app-icon>
+          </span>
+          <span class="course-title">{{ course.title }}</span>
+          <app-icon name="chevron-right" [size]="14" class="chevron"></app-icon>
+        </button>
+
+        @if (isCourseExpanded(course.id)) {
+          <div class="course-children">
+            <a [routerLink]="['/courses', course.id]"
+               routerLinkActive="active"
+               [routerLinkActiveOptions]="{exact: true}"
+               class="overview-link"
+               (click)="onNavigate()">
+              Vue d'ensemble
+            </a>
+
+            @for (section of course.sections; track section.title) {
+              <div class="nav-section">
+                <button class="section-toggle"
+                        [class.expanded]="isSectionExpanded(course.id + ':' + section.title)"
+                        (click)="toggleSection(course.id + ':' + section.title)">
+                  <app-icon [name]="section.icon" [size]="13" class="section-icon"></app-icon>
+                  <span>{{ section.title }}</span>
+                  <app-icon name="chevron-right" [size]="11" class="chevron"></app-icon>
+                </button>
+
+                @if (isSectionExpanded(course.id + ':' + section.title)) {
+                  <div class="section-lessons">
+                    @for (lesson of section.lessons; track lesson.number) {
+                      <a [routerLink]="['/courses', course.id, lesson.route]"
+                         routerLinkActive="active"
+                         class="lesson-link"
+                         (click)="onNavigate()">
+                        <span class="lesson-num">{{ lesson.route }}</span>
+                        <span class="lesson-title">{{ lesson.title }}</span>
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+  </nav>
+
+  <div class="sidebar-footer">
+    <span>© 2026 BMIS Academy</span>
+  </div>
+</aside>

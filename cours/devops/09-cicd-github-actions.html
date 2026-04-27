@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CI/CD Pipeline GitHub Actions - DevOps BMIS Academy</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/dockerfile.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="progress-bar"></div>
+
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="docs-layout">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <a href="../../index.html" class="sidebar-brand">
+      <div class="brand-logo">BM</div>
+      <div class="brand-text">
+        <span class="brand-name">BMIS Academy</span>
+        <span class="brand-tagline">DevOps &amp; Production</span>
+      </div>
+    </a>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Vue d'ensemble</div>
+        <a href="index.html" class="nav-link">Accueil du cours</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">1 - Fondations Docker</div>
+        <a href="01-docker-images-containers.html" class="nav-link">Images vs Containers</a>
+        <a href="02-docker-volumes-networking.html" class="nav-link">Volumes &amp; Networking</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">2 - Kubernetes Core</div>
+        <a href="03-kubernetes-architecture.html" class="nav-link">Architecture K8s</a>
+        <a href="04-kubernetes-workloads.html" class="nav-link">Deployments &amp; StatefulSets</a>
+        <a href="05-kubernetes-services-ingress.html" class="nav-link">Services &amp; Ingress</a>
+        <a href="06-kubernetes-configmaps-secrets.html" class="nav-link">ConfigMaps &amp; Secrets</a>
+        <a href="07-kubernetes-storage-namespaces.html" class="nav-link">Storage &amp; Namespaces</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">3 - Déploiement Système</div>
+        <a href="08-deploy-fintech-system.html" class="nav-link">Déployer le Système Fintech</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">4 - CI/CD</div>
+        <a href="09-cicd-github-actions.html" class="nav-link active">Pipeline GitHub Actions</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">5 - Observabilité</div>
+        <a href="10-observability-metrics.html" class="nav-link">Prometheus &amp; Grafana</a>
+        <a href="11-observability-logging-alerting.html" class="nav-link">ELK Stack &amp; Alerting</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">6 - Réseau &amp; Sécurité</div>
+        <a href="12-networking-security.html" class="nav-link">Networking &amp; Security</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">7 - CDN &amp; Assets</div>
+        <a href="13-cdn-asset-delivery.html" class="nav-link">CDN &amp; Distribution</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">8 - Production</div>
+        <a href="14-production-best-practices.html" class="nav-link">Best Practices Production</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../../index.html" class="sidebar-footer-link">← Retour au catalogue</a>
+    </div>
+  </aside>
+
+  <main class="docs-main">
+    <div class="docs-content">
+
+    <!-- ═══════════════════════════════════════════ HEADER ═══════════════════════════════════════════ -->
+    <div class="lesson-header">
+      <div class="lesson-meta">
+        <span class="lesson-number">Leçon 9</span>
+        <span class="lesson-section">Section 4 - CI/CD</span>
+      </div>
+      <h1>Pipeline CI/CD avec GitHub Actions</h1>
+      <p class="lesson-subtitle">Build, test, dockerize, push et deploy automatiquement sur Kubernetes - pipeline production-ready.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ 1. POURQUOI CI/CD ═══════════════════════════════════════════ -->
+    <section>
+      <h2>1 - Pourquoi CI/CD ?</h2>
+
+      <p>Imaginez le scénario suivant : un développeur termine une fonctionnalité, compile le projet sur sa machine, exécute quelques tests manuellement, construit une image Docker, la pousse sur un registre, se connecte au serveur de production en SSH, et lance <code>kubectl apply</code>. Ce processus prend <strong>30 minutes minimum</strong>, est sujet à des erreurs humaines, et n'est absolument pas reproductible.</p>
+
+      <p>Maintenant multipliez par 5 développeurs, 10 déploiements par semaine, et 3 environnements (dev, staging, production). Vous obtenez un chaos organisationnel où personne ne sait exactement quelle version tourne en production, les bugs sont déployés régulièrement, et le rollback est une opération de panique.</p>
+
+      <h3>1.1 - Continuous Integration (CI)</h3>
+
+      <p>L'<strong>Intégration Continue</strong> est la pratique d'intégrer le code de tous les développeurs dans une branche commune <strong>plusieurs fois par jour</strong>. Chaque intégration déclenche automatiquement :</p>
+
+      <ul>
+        <li><strong>Compilation</strong> - Le code compile-t-il sans erreur ?</li>
+        <li><strong>Tests unitaires</strong> - Les fonctions individuelles fonctionnent-elles ?</li>
+        <li><strong>Tests d'intégration</strong> - Les composants interagissent-ils correctement ?</li>
+        <li><strong>Analyse statique</strong> - Le code respecte-t-il les standards de qualité ?</li>
+      </ul>
+
+      <p>Si une seule de ces étapes échoue, l'équipe est <strong>immédiatement notifiée</strong>. Le développeur responsable corrige le problème avant qu'il ne se propage.</p>
+
+      <h3>1.2 - Continuous Deployment vs Continuous Delivery</h3>
+
+      <p>Ces deux termes sont souvent confondus, mais ils sont fondamentalement différents :</p>
+
+      <ul>
+        <li><strong>Continuous Delivery (CD)</strong> - Le code est <strong>prêt à être déployé</strong> à tout moment. Le déploiement en production nécessite une <strong>approbation manuelle</strong>. C'est la pratique recommandée pour les systèmes critiques (fintech, santé, etc.).</li>
+        <li><strong>Continuous Deployment</strong> - Chaque commit qui passe tous les tests est <strong>automatiquement déployé</strong> en production. Aucune intervention humaine. Adapté aux applications web avec un cycle de feedback rapide.</li>
+      </ul>
+
+      <div class="callout info">
+        <strong>Dans ce cours, nous utilisons Continuous Delivery</strong> - le pipeline automatise tout jusqu'au déploiement en staging. Le déploiement en production nécessite une approbation manuelle via les <strong>environments</strong> et <strong>protection rules</strong> de GitHub. C'est le standard pour les systèmes financiers.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 2. GITHUB ACTIONS CONCEPTS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>2 - GitHub Actions - Concepts fondamentaux</h2>
+
+      <p>GitHub Actions est la plateforme CI/CD intégrée à GitHub. Elle permet d'automatiser des workflows directement depuis votre dépôt, sans outil externe comme Jenkins ou CircleCI.</p>
+
+      <h3>2.1 - Vocabulaire essentiel</h3>
+
+      <ul>
+        <li><strong>Workflow</strong> - Un processus automatisé défini dans un fichier YAML. Un dépôt peut avoir plusieurs workflows (CI, CD, release, etc.).</li>
+        <li><strong>Job</strong> - Un ensemble d'étapes qui s'exécutent sur le <strong>même runner</strong>. Les jobs d'un workflow s'exécutent en <strong>parallèle par défaut</strong>, sauf si vous définissez des dépendances avec <code>needs</code>.</li>
+        <li><strong>Step</strong> - Une tâche individuelle dans un job. Un step peut exécuter une commande shell (<code>run</code>) ou utiliser une action réutilisable (<code>uses</code>).</li>
+        <li><strong>Runner</strong> - La machine (VM) qui exécute le job. GitHub fournit des runners hébergés (<code>ubuntu-latest</code>, <code>windows-latest</code>, <code>macos-latest</code>) ou vous pouvez utiliser des <strong>self-hosted runners</strong>.</li>
+        <li><strong>Action</strong> - Un composant réutilisable. Par exemple, <code>actions/checkout@v4</code> clone le dépôt, <code>actions/setup-java@v4</code> installe Java.</li>
+      </ul>
+
+      <h3>2.2 - Événements déclencheurs</h3>
+
+      <p>Un workflow est déclenché par un <strong>événement</strong>. Les plus courants :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Événements déclencheurs courants</span>
+        </div>
+        <pre><code class="language-yaml"># Déclencher sur push vers main ou develop
+on:
+  push:
+    branches: [main, develop]
+
+# Déclencher sur pull request vers main
+  pull_request:
+    branches: [main]
+
+# Déclencher manuellement depuis l'interface GitHub
+  workflow_dispatch:
+
+# Déclencher sur création d'un tag
+  push:
+    tags:
+      - 'v*'
+
+# Déclencher sur un schedule (cron)
+  schedule:
+    - cron: '0 2 * * 1'  # Chaque lundi à 2h du matin</code></pre>
+      </div>
+
+      <h3>2.3 - Emplacement des fichiers</h3>
+
+      <p>Tous les workflows doivent être placés dans le répertoire <code>.github/workflows/</code> à la racine du dépôt. GitHub détecte automatiquement tout fichier <code>.yml</code> ou <code>.yaml</code> dans ce répertoire.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Structure du répertoire</span>
+        </div>
+        <pre><code class="language-bash">mon-projet/
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yaml          # Pipeline principal
+│       ├── release.yaml        # Création de releases
+│       └── security-scan.yaml  # Scan de sécurité hebdomadaire
+├── src/
+├── Dockerfile
+└── pom.xml</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 3. VUE D'ENSEMBLE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>3 - Pipeline complet - Vue d'ensemble</h2>
+
+      <p>Voici l'architecture complète de notre pipeline CI/CD. Chaque étape est automatisée et chaque échec bloque les étapes suivantes :</p>
+
+      <div class="arch-diagram">
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Checkout   │────▶│  Build Maven │────▶│    Tests      │
+│  (clone repo)│     │ (compile JAR)│     │ (unit + integ)│
+└──────────────┘     └──────────────┘     └──────┬───────┘
+                                                  │
+                                                  ▼
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Deploy K8s  │◀────│  Push Image  │◀────│ Docker Build  │
+│ (kubectl set)│     │ (registry)   │     │ (multi-stage) │
+└──────────────┘     └──────────────┘     └──────────────┘
+
+       │                                         │
+       ▼                                         │
+┌──────────────┐                                 │
+│  Smoke Tests │     Pipeline échoue ◀───────────┘
+│ (health check)│     si une étape échoue
+└──────────────┘
+      </div>
+
+      <p>Le pipeline se compose de <strong>deux jobs principaux</strong> :</p>
+
+      <ul>
+        <li><strong>Job <code>build</code></strong> - Checkout, compilation, tests, construction de l'image Docker, et push vers le registre. S'exécute sur chaque push et pull request.</li>
+        <li><strong>Job <code>deploy</code></strong> - Déploiement sur Kubernetes. S'exécute <strong>uniquement</strong> sur la branche <code>main</code> et <strong>après</strong> le succès du job <code>build</code>.</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 4. BUILD PIPELINE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>4 - Build Pipeline - Workflow complet</h2>
+
+      <p>Voici le fichier de workflow complet que nous allons décomposer étape par étape dans les sections suivantes :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">.github/workflows/ci-cd.yaml</span>
+        </div>
+        <pre><code class="language-yaml">name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  JAVA_VERSION: '21'
+
+jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1 : Build, Test, Docker
+  # ─────────────────────────────────────────────
+  build:
+    name: Build &amp; Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # 1. Cloner le dépôt
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Installer Java 21 avec cache Maven
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # 3. Compiler le projet (sans exécuter les tests)
+      - name: Build with Maven
+        run: mvn clean package -DskipTests -B
+
+      # 4. Exécuter les tests unitaires et d'intégration
+      - name: Run tests
+        run: mvn test -B
+
+      # 5. Uploader les rapports de test en cas d'échec
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+      # 6. Extraire les métadonnées Docker (tags, labels)
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      # 7. Se connecter au registre GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 8. Construire et pousser l'image Docker
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────
+  # JOB 2 : Deploy to Staging
+  # ─────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > $HOME/.kube/config
+
+      - name: Deploy to staging namespace
+        run: |
+          kubectl set image deployment/spring-boot-app \
+            spring-boot-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n bmis-staging
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/spring-boot-app \
+            -n bmis-staging \
+            --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          STAGING_URL=$(kubectl get svc spring-boot-app -n bmis-staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          curl -f "http://${STAGING_URL}/actuator/health" || exit 1
+
+  # ─────────────────────────────────────────────
+  # JOB 3 : Deploy to Production
+  # ─────────────────────────────────────────────
+  deploy-production:
+    name: Deploy to Production
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://api.bmis-academy.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > $HOME/.kube/config
+
+      - name: Deploy to production namespace
+        run: |
+          kubectl set image deployment/spring-boot-app \
+            spring-boot-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n bmis-production
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/spring-boot-app \
+            -n bmis-production \
+            --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          PROD_URL=$(kubectl get svc spring-boot-app -n bmis-production -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          curl -f "http://${PROD_URL}/actuator/health" || exit 1
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Production deployment successful: ${{ github.sha }}"</code></pre>
+      </div>
+
+      <p>Ce workflow fait <strong>beaucoup de choses</strong>. Décomposons chaque étape en détail.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 5. CHECKOUT ═══════════════════════════════════════════ -->
+    <section>
+      <h2>5 - Étape par étape - Checkout</h2>
+
+      <p>La première étape de tout pipeline est de <strong>cloner le dépôt</strong> sur le runner. Sans cette étape, le runner n'a aucun accès à votre code source.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Checkout avec options avancées</span>
+        </div>
+        <pre><code class="language-yaml">- name: Checkout repository
+  uses: actions/checkout@v4
+  with:
+    # Nombre de commits à récupérer (0 = tout l'historique)
+    fetch-depth: 0
+
+    # Token d'authentification (automatique avec GITHUB_TOKEN)
+    token: ${{ secrets.GITHUB_TOKEN }}
+
+    # Sous-modules (si votre projet en utilise)
+    submodules: recursive</code></pre>
+      </div>
+
+      <h3>5.1 - Pourquoi épingler les versions ?</h3>
+
+      <p>Vous remarquez <code>actions/checkout@v4</code> et non <code>actions/checkout@main</code>. C'est une pratique de sécurité <strong>critique</strong> :</p>
+
+      <ul>
+        <li><strong>Reproductibilité</strong> - <code>@v4</code> pointe vers un tag immutable. Votre pipeline produira le même résultat aujourd'hui et dans 6 mois.</li>
+        <li><strong>Sécurité</strong> - Si un attaquant compromet le dépôt d'une action et pousse du code malveillant sur <code>main</code>, votre pipeline n'est pas affecté car vous utilisez un tag spécifique.</li>
+        <li><strong>Stabilité</strong> - Les nouvelles versions majeures peuvent introduire des breaking changes. Avec <code>@v4</code>, vous choisissez quand migrer.</li>
+      </ul>
+
+      <div class="callout info">
+        <strong>Bonne pratique encore plus stricte :</strong> Utilisez le SHA complet du commit au lieu du tag : <code>actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11</code>. C'est la méthode la plus sûre car les tags peuvent être déplacés, mais les SHAs sont immuables.
+      </div>
+
+      <h3>5.2 - fetch-depth</h3>
+
+      <p>Par défaut, <code>actions/checkout</code> ne récupère que le <strong>dernier commit</strong> (<code>fetch-depth: 1</code>). C'est suffisant pour la plupart des pipelines. Mais si vous avez besoin de l'historique complet (pour générer un changelog, déterminer la version sémantique, ou faire un <code>git diff</code>), utilisez <code>fetch-depth: 0</code>.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 6. BUILD MAVEN ═══════════════════════════════════════════ -->
+    <section>
+      <h2>6 - Build Maven</h2>
+
+      <p>L'étape de build compile le code source, résout les dépendances, et produit un fichier JAR exécutable. Avec GitHub Actions, nous utilisons l'action officielle <code>actions/setup-java</code> pour installer le JDK.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Configuration Java avec cache Maven</span>
+        </div>
+        <pre><code class="language-yaml">- name: Setup Java 21
+  uses: actions/setup-java@v4
+  with:
+    java-version: '21'
+    distribution: 'temurin'    # Eclipse Temurin (ex-AdoptOpenJDK)
+    cache: 'maven'             # Cache automatique du répertoire ~/.m2
+
+- name: Build with Maven
+  run: mvn clean package -DskipTests -B</code></pre>
+      </div>
+
+      <h3>6.1 - Le cache Maven</h3>
+
+      <p>La ligne <code>cache: 'maven'</code> est <strong>essentielle</strong>. Sans cache, Maven télécharge toutes les dépendances à chaque exécution du pipeline. Pour un projet Spring Boot typique, cela représente <strong>200-300 Mo</strong> de dépendances et <strong>2-3 minutes</strong> de téléchargement.</p>
+
+      <p>Avec le cache, les dépendances sont stockées entre les exécutions. Seules les nouvelles dépendances ou celles dont la version a changé sont téléchargées. Le temps de build passe de <strong>5 minutes à moins de 2 minutes</strong>.</p>
+
+      <h3>6.2 - Pourquoi séparer build et tests ?</h3>
+
+      <p>Nous utilisons <code>-DskipTests</code> dans l'étape de build et exécutons les tests séparément. Les raisons :</p>
+
+      <ul>
+        <li><strong>Visibilité</strong> - Si le build échoue, vous savez immédiatement que c'est un problème de compilation, pas un test qui échoue.</li>
+        <li><strong>Rapports séparés</strong> - Les rapports de test sont générés dans une étape dédiée et peuvent être uploadés comme artefact.</li>
+        <li><strong>Optimisation</strong> - En cas d'échec de compilation, les tests ne sont jamais exécutés, ce qui économise du temps de runner.</li>
+      </ul>
+
+      <h3>6.3 - Le flag -B (batch mode)</h3>
+
+      <p>Le flag <code>-B</code> active le <strong>mode batch</strong> de Maven. Il désactive la sortie colorée et les prompts interactifs. C'est important en CI car :</p>
+
+      <ul>
+        <li>Les logs sont plus lisibles dans l'interface GitHub Actions</li>
+        <li>Maven ne bloquera jamais en attendant une entrée utilisateur</li>
+        <li>La sortie est plus compacte et facile à parser</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 7. TESTS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>7 - Tests</h2>
+
+      <p>Les tests sont le <strong>gardien du pipeline</strong>. Si un seul test échoue, le pipeline entier s'arrête et le code ne sera jamais déployé. C'est le principe fondamental du CI/CD : <strong>ne jamais déployer du code cassé</strong>.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Exécution des tests avec rapport</span>
+        </div>
+        <pre><code class="language-yaml"># Exécuter tous les tests (unitaires + intégration)
+- name: Run tests
+  run: mvn test -B
+
+# Uploader les rapports en cas d'échec
+- name: Upload test reports
+  if: failure()
+  uses: actions/upload-artifact@v4
+  with:
+    name: test-reports
+    path: target/surefire-reports/
+    retention-days: 7
+
+# Optionnel : publier les résultats dans la PR
+- name: Publish test results
+  if: always()
+  uses: dorny/test-reporter@v1
+  with:
+    name: Maven Tests
+    path: target/surefire-reports/*.xml
+    reporter: java-junit</code></pre>
+      </div>
+
+      <h3>7.1 - Tests unitaires vs intégration</h3>
+
+      <p>Dans un projet Spring Boot, les tests sont organisés par convention :</p>
+
+      <ul>
+        <li><strong>Tests unitaires</strong> (<code>*Test.java</code>) - Testent une classe isolée avec des mocks. Rapides (millisecondes). Exécutés par le plugin <strong>Surefire</strong>.</li>
+        <li><strong>Tests d'intégration</strong> (<code>*IT.java</code>) - Testent l'interaction entre composants (base de données, API). Plus lents (secondes). Exécutés par le plugin <strong>Failsafe</strong>.</li>
+      </ul>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Séparer tests unitaires et intégration</span>
+        </div>
+        <pre><code class="language-yaml"># Exécuter uniquement les tests unitaires
+- name: Run unit tests
+  run: mvn test -B
+
+# Exécuter les tests d'intégration séparément
+- name: Run integration tests
+  run: mvn verify -DskipUnitTests -B</code></pre>
+      </div>
+
+      <h3>7.2 - Échouer rapidement</h3>
+
+      <p>Le comportement par défaut de GitHub Actions est d'<strong>arrêter le job</strong> si un step échoue (code de sortie non-zéro). Maven retourne un code de sortie non-zéro si un test échoue. C'est exactement ce que nous voulons : <strong>aucun code avec des tests qui échouent ne peut progresser dans le pipeline</strong>.</p>
+
+      <h3>7.3 - Rapports de test</h3>
+
+      <p>La condition <code>if: failure()</code> garantit que les rapports de test sont uploadés <strong>uniquement quand les tests échouent</strong>. Cela permet aux développeurs de télécharger les rapports Surefire et d'analyser exactement quels tests ont échoué, avec les stack traces complètes, sans avoir à reproduire l'erreur localement.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 8. DOCKER BUILD & PUSH ═══════════════════════════════════════════ -->
+    <section>
+      <h2>8 - Docker Build &amp; Push</h2>
+
+      <p>Une fois le code compilé et les tests passés, nous construisons une image Docker et la poussons vers un registre. C'est l'étape qui transforme votre application en un <strong>artefact déployable</strong>.</p>
+
+      <h3>8.1 - Multi-stage Dockerfile</h3>
+
+      <p>En production, utilisez toujours un <strong>Dockerfile multi-stage</strong>. Le premier stage compile l'application, le second ne contient que le JAR et le JRE :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">dockerfile</span>
+          <span class="file-label">Dockerfile - Multi-stage build</span>
+        </div>
+        <pre><code class="language-dockerfile"># ─── Stage 1 : Build ───
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN apk add --no-cache maven \
+    && mvn clean package -DskipTests -B
+
+# ─── Stage 2 : Runtime ───
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Créer un utilisateur non-root
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
+# Copier uniquement le JAR depuis le stage de build
+COPY --from=builder /app/target/*.jar app.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]</code></pre>
+      </div>
+
+      <h3>8.2 - Stratégie de tags</h3>
+
+      <p>Le tagging des images Docker est une décision architecturale importante. Voici les stratégies recommandées :</p>
+
+      <ul>
+        <li><strong><code>${{ github.sha }}</code></strong> - Le SHA du commit. Chaque commit produit une image unique et traçable. C'est le tag utilisé pour les déploiements automatiques.</li>
+        <li><strong>Semver (<code>v1.2.3</code>)</strong> - Pour les releases. Déclenché par un tag git. Permet d'identifier facilement les versions majeures, mineures et patch.</li>
+        <li><strong>Branche (<code>develop</code>, <code>main</code>)</strong> - Utile pour toujours avoir la dernière version d'une branche. Utilisé en dev/staging.</li>
+      </ul>
+
+      <div class="callout warning">
+        <strong>Ne JAMAIS utiliser <code>:latest</code> en production.</strong> Le tag <code>:latest</code> est mutable - il change à chaque push. Impossible de savoir quelle version tourne en production, impossible de faire un rollback précis. Utilisez toujours un tag <strong>immutable</strong> comme le SHA du commit ou un tag semver.
+      </div>
+
+      <h3>8.3 - Docker Hub vs GitHub Container Registry</h3>
+
+      <p>Deux options principales pour héberger vos images :</p>
+
+      <ul>
+        <li><strong>Docker Hub</strong> - Le registre historique. Gratuit pour les images publiques, limité pour les images privées. Authentification avec <code>docker/login-action</code> et les secrets <code>DOCKERHUB_USERNAME</code> / <code>DOCKERHUB_TOKEN</code>.</li>
+        <li><strong>GitHub Container Registry (ghcr.io)</strong> - Intégré à GitHub. Utilise le <code>GITHUB_TOKEN</code> automatique, pas besoin de secrets supplémentaires. Les images sont liées au dépôt. <strong>C'est notre choix recommandé</strong>.</li>
+      </ul>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Login Docker Hub vs GHCR</span>
+        </div>
+        <pre><code class="language-yaml"># Option A : Docker Hub
+- name: Login to Docker Hub
+  uses: docker/login-action@v3
+  with:
+    username: ${{ secrets.DOCKERHUB_USERNAME }}
+    password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+# Option B : GitHub Container Registry (recommandé)
+- name: Login to GHCR
+  uses: docker/login-action@v3
+  with:
+    registry: ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}</code></pre>
+      </div>
+
+      <h3>8.4 - Optimisation avec le cache</h3>
+
+      <p>L'action <code>docker/build-push-action</code> supporte le cache GitHub Actions. Cela évite de reconstruire les layers Docker qui n'ont pas changé :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Build avec cache GitHub Actions</span>
+        </div>
+        <pre><code class="language-yaml">- name: Build and push Docker image
+  uses: docker/build-push-action@v5
+  with:
+    context: .
+    push: true
+    tags: ${{ steps.meta.outputs.tags }}
+    labels: ${{ steps.meta.outputs.labels }}
+    cache-from: type=gha          # Lire le cache depuis GitHub Actions
+    cache-to: type=gha,mode=max   # Écrire le cache (toutes les layers)</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 9. VERSIONING ═══════════════════════════════════════════ -->
+    <section>
+      <h2>9 - Versioning Strategy</h2>
+
+      <p>Le versioning est le lien entre votre code, vos images Docker, et vos déploiements Kubernetes. Une stratégie cohérente est <strong>indispensable</strong> pour la traçabilité en production.</p>
+
+      <h3>9.1 - Semantic Versioning (SemVer)</h3>
+
+      <p>Le <strong>Semantic Versioning</strong> suit le format <code>MAJOR.MINOR.PATCH</code> :</p>
+
+      <ul>
+        <li><strong>MAJOR</strong> (v<strong>2</strong>.0.0) - Changements incompatibles avec les versions précédentes (breaking changes).</li>
+        <li><strong>MINOR</strong> (v1.<strong>3</strong>.0) - Nouvelles fonctionnalités rétro-compatibles.</li>
+        <li><strong>PATCH</strong> (v1.2.<strong>4</strong>) - Corrections de bugs rétro-compatibles.</li>
+      </ul>
+
+      <h3>9.2 - Git tags et releases</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Créer un tag de release</span>
+        </div>
+        <pre><code class="language-bash"># Créer un tag annoté
+git tag -a v1.2.3 -m "Release v1.2.3 - correction du calcul des intérêts"
+
+# Pousser le tag vers GitHub
+git push origin v1.2.3
+
+# Le workflow se déclenche automatiquement grâce à :
+# on:
+#   push:
+#     tags: ['v*']</code></pre>
+      </div>
+
+      <h3>9.3 - Alignement pom.xml et Docker tag</h3>
+
+      <p>La version dans votre <code>pom.xml</code> doit correspondre au tag git et au tag Docker. Utilisez le plugin <code>maven-release-plugin</code> ou un script pour maintenir la cohérence :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Extraire la version du pom.xml</span>
+        </div>
+        <pre><code class="language-yaml">- name: Extract version from pom.xml
+  id: version
+  run: |
+    VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+    echo "version=${VERSION}" >> $GITHUB_OUTPUT
+    echo "Version du projet : ${VERSION}"
+
+- name: Verify tag matches pom.xml version
+  if: startsWith(github.ref, 'refs/tags/v')
+  run: |
+    TAG_VERSION=${GITHUB_REF#refs/tags/v}
+    POM_VERSION=${{ steps.version.outputs.version }}
+    if [ "${TAG_VERSION}" != "${POM_VERSION}" ]; then
+      echo "❌ Tag (${TAG_VERSION}) ne correspond pas au pom.xml (${POM_VERSION})"
+      exit 1
+    fi</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 10. DEPLOY K8S ═══════════════════════════════════════════ -->
+    <section>
+      <h2>10 - Deploy to Kubernetes</h2>
+
+      <p>Le déploiement est la dernière étape du pipeline. C'est là que votre nouvelle image Docker est déployée sur le cluster Kubernetes.</p>
+
+      <h3>10.1 - Configuration de kubectl</h3>
+
+      <p>Le runner GitHub Actions n'a pas accès à votre cluster Kubernetes par défaut. Vous devez configurer <code>kubectl</code> avec un fichier <code>kubeconfig</code> stocké en secret :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Configuration kubectl</span>
+        </div>
+        <pre><code class="language-yaml">- name: Setup kubectl
+  uses: azure/setup-kubectl@v3
+  with:
+    version: 'v1.29.0'
+
+- name: Configure kubeconfig
+  run: |
+    mkdir -p $HOME/.kube
+    echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+    chmod 600 $HOME/.kube/config</code></pre>
+      </div>
+
+      <h3>10.2 - Méthode 1 : kubectl set image</h3>
+
+      <p>La méthode la plus simple pour mettre à jour un déploiement :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Mise à jour de l'image du Deployment</span>
+        </div>
+        <pre><code class="language-yaml">- name: Deploy new image
+  run: |
+    kubectl set image deployment/spring-boot-app \
+      spring-boot-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+      -n bmis-production
+
+- name: Wait for rollout to complete
+  run: |
+    kubectl rollout status deployment/spring-boot-app \
+      -n bmis-production \
+      --timeout=300s</code></pre>
+      </div>
+
+      <h3>10.3 - Méthode 2 : kubectl apply avec Kustomize</h3>
+
+      <p>Pour des déploiements plus complexes avec plusieurs ressources (Deployment, Service, ConfigMap, etc.), utilisez <strong>Kustomize</strong> :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Déploiement avec Kustomize</span>
+        </div>
+        <pre><code class="language-yaml">- name: Deploy with Kustomize
+  run: |
+    cd k8s/overlays/production
+    kustomize edit set image \
+      spring-boot-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+    kubectl apply -k .</code></pre>
+      </div>
+
+      <h3>10.4 - Environnements et approbation manuelle</h3>
+
+      <p>GitHub Actions supporte les <strong>environments</strong> avec des <strong>protection rules</strong>. C'est ainsi que nous implémentons l'approbation manuelle pour le déploiement en production :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Environment avec approbation</span>
+        </div>
+        <pre><code class="language-yaml">deploy-production:
+  needs: build
+  runs-on: ubuntu-latest
+  environment:
+    name: production          # Doit correspondre à un environment GitHub
+    url: https://api.example.com
+
+  # Ce job sera BLOQUÉ jusqu'à ce qu'un reviewer approuve
+  # Configuration dans Settings > Environments > production :
+  #   - Required reviewers : tech-lead, devops-lead
+  #   - Wait timer : 5 minutes (optionnel)
+  #   - Deployment branches : main only</code></pre>
+      </div>
+
+      <p>Avec cette configuration, quand un push arrive sur <code>main</code>, le job de build s'exécute automatiquement. Mais le job <code>deploy-production</code> est <strong>mis en attente</strong> jusqu'à ce qu'un reviewer désigné clique sur « Approve » dans l'interface GitHub. C'est le mécanisme de <strong>Continuous Delivery</strong> en action.</p>
+
+      <h3>10.5 - Déploiement multi-environnement</h3>
+
+      <p>Utilisez les paramètres <code>if</code> pour contrôler quel environnement est ciblé :</p>
+
+      <ul>
+        <li><strong>Dev</strong> - Déploiement automatique sur chaque push vers <code>develop</code></li>
+        <li><strong>Staging</strong> - Déploiement automatique quand une PR est mergée dans <code>main</code></li>
+        <li><strong>Production</strong> - Déploiement après approbation manuelle sur <code>main</code></li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 11. ROLLBACK ═══════════════════════════════════════════ -->
+    <section>
+      <h2>11 - Rollback Strategy</h2>
+
+      <p>Même avec les meilleurs tests, des problèmes peuvent survenir en production. Une stratégie de rollback solide est <strong>non-négociable</strong>.</p>
+
+      <h3>11.1 - kubectl rollout undo</h3>
+
+      <p>Kubernetes maintient un <strong>historique des révisions</strong> de chaque Deployment. Vous pouvez revenir à la version précédente en une seule commande :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Rollback Kubernetes</span>
+        </div>
+        <pre><code class="language-bash"># Revenir à la version précédente
+kubectl rollout undo deployment/spring-boot-app -n bmis-production
+
+# Revenir à une révision spécifique
+kubectl rollout undo deployment/spring-boot-app \
+  --to-revision=3 \
+  -n bmis-production
+
+# Voir l'historique des révisions
+kubectl rollout history deployment/spring-boot-app -n bmis-production</code></pre>
+      </div>
+
+      <h3>11.2 - Revenir à un tag d'image précédent</h3>
+
+      <p>Alternativement, vous pouvez déployer explicitement une version antérieure en utilisant son tag :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Rollback vers un tag spécifique</span>
+        </div>
+        <pre><code class="language-bash"># Déployer une version spécifique connue comme stable
+kubectl set image deployment/spring-boot-app \
+  spring-boot-app=ghcr.io/bmis/backend:abc123def \
+  -n bmis-production</code></pre>
+      </div>
+
+      <h3>11.3 - Workflow de rollback manuel</h3>
+
+      <p>Créez un workflow dédié avec <code>workflow_dispatch</code> qui permet de déclencher un rollback manuellement depuis l'interface GitHub :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">.github/workflows/rollback.yaml</span>
+        </div>
+        <pre><code class="language-yaml">name: Rollback Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag de l image à déployer (SHA du commit)'
+        required: true
+        type: string
+      environment:
+        description: 'Environnement cible'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Rollback deployment
+        run: |
+          kubectl set image deployment/spring-boot-app \
+            spring-boot-app=ghcr.io/bmis/backend:${{ github.event.inputs.image_tag }} \
+            -n bmis-${{ github.event.inputs.environment }}
+
+      - name: Verify rollback
+        run: |
+          kubectl rollout status deployment/spring-boot-app \
+            -n bmis-${{ github.event.inputs.environment }} \
+            --timeout=300s</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <strong>Attention aux migrations de base de données.</strong> Un rollback d'application ne <strong>reverse pas</strong> les migrations SQL. Si la version actuelle a modifié le schéma de la base de données, revenir au code précédent peut provoquer des erreurs de compatibilité. Utilisez des migrations <strong>rétro-compatibles</strong> (expand-contract pattern) et planifiez les rollbacks de schéma séparément.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 12. SECRETS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>12 - Secrets dans GitHub Actions</h2>
+
+      <p>Les informations sensibles (mots de passe, tokens, clés API, kubeconfig) ne doivent <strong>jamais</strong> apparaître en clair dans les fichiers de workflow. GitHub Actions fournit un mécanisme de <strong>secrets</strong> chiffrés.</p>
+
+      <h3>12.1 - Repository Secrets</h3>
+
+      <p>Les secrets de dépôt sont accessibles par <strong>tous les workflows</strong> du dépôt. Configurez-les dans <code>Settings &gt; Secrets and variables &gt; Actions</code> :</p>
+
+      <ul>
+        <li><code>DOCKERHUB_USERNAME</code> - Nom d'utilisateur Docker Hub</li>
+        <li><code>DOCKERHUB_TOKEN</code> - Token d'accès Docker Hub (pas le mot de passe)</li>
+        <li><code>KUBE_CONFIG</code> - Fichier kubeconfig encodé en base64</li>
+        <li><code>SONAR_TOKEN</code> - Token d'authentification SonarQube</li>
+      </ul>
+
+      <h3>12.2 - Environment Secrets</h3>
+
+      <p>Les secrets d'environnement sont liés à un <strong>environment spécifique</strong> (staging, production). Ils ne sont accessibles que par les jobs qui ciblent cet environment :</p>
+
+      <ul>
+        <li><code>KUBE_CONFIG_STAGING</code> - Kubeconfig du cluster staging</li>
+        <li><code>KUBE_CONFIG_PRODUCTION</code> - Kubeconfig du cluster production</li>
+        <li><code>DB_PASSWORD_PRODUCTION</code> - Mot de passe de la base de données de production</li>
+      </ul>
+
+      <p>Cela permet d'appliquer le <strong>principe du moindre privilège</strong> : les secrets de production ne sont disponibles que dans le job de déploiement production, après approbation manuelle.</p>
+
+      <h3>12.3 - Encoder le kubeconfig en base64</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Préparer le kubeconfig comme secret</span>
+        </div>
+        <pre><code class="language-bash"># Encoder le kubeconfig en base64 (une seule ligne)
+cat ~/.kube/config | base64 -w 0
+
+# Copier la sortie et la coller dans :
+# Settings > Environments > production > Add secret > KUBE_CONFIG_PRODUCTION</code></pre>
+      </div>
+
+      <h3>12.4 - Sécurité des secrets</h3>
+
+      <ul>
+        <li>Les secrets sont <strong>automatiquement masqués</strong> dans les logs GitHub Actions. Si un secret apparaît dans la sortie, il sera remplacé par <code>***</code>.</li>
+        <li>Les secrets ne sont <strong>pas transmis aux forks</strong>. Un attaquant ne peut pas créer un fork et accéder à vos secrets via une pull request.</li>
+        <li><strong>Rotation régulière</strong> - Changez vos secrets tous les 90 jours. Utilisez des tokens avec une durée de vie limitée plutôt que des mots de passe permanents.</li>
+        <li><strong>GITHUB_TOKEN</strong> - Automatiquement créé par GitHub pour chaque exécution de workflow. Permissions limitées au dépôt. Expire à la fin du job.</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 13. MULTI-ENVIRONNEMENT ═══════════════════════════════════════════ -->
+    <section>
+      <h2>13 - Pipeline multi-environnement</h2>
+
+      <p>Un pipeline professionnel déploie sur <strong>plusieurs environnements</strong> avec des règles différentes pour chacun :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">.github/workflows/ci-cd-multi-env.yaml - Stratégie complète</span>
+        </div>
+        <pre><code class="language-yaml">name: CI/CD Multi-Environment
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build &amp; Test
+    runs-on: ubuntu-latest
+    # ... (même job que précédemment)
+
+  # ─── Dev : déploiement automatique sur push develop ───
+  deploy-dev:
+    name: Deploy to Dev
+    needs: build
+    if: github.ref == 'refs/heads/develop' &amp;&amp; github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Deploy to dev
+        run: |
+          kubectl set image deployment/spring-boot-app \
+            spring-boot-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n bmis-dev
+
+  # ─── Staging : déploiement automatique sur push main ───
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    if: github.ref == 'refs/heads/main' &amp;&amp; github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Deploy to staging
+        run: |
+          kubectl set image deployment/spring-boot-app \
+            spring-boot-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n bmis-staging
+
+  # ─── Production : déploiement sur tag avec approbation ───
+  deploy-production:
+    name: Deploy to Production
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://api.bmis-academy.com
+    steps:
+      - name: Deploy to production
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          kubectl set image deployment/spring-boot-app \
+            spring-boot-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${TAG_VERSION} \
+            -n bmis-production</code></pre>
+      </div>
+
+      <p>Cette stratégie garantit un <strong>flux progressif</strong> : le code est d'abord validé en dev, puis en staging, et enfin déployé en production uniquement via un tag de release avec approbation manuelle.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 14. NOTIFICATIONS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>14 - Notifications</h2>
+
+      <p>Un pipeline qui échoue silencieusement est inutile. Configurez des notifications pour alerter l'équipe immédiatement en cas de problème.</p>
+
+      <h3>14.1 - Notification Slack</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Notification Slack en cas d'échec</span>
+        </div>
+        <pre><code class="language-yaml">- name: Notify Slack on failure
+  if: failure()
+  uses: slackapi/slack-github-action@v1.25.0
+  with:
+    payload: |
+      {
+        "text": "❌ Pipeline échoué !",
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "❌ *Pipeline CI/CD échoué*\n*Repo:* ${{ github.repository }}\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*Auteur:* ${{ github.actor }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Voir les logs>"
+            }
+          }
+        ]
+      }
+  env:
+    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK</code></pre>
+      </div>
+
+      <h3>14.2 - Notification Discord</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Notification Discord</span>
+        </div>
+        <pre><code class="language-yaml">- name: Notify Discord on failure
+  if: failure()
+  run: |
+    curl -H "Content-Type: application/json" \
+      -d '{
+        "content": "❌ **Pipeline échoué** sur `${{ github.repository }}`\nBranche: `${{ github.ref_name }}`\nAuteur: `${{ github.actor }}`\n[Voir les logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+      }' \
+      ${{ secrets.DISCORD_WEBHOOK_URL }}</code></pre>
+      </div>
+
+      <h3>14.3 - Notification de succès en production</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Notification de déploiement réussi</span>
+        </div>
+        <pre><code class="language-yaml">- name: Notify deployment success
+  if: success()
+  uses: slackapi/slack-github-action@v1.25.0
+  with:
+    payload: |
+      {
+        "text": "✅ Déploiement production réussi !",
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "✅ *Déploiement production réussi*\n*Version:* ${{ github.sha }}\n*Auteur:* ${{ github.actor }}"
+            }
+          }
+        ]
+      }
+  env:
+    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 15. ERREURS COURANTES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>15 - Erreurs courantes</h2>
+
+      <div class="callout bad">
+        <strong>Utiliser <code>:latest</code> comme tag d'image</strong> - Impossible de savoir quelle version est déployée. Impossible de rollback. Utilisez toujours le SHA du commit ou un tag semver.
+      </div>
+
+      <div class="callout bad">
+        <strong>Stocker les secrets en dur dans le workflow</strong> - Même dans un dépôt privé, les secrets en clair dans les fichiers YAML sont une faille de sécurité majeure. Utilisez <code>${{ secrets.NOM_DU_SECRET }}</code>.
+      </div>
+
+      <div class="callout bad">
+        <strong>Utiliser <code>actions/checkout@main</code> au lieu de <code>@v4</code></strong> - Les branches changent. Un attaquant pourrait injecter du code malveillant dans une action que vous utilisez. Épinglez toujours la version.
+      </div>
+
+      <div class="callout bad">
+        <strong>Ne pas attendre le <code>rollout status</code></strong> - Sans cette vérification, le pipeline se termine avec succès même si les nouveaux Pods sont en <code>CrashLoopBackOff</code>. Toujours vérifier que le déploiement est réellement terminé.
+      </div>
+
+      <div class="callout bad">
+        <strong>Ignorer les tests qui échouent avec <code>continue-on-error: true</code></strong> - Si vous autorisez la continuation malgré les échecs de test, vous perdez toute la valeur du CI. Un test qui échoue doit <strong>bloquer</strong> le pipeline.
+      </div>
+
+      <div class="callout bad">
+        <strong>Partager le même kubeconfig pour tous les environnements</strong> - Le kubeconfig de production ne doit être accessible que dans l'environment <code>production</code> avec approbation manuelle. Utilisez des secrets d'environnement séparés.
+      </div>
+
+      <div class="callout bad">
+        <strong>Déployer sans smoke tests</strong> - Après chaque déploiement, vérifiez au minimum que l'endpoint <code>/actuator/health</code> retourne <code>200 OK</code>. Un déploiement sans vérification est un déploiement aveugle.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 16. BEST PRACTICES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>16 - Best practices</h2>
+
+      <div class="callout tip">
+        <strong>Un workflow, pas trente fichiers</strong> - Gardez votre pipeline dans un seul fichier <code>ci-cd.yaml</code> avec des jobs séparés par <code>needs</code>. Cela facilite la compréhension et le debugging. Séparez uniquement les workflows avec des déclencheurs différents (CI, release, rollback).
+      </div>
+
+      <div class="callout tip">
+        <strong>Toujours utiliser le cache</strong> - Activez le cache Maven (<code>cache: 'maven'</code>) et le cache Docker (<code>cache-from: type=gha</code>). Cela réduit le temps de pipeline de 50% ou plus.
+      </div>
+
+      <div class="callout tip">
+        <strong>Smoke tests après chaque déploiement</strong> - Après <code>kubectl rollout status</code>, exécutez un <code>curl</code> vers <code>/actuator/health</code>. Si le health check échoue, déclenchez automatiquement un rollback.
+      </div>
+
+      <div class="callout tip">
+        <strong>Utiliser les environments GitHub pour la production</strong> - Configurez des <strong>required reviewers</strong> et un <strong>wait timer</strong> pour le déploiement production. Cela ajoute une couche de sécurité humaine sans ralentir le pipeline pour les autres environnements.
+      </div>
+
+      <div class="callout tip">
+        <strong>Rotation des secrets tous les 90 jours</strong> - Planifiez un rappel pour régénérer vos tokens et credentials. Utilisez des tokens à durée de vie limitée quand c'est possible (GitHub App tokens, service account keys avec expiration).
+      </div>
+
+      <div class="callout tip">
+        <strong>Logs structurés dans le pipeline</strong> - Utilisez <code>echo "::notice::Message"</code> et <code>echo "::warning::Message"</code> pour ajouter des annotations visibles dans l'interface GitHub Actions. Cela facilite le debugging sans fouiller les logs bruts.
+      </div>
+
+      <div class="callout tip">
+        <strong>Séparer les images Docker par environnement</strong> - Utilisez des tags différents pour chaque environnement. Ne recyclez jamais un tag entre dev et production. Le tag doit être <strong>immuable</strong> et <strong>traçable</strong> jusqu'au commit source.
+      </div>
+
+      <div class="callout tip">
+        <strong>Documenter le pipeline</strong> - Ajoutez des commentaires dans votre fichier YAML. Un nouveau développeur doit pouvoir comprendre le pipeline en lisant le fichier, sans documentation externe.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ NAV FOOTER ═══════════════════════════════════════════ -->
+    <div class="lesson-nav">
+      <a href="08-deploy-fintech-system.html">
+        <span class="nav-dir">← Leçon précédente</span>
+        <span class="nav-title">Déployer le Système Fintech</span>
+      </a>
+      <a href="10-observability-metrics.html" class="nav-next">
+        <span class="nav-dir">Leçon suivante →</span>
+        <span class="nav-title">Prometheus &amp; Grafana</span>
+      </a>
+    </div>
+
+    </div>
+  </main>
+
+  </div>
+
+  <button class="back-to-top" id="back-to-top" aria-label="Retour en haut">↑</button>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>

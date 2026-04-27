@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deployments &amp; StatefulSets - DevOps BMIS Academy</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="progress-bar"></div>
+
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="docs-layout">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <a href="../../index.html" class="sidebar-brand">
+      <div class="brand-logo">BM</div>
+      <div class="brand-text">
+        <span class="brand-name">BMIS Academy</span>
+        <span class="brand-tagline">DevOps &amp; Production</span>
+      </div>
+    </a>
+    <nav class="sidebar-nav">
+      <div class="nav-section"><div class="nav-section-label">Vue d'ensemble</div><a href="index.html" class="nav-link">Accueil du cours</a></div>
+      <div class="nav-section"><div class="nav-section-label">1 - Fondations Docker</div><a href="01-docker-images-containers.html" class="nav-link">Images vs Containers</a><a href="02-docker-volumes-networking.html" class="nav-link">Volumes &amp; Networking</a></div>
+      <div class="nav-section"><div class="nav-section-label">2 - Kubernetes Core</div><a href="03-kubernetes-architecture.html" class="nav-link">Architecture K8s</a><a href="04-kubernetes-workloads.html" class="nav-link active">Deployments &amp; StatefulSets</a><a href="05-kubernetes-services-ingress.html" class="nav-link">Services &amp; Ingress</a><a href="06-kubernetes-configmaps-secrets.html" class="nav-link">ConfigMaps &amp; Secrets</a><a href="07-kubernetes-storage-namespaces.html" class="nav-link">Storage &amp; Namespaces</a></div>
+      <div class="nav-section"><div class="nav-section-label">3 - Déploiement Système</div><a href="08-deploy-fintech-system.html" class="nav-link">Déployer le Système Fintech</a></div>
+      <div class="nav-section"><div class="nav-section-label">4 - CI/CD</div><a href="09-cicd-github-actions.html" class="nav-link">Pipeline GitHub Actions</a></div>
+      <div class="nav-section"><div class="nav-section-label">5 - Observabilité</div><a href="10-observability-metrics.html" class="nav-link">Prometheus &amp; Grafana</a><a href="11-observability-logging-alerting.html" class="nav-link">ELK Stack &amp; Alerting</a></div>
+      <div class="nav-section"><div class="nav-section-label">6 - Réseau &amp; Sécurité</div><a href="12-networking-security.html" class="nav-link">Networking &amp; Security</a></div>
+      <div class="nav-section"><div class="nav-section-label">7 - CDN &amp; Assets</div><a href="13-cdn-asset-delivery.html" class="nav-link">CDN &amp; Distribution</a></div>
+      <div class="nav-section"><div class="nav-section-label">8 - Production</div><a href="14-production-best-practices.html" class="nav-link">Best Practices Production</a></div>
+    </nav>
+    <div class="sidebar-footer"><a href="../../index.html" class="sidebar-footer-link">← Retour au catalogue</a></div>
+  </aside>
+
+  <main class="docs-main">
+  <div class="docs-content">
+
+    <!-- ═══════════════════════════════════════════ HEADER ═══════════════════════════════════════════ -->
+    <div class="lesson-header">
+      <div class="lesson-meta">
+        <span class="lesson-number">Leçon 4</span>
+        <span class="lesson-section">Section 2 - Kubernetes Core</span>
+      </div>
+      <h1>Deployments &amp; StatefulSets</h1>
+      <p class="lesson-subtitle">Gérer les workloads stateless et stateful - stratégies de déploiement, rolling updates et rollbacks.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ 1. REPLICASET ═══════════════════════════════════════════ -->
+    <section>
+      <h2>1 - ReplicaSet - La base</h2>
+
+      <p>Un <strong>ReplicaSet</strong> garantit qu'un nombre spécifié de réplicas (copies identiques) d'un Pod est en cours d'exécution à tout moment. Si un Pod tombe, le ReplicaSet en crée automatiquement un nouveau pour maintenir le compte souhaité.</p>
+
+      <p>Le ReplicaSet utilise un <strong>sélecteur de labels</strong> pour identifier les Pods qu'il gère. Tous les Pods dont les labels correspondent au sélecteur sont « adoptés » par le ReplicaSet.</p>
+
+      <div class="callout info">
+        <strong>En pratique, vous ne créez presque jamais un ReplicaSet directement.</strong> Vous utilisez un <strong>Deployment</strong>, qui crée et gère automatiquement un ReplicaSet pour vous. Le Deployment ajoute des fonctionnalités essentielles comme les rolling updates et les rollbacks que le ReplicaSet seul ne possède pas.
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">replicaset-exemple.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-backend-rs
+  labels:
+    app: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+        - name: api-backend
+          image: bmis/api-backend:1.0.0
+          ports:
+            - containerPort: 8080</code></pre>
+      </div>
+
+      <p>Ce ReplicaSet maintient <strong>3 Pods</strong> identiques. Si vous supprimez manuellement un Pod, le ReplicaSet en recréera un immédiatement. Cependant, si vous changez l'image (par exemple de <code>1.0.0</code> à <code>1.1.0</code>), le ReplicaSet <strong>ne mettra pas à jour</strong> les Pods existants - il faudrait les supprimer manuellement. C'est précisément ce que le Deployment automatise.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 2. DEPLOYMENT ═══════════════════════════════════════════ -->
+    <section>
+      <h2>2 - Deployment - Le workload standard</h2>
+
+      <p>Le <strong>Deployment</strong> est la ressource la plus utilisée dans Kubernetes. Il gère un ReplicaSet qui lui-même gère les Pods. La chaîne est : <strong>Deployment → ReplicaSet → Pods</strong>. Le Deployment ajoute la gestion des mises à jour (rolling updates) et des rollbacks.</p>
+
+      <h3>2.1 - Structure complète d'un Deployment</h3>
+
+      <p>Voici un Deployment complet pour une application Spring Boot, avec chaque champ important expliqué :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">deployment-spring-boot.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend                    # Nom unique du Deployment
+  namespace: fintech                   # Namespace cible
+  labels:
+    app: api-backend                   # Labels du Deployment lui-même
+    version: "1.2.0"
+    team: backend
+spec:
+  replicas: 3                          # Nombre de Pods souhaités
+  selector:
+    matchLabels:
+      app: api-backend                 # Doit correspondre aux labels du template
+  template:                            # Template du Pod
+    metadata:
+      labels:
+        app: api-backend               # Labels des Pods (doivent matcher selector)
+        version: "1.2.0"
+    spec:
+      containers:
+        - name: api-backend
+          image: bmis/api-backend:1.2.0   # Image avec tag de version explicite
+          imagePullPolicy: IfNotPresent   # Ne pull que si l'image n'existe pas localement
+          ports:
+            - containerPort: 8080         # Port exposé par le container
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "production"
+            - name: SERVER_PORT
+              value: "8080"
+            - name: DB_HOST
+              value: "postgres-headless.fintech.svc.cluster.local"
+          resources:
+            requests:                     # Ressources minimales garanties
+              memory: "256Mi"
+              cpu: "250m"
+            limits:                       # Ressources maximales autorisées
+              memory: "512Mi"
+              cpu: "500m"</code></pre>
+      </div>
+
+      <h3>2.2 - Les champs clés expliqués</h3>
+
+      <p><strong><code>spec.replicas</code></strong> - Le nombre de Pods identiques que Kubernetes doit maintenir. Si un Pod meurt, un nouveau est créé. Si vous changez cette valeur, Kubernetes ajuste automatiquement le nombre de Pods.</p>
+
+      <p><strong><code>spec.selector.matchLabels</code></strong> - Le sélecteur qui détermine quels Pods sont gérés par ce Deployment. Les labels définis ici <strong>doivent correspondre exactement</strong> aux labels dans <code>spec.template.metadata.labels</code>. C'est un contrat : le Deployment ne gère que les Pods qui portent ces labels.</p>
+
+      <p><strong><code>spec.template</code></strong> - Le « moule » utilisé pour créer chaque Pod. Il contient les métadonnées (labels) et la spécification du Pod (containers, volumes, etc.). Chaque modification du template déclenche un rolling update.</p>
+
+      <p><strong><code>resources.requests</code></strong> - Les ressources <em>garanties</em> pour le container. Le Scheduler utilise ces valeurs pour placer le Pod sur un nœud disposant de suffisamment de ressources. Un Pod ne sera jamais schedulé sur un nœud qui n'a pas assez de ressources libres pour satisfaire les requests.</p>
+
+      <p><strong><code>resources.limits</code></strong> - Les ressources <em>maximales</em> que le container peut consommer. Si le container dépasse la limite mémoire, il est tué (OOMKilled). Si il dépasse la limite CPU, il est throttlé (ralenti).</p>
+
+      <p><strong><code>imagePullPolicy</code></strong> - Contrôle quand Kubernetes télécharge l'image :</p>
+      <ul>
+        <li><code>Always</code> - Toujours pull l'image (défaut si tag est <code>:latest</code>)</li>
+        <li><code>IfNotPresent</code> - Pull seulement si l'image n'est pas en cache local (défaut si tag de version explicite)</li>
+        <li><code>Never</code> - N'utilise que l'image locale, ne pull jamais</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 3. ROLLING UPDATE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>3 - Rolling Update Strategy</h2>
+
+      <p>La stratégie de <strong>rolling update</strong> (mise à jour progressive) est le mécanisme par défaut de Kubernetes pour déployer une nouvelle version de votre application <strong>sans temps d'arrêt</strong>. Kubernetes remplace les anciens Pods par les nouveaux de manière graduelle.</p>
+
+      <h3>3.1 - Comment ça fonctionne, étape par étape</h3>
+
+      <ol>
+        <li>Vous modifiez le template du Deployment (par exemple, changement de version d'image)</li>
+        <li>Kubernetes crée un <strong>nouveau ReplicaSet</strong> avec la nouvelle configuration</li>
+        <li>Le nouveau ReplicaSet commence à créer des Pods avec la nouvelle version</li>
+        <li>Kubernetes attend que les nouveaux Pods soient <strong>Ready</strong> (passent la readinessProbe)</li>
+        <li>L'ancien ReplicaSet réduit progressivement le nombre de Pods</li>
+        <li>Le processus continue jusqu'à ce que tous les Pods soient sur la nouvelle version</li>
+        <li>L'ancien ReplicaSet est conservé (avec 0 réplicas) pour permettre un rollback</li>
+      </ol>
+
+      <h3>3.2 - Configuration de la stratégie</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">deployment-rolling-strategy.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+  namespace: fintech
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate           # Stratégie de mise à jour (défaut)
+    rollingUpdate:
+      maxUnavailable: 1           # Max 1 Pod indisponible pendant le rollout
+      maxSurge: 1                 # Max 1 Pod supplémentaire au-dessus de replicas
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+        - name: api-backend
+          image: bmis/api-backend:1.3.0
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"</code></pre>
+      </div>
+
+      <p><strong><code>maxUnavailable</code></strong> - Le nombre maximum de Pods qui peuvent être indisponibles pendant la mise à jour. Peut être un nombre absolu (ex : <code>1</code>) ou un pourcentage (ex : <code>25%</code>). Avec 4 replicas et <code>maxUnavailable: 1</code>, il y aura toujours au moins 3 Pods en service.</p>
+
+      <p><strong><code>maxSurge</code></strong> - Le nombre maximum de Pods supplémentaires qui peuvent être créés au-dessus du nombre souhaité de replicas. Avec 4 replicas et <code>maxSurge: 1</code>, Kubernetes peut avoir jusqu'à 5 Pods temporairement pendant le déploiement.</p>
+
+      <div class="callout tip">
+        <strong>Exemple concret</strong> - Avec <code>replicas: 4</code>, <code>maxUnavailable: 1</code> et <code>maxSurge: 1</code> lors d'un rolling update :
+        <ul>
+          <li>Minimum de Pods actifs à tout moment : 4 - 1 = <strong>3</strong></li>
+          <li>Maximum de Pods total (ancien + nouveau) : 4 + 1 = <strong>5</strong></li>
+        </ul>
+        Kubernetes crée 1 nouveau Pod, attend qu'il soit Ready, puis supprime 1 ancien Pod. Puis crée le suivant, et ainsi de suite.
+      </div>
+
+      <h3>3.3 - Surveiller un rolling update</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Surveiller le rollout</span>
+        </div>
+        <pre><code class="language-bash"># Déclencher un rolling update en changeant l'image
+kubectl set image deployment/api-backend api-backend=bmis/api-backend:1.3.0 -n fintech
+
+# Surveiller le rollout en temps réel
+kubectl rollout status deployment/api-backend -n fintech
+# Waiting for deployment "api-backend" rollout to finish: 2 out of 4 new replicas have been updated...
+# Waiting for deployment "api-backend" rollout to finish: 3 out of 4 new replicas have been updated...
+# deployment "api-backend" successfully rolled out
+
+# Voir les ReplicaSets (ancien et nouveau)
+kubectl get rs -n fintech
+# NAME                      DESIRED   CURRENT   READY   AGE
+# api-backend-7d8f9c6b4d    4         4         4       30s    ← nouveau
+# api-backend-5b6f7a8c3e    0         0         0       2h     ← ancien (conservé)
+
+# Voir les événements du Deployment
+kubectl describe deployment api-backend -n fintech</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <strong>Stratégie Recreate :</strong> Il existe une alternative au RollingUpdate appelée <code>Recreate</code>. Cette stratégie <strong>supprime tous les anciens Pods avant de créer les nouveaux</strong>, ce qui cause un temps d'arrêt. Utilisez-la uniquement pour les workloads qui ne supportent pas deux versions simultanées (par exemple, des migrations de schéma de base de données).
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 4. ROLLBACK ═══════════════════════════════════════════ -->
+    <section>
+      <h2>4 - Rollback - Revenir en arrière</h2>
+
+      <p>L'un des plus grands avantages des Deployments est la capacité de <strong>revenir instantanément</strong> à une version précédente. Kubernetes conserve l'historique des ReplicaSets (par défaut les 10 dernières révisions), ce qui permet un rollback rapide.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Commandes de rollback</span>
+        </div>
+        <pre><code class="language-bash"># Voir l'historique des déploiements
+kubectl rollout history deployment/api-backend -n fintech
+# REVISION  CHANGE-CAUSE
+# 1         kubectl apply --filename=deployment.yaml --record
+# 2         kubectl set image deployment/api-backend api-backend=bmis/api-backend:1.2.0
+# 3         kubectl set image deployment/api-backend api-backend=bmis/api-backend:1.3.0
+
+# Voir les détails d'une révision spécifique
+kubectl rollout history deployment/api-backend -n fintech --revision=2
+
+# Rollback à la révision précédente (immédiat)
+kubectl rollout undo deployment/api-backend -n fintech
+
+# Rollback à une révision spécifique
+kubectl rollout undo deployment/api-backend -n fintech --to-revision=1
+
+# Vérifier le statut du rollback
+kubectl rollout status deployment/api-backend -n fintech
+
+# Mettre en pause un rollout en cours (utile pour vérifier)
+kubectl rollout pause deployment/api-backend -n fintech
+
+# Reprendre un rollout en pause
+kubectl rollout resume deployment/api-backend -n fintech</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Bonne pratique :</strong> Utilisez l'option <code>--record</code> lors de vos déploiements (<code>kubectl apply -f deployment.yaml --record</code>) pour enregistrer la commande utilisée dans l'historique. Cela facilite l'identification de la cause de chaque révision. Vous pouvez aussi configurer le nombre de révisions conservées via <code>spec.revisionHistoryLimit</code> dans votre Deployment.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 5. STATEFULSET ═══════════════════════════════════════════ -->
+    <section>
+      <h2>5 - StatefulSet - Pour les workloads avec état</h2>
+
+      <p>Un <strong>StatefulSet</strong> est conçu pour les applications qui nécessitent un <strong>état persistant</strong>, une <strong>identité réseau stable</strong> et un <strong>déploiement ordonné</strong>. Contrairement aux Deployments qui traitent tous les Pods comme interchangeables, chaque Pod d'un StatefulSet est <strong>unique et irremplaçable</strong>.</p>
+
+      <h3>5.1 - Quand utiliser un StatefulSet ?</h3>
+
+      <ul>
+        <li><strong>Bases de données</strong> - PostgreSQL, MySQL, MongoDB (chaque instance a ses propres données)</li>
+        <li><strong>Files de messages</strong> - Kafka, RabbitMQ (les brokers ont des identités uniques)</li>
+        <li><strong>Caches avec persistance</strong> - Redis en mode persistant (les données doivent survivre aux redémarrages)</li>
+        <li><strong>Systèmes distribués avec leadership</strong> - ZooKeeper, etcd (les nœuds doivent se connaître mutuellement)</li>
+      </ul>
+
+      <h3>5.2 - Différences avec un Deployment</h3>
+
+      <p>Les StatefulSets fournissent trois garanties que les Deployments ne donnent pas :</p>
+
+      <ul>
+        <li><strong>Identité réseau stable</strong> - Chaque Pod reçoit un nom DNS prédictible et persistant (ex : <code>postgres-0</code>, <code>postgres-1</code>, <code>postgres-2</code>). Même après un redémarrage, le Pod récupère le même nom.</li>
+        <li><strong>Déploiement et suppression ordonnés</strong> - Les Pods sont créés dans l'ordre (0, 1, 2…) et supprimés dans l'ordre inverse (2, 1, 0). Le Pod N+1 n'est pas créé tant que le Pod N n'est pas Ready.</li>
+        <li><strong>Stockage persistant stable</strong> - Chaque Pod est lié à son propre PersistentVolumeClaim (PVC). Si le Pod est recréé, il retrouve exactement le même volume de données.</li>
+      </ul>
+
+      <h3>5.3 - Prérequis : Headless Service</h3>
+
+      <p>Un StatefulSet nécessite un <strong>Headless Service</strong> (Service avec <code>clusterIP: None</code>) pour fournir l'identité réseau aux Pods. Ce service ne fait pas de load balancing - il crée des entrées DNS individuelles pour chaque Pod.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">headless-service-postgres.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: fintech
+  labels:
+    app: postgres
+spec:
+  clusterIP: None               # Headless Service - pas de VIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgres</code></pre>
+      </div>
+
+      <p>Grâce à ce Headless Service, chaque Pod du StatefulSet obtient un enregistrement DNS de la forme :</p>
+      <p><code>&lt;pod-name&gt;.&lt;service-name&gt;.&lt;namespace&gt;.svc.cluster.local</code></p>
+      <p>Exemple : <code>postgres-0.postgres-headless.fintech.svc.cluster.local</code></p>
+
+      <h3>5.4 - StatefulSet complet pour PostgreSQL</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">statefulset-postgres.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: fintech
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres-headless       # Référence au Headless Service
+  replicas: 1                          # Single-master pour commencer
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: "fintech_db"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:                # PVC créé automatiquement pour chaque Pod
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 10Gi</code></pre>
+      </div>
+
+      <h3>5.5 - Convention de nommage des Pods</h3>
+
+      <p>Contrairement aux Deployments qui génèrent des suffixes aléatoires (ex : <code>api-backend-7d8f9c6b4d-x2k9p</code>), les Pods d'un StatefulSet ont des noms <strong>prévisibles et ordonnés</strong> :</p>
+
+      <ul>
+        <li><code>postgres-0</code> - Premier Pod (master)</li>
+        <li><code>postgres-1</code> - Deuxième Pod (réplica)</li>
+        <li><code>postgres-2</code> - Troisième Pod (réplica)</li>
+      </ul>
+
+      <p>Si <code>postgres-1</code> tombe, Kubernetes le recrée avec <strong>exactement le même nom</strong> (<code>postgres-1</code>) et le <strong>même PVC</strong> (<code>postgres-data-postgres-1</code>), garantissant que le Pod retrouve ses données.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 6. COMPARAISON ═══════════════════════════════════════════ -->
+    <section>
+      <h2>6 - StatefulSet vs Deployment - Comparaison</h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Critère</th>
+              <th>Deployment</th>
+              <th>StatefulSet</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Cas d'usage</strong></td>
+              <td>Applications stateless (API, frontend, workers)</td>
+              <td>Applications stateful (bases de données, message brokers)</td>
+            </tr>
+            <tr>
+              <td><strong>Identité des Pods</strong></td>
+              <td>Interchangeables, noms aléatoires</td>
+              <td>Uniques, noms ordonnés (app-0, app-1…)</td>
+            </tr>
+            <tr>
+              <td><strong>Réseau</strong></td>
+              <td>IP aléatoire, accès via Service (ClusterIP)</td>
+              <td>DNS stable par Pod via Headless Service</td>
+            </tr>
+            <tr>
+              <td><strong>Stockage</strong></td>
+              <td>Volumes partagés ou éphémères</td>
+              <td>PVC dédié par Pod (volumeClaimTemplates)</td>
+            </tr>
+            <tr>
+              <td><strong>Ordre de déploiement</strong></td>
+              <td>Parallèle (tous en même temps)</td>
+              <td>Séquentiel (0, puis 1, puis 2…)</td>
+            </tr>
+            <tr>
+              <td><strong>Ordre de suppression</strong></td>
+              <td>Parallèle</td>
+              <td>Séquentiel inversé (2, puis 1, puis 0)</td>
+            </tr>
+            <tr>
+              <td><strong>Rolling update</strong></td>
+              <td>Remplace les Pods (nouveau ReplicaSet)</td>
+              <td>Met à jour dans l'ordre inverse (dernier Pod d'abord)</td>
+            </tr>
+            <tr>
+              <td><strong>Scaling</strong></td>
+              <td>Rapide, horizontal</td>
+              <td>Plus lent, séquentiel</td>
+            </tr>
+            <tr>
+              <td><strong>Prérequis</strong></td>
+              <td>Aucun service obligatoire</td>
+              <td>Headless Service obligatoire</td>
+            </tr>
+            <tr>
+              <td><strong>Exemples concrets</strong></td>
+              <td>Spring Boot API, React frontend, microservices</td>
+              <td>PostgreSQL, Kafka, Redis (persistant), ZooKeeper</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout info">
+        <strong>Règle simple :</strong> Si votre application peut être arrêtée et redémarrée n'importe où sans perte de données ni impact fonctionnel → <strong>Deployment</strong>. Si elle a besoin de conserver des données entre les redémarrages ou d'une identité réseau fixe → <strong>StatefulSet</strong>.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 7. DEPLOYMENT SPRING BOOT PRODUCTION ═══════════════════════════════════════════ -->
+    <section>
+      <h2>7 - Deployment pour Spring Boot - Production-Ready</h2>
+
+      <p>Voici un Deployment complet, prêt pour la production, pour une application Spring Boot. Il inclut les probes de santé, les limites de ressources, les variables d'environnement injectées depuis des ConfigMaps et Secrets, et une stratégie de rolling update robuste.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">deployment-api-production.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+  namespace: fintech
+  labels:
+    app: api-backend
+    version: "2.1.0"
+    team: backend
+    environment: production
+spec:
+  replicas: 3                            # 3 réplicas pour la haute disponibilité
+  revisionHistoryLimit: 5                # Conserver 5 anciennes révisions pour rollback
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1                  # Toujours au moins 2 Pods disponibles
+      maxSurge: 1                        # Max 4 Pods temporairement
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+        version: "2.1.0"
+    spec:
+      containers:
+        - name: api-backend
+          image: bmis/api-backend:2.1.0  # JAMAIS :latest en production
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+              name: http
+
+          # ── Variables d'environnement depuis ConfigMap ──
+          envFrom:
+            - configMapRef:
+                name: api-backend-config     # Injecte toutes les clés du ConfigMap
+          env:
+            # ── Variables depuis Secret ──
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: secret-key
+
+          # ── Ressources CPU / Mémoire ──
+          resources:
+            requests:
+              memory: "384Mi"
+              cpu: "250m"
+            limits:
+              memory: "768Mi"
+              cpu: "1000m"
+
+          # ── Probe de démarrage (Spring Boot peut être lent à démarrer) ──
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30       # 10 + (5 × 30) = max 160s pour démarrer
+
+          # ── Probe de vivacité (redémarrer si bloqué) ──
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 15
+            failureThreshold: 3        # 3 échecs consécutifs → restart
+
+          # ── Probe de disponibilité (ne pas envoyer de trafic si pas prêt) ──
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <strong>Ne jamais utiliser <code>:latest</code> en production.</strong> Le tag <code>:latest</code> est mutable - il peut pointer vers des images différentes selon le moment du pull. Cela rend les rollbacks impossibles et crée des incohérences entre les Pods. Utilisez toujours un tag de version sémantique explicite : <code>bmis/api-backend:2.1.0</code>.
+      </div>
+
+      <h3>7.1 - Les probes expliquées pour Spring Boot</h3>
+
+      <p><strong>startupProbe</strong> - Vérifie si l'application a <em>fini de démarrer</em>. Spring Boot peut prendre 20-60 secondes au démarrage (chargement du contexte Spring, connexion à la base, etc.). Tant que la startupProbe n'a pas réussi, les autres probes sont désactivées. Cela évite que Kubernetes ne tue un Pod en cours de démarrage.</p>
+
+      <p><strong>livenessProbe</strong> - Vérifie si l'application est <em>vivante</em>. Si cette probe échoue (3 fois consécutives avec les paramètres ci-dessus), Kubernetes <strong>redémarre</strong> le container. Utilisez l'endpoint <code>/actuator/health/liveness</code> qui vérifie seulement si la JVM répond, sans vérifier les dépendances externes.</p>
+
+      <p><strong>readinessProbe</strong> - Vérifie si l'application est <em>prête à recevoir du trafic</em>. Si cette probe échoue, le Pod est <strong>retiré du Service</strong> (plus de trafic entrant) mais n'est <em>pas</em> redémarré. Utilisez <code>/actuator/health/readiness</code> qui vérifie aussi les connexions à la base de données et autres dépendances.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 8. STATEFULSET POSTGRESQL PRODUCTION ═══════════════════════════════════════════ -->
+    <section>
+      <h2>8 - StatefulSet pour PostgreSQL - Production-Ready</h2>
+
+      <p>Voici un StatefulSet complet pour PostgreSQL en production, avec un Headless Service, un initContainer pour l'initialisation, et des volumeClaimTemplates pour la persistance des données.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">postgres-headless-service.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: fintech
+  labels:
+    app: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">statefulset-postgres-production.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: fintech
+  labels:
+    app: postgres
+    version: "16"
+spec:
+  serviceName: postgres-headless
+  replicas: 1                           # Single-master
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # ── Init Container : préparer le répertoire de données ──
+      initContainers:
+        - name: init-permissions
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /var/lib/postgresql/data/pgdata
+              chown -R 999:999 /var/lib/postgresql/data
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: "fintech_db"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+
+          # ── Probe de vivacité : pg_isready ──
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - fintech_db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # ── Probe de disponibilité ──
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - fintech_db
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+  # ── PVC créé automatiquement pour chaque Pod ──
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 20Gi</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>Pourquoi un initContainer ?</strong> PostgreSQL nécessite que le répertoire de données (<code>PGDATA</code>) soit détenu par l'utilisateur <code>postgres</code> (UID 999). L'initContainer s'exécute <em>avant</em> le container principal et configure les permissions correctement. Sans cela, PostgreSQL refuserait de démarrer avec une erreur de permission.
+      </div>
+
+      <div class="callout warning">
+        <strong>volumeClaimTemplates :</strong> Contrairement aux volumes classiques, les PVC créés par un <code>volumeClaimTemplate</code> ne sont <strong>pas supprimés</strong> quand le StatefulSet est supprimé. C'est voulu - cela protège vos données. Vous devez supprimer les PVC manuellement si vous voulez libérer le stockage : <code>kubectl delete pvc postgres-data-postgres-0 -n fintech</code>.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 9. STATEFULSET REDIS ═══════════════════════════════════════════ -->
+    <section>
+      <h2>9 - StatefulSet pour Redis - Avec persistance</h2>
+
+      <p>Redis est souvent utilisé comme cache éphémère (Deployment suffit), mais dans notre système fintech, Redis stocke aussi des sessions utilisateur et des données de rate-limiting qui doivent survivre aux redémarrages. Un StatefulSet avec persistance est alors nécessaire.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">redis-headless-service.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: fintech
+  labels:
+    app: redis
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">statefulset-redis.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: fintech
+  labels:
+    app: redis
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+              name: redis
+          command:
+            - redis-server
+            - "--appendonly"
+            - "yes"                      # Activer la persistance AOF
+            - "--appendfsync"
+            - "everysec"                 # Sync AOF chaque seconde
+            - "--maxmemory"
+            - "256mb"
+            - "--maxmemory-policy"
+            - "allkeys-lru"              # Politique d'éviction LRU
+
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "384Mi"
+              cpu: "500m"
+
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>AOF (Append Only File)</strong> - Redis écrit chaque opération d'écriture dans un fichier journal. En cas de crash, Redis replay ce fichier au redémarrage pour restaurer l'état. L'option <code>appendfsync everysec</code> offre un bon compromis entre performance et durabilité (perte maximale d'une seconde de données).
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 10. SCALING ═══════════════════════════════════════════ -->
+    <section>
+      <h2>10 - Scaling - Mise à l'échelle</h2>
+
+      <p>Kubernetes facilite le scaling horizontal (ajout/retrait de Pods) de vos workloads. Le scaling peut être <strong>manuel</strong> (commande kubectl) ou <strong>automatique</strong> (Horizontal Pod Autoscaler).</p>
+
+      <h3>10.1 - Scaling manuel</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Commandes de scaling</span>
+        </div>
+        <pre><code class="language-bash"># Scaler un Deployment à 5 réplicas
+kubectl scale deployment/api-backend --replicas=5 -n fintech
+
+# Vérifier le scaling
+kubectl get deployment api-backend -n fintech
+# NAME          READY   UP-TO-DATE   AVAILABLE   AGE
+# api-backend   5/5     5            5           2h
+
+# Scaler un StatefulSet (séquentiel : 1 → 2 → 3)
+kubectl scale statefulset/postgres --replicas=3 -n fintech
+
+# Réduire le nombre de réplicas (scale down)
+kubectl scale deployment/api-backend --replicas=2 -n fintech
+
+# Scaler à zéro (arrêter tous les Pods sans supprimer le Deployment)
+kubectl scale deployment/api-backend --replicas=0 -n fintech
+
+# Voir les Pods en temps réel pendant le scaling
+kubectl get pods -n fintech -w</code></pre>
+      </div>
+
+      <h3>10.2 - Horizontal Pod Autoscaler (HPA) - Aperçu</h3>
+
+      <p>Le <strong>HPA</strong> ajuste automatiquement le nombre de réplicas d'un Deployment en fonction de métriques observées (CPU, mémoire, métriques custom). Il nécessite le <strong>Metrics Server</strong> installé dans le cluster.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">hpa-api-backend.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-backend-hpa
+  namespace: fintech
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-backend
+  minReplicas: 2                   # Minimum 2 Pods (haute disponibilité)
+  maxReplicas: 10                  # Maximum 10 Pods
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70   # Scale up si CPU moyen > 70%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80   # Scale up si mémoire moyenne > 80%</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Commandes HPA</span>
+        </div>
+        <pre><code class="language-bash"># Créer un HPA rapidement via la CLI
+kubectl autoscale deployment api-backend \
+  --min=2 --max=10 --cpu-percent=70 -n fintech
+
+# Voir le statut du HPA
+kubectl get hpa -n fintech
+# NAME              REFERENCE              TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+# api-backend-hpa   Deployment/api-backend  45%/70%   2         10        3          1h
+
+# Détails du HPA
+kubectl describe hpa api-backend-hpa -n fintech</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <strong>Attention :</strong> Le HPA ne fonctionne que si vous avez défini des <code>resources.requests</code> sur vos containers. Sans requests, Kubernetes ne peut pas calculer le pourcentage d'utilisation. Le Metrics Server doit aussi être installé : <code>minikube addons enable metrics-server</code> (sur Minikube).
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 11. ERREURS COURANTES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>11 - Erreurs courantes</h2>
+
+      <div class="callout bad">
+        <strong>Utiliser un Deployment pour une base de données</strong> - Un Deployment traite les Pods comme interchangeables. Si le Pod PostgreSQL est recréé, il perd son volume et ses données. Les bases de données nécessitent un <strong>StatefulSet</strong> avec <code>volumeClaimTemplates</code> pour garantir la persistance.
+      </div>
+
+      <div class="callout bad">
+        <strong>Utiliser le tag <code>:latest</code> pour les images</strong> - Le tag <code>:latest</code> est mutable et non déterministe. Deux <code>kubectl apply</code> successifs peuvent déployer des versions différentes. Utilisez toujours un tag de version explicite (<code>api-backend:2.1.0</code>) pour garantir la reproductibilité et permettre les rollbacks.
+      </div>
+
+      <div class="callout bad">
+        <strong>Ne pas définir de resource requests et limits</strong> - Sans <code>requests</code>, le Scheduler ne peut pas placer intelligemment les Pods. Sans <code>limits</code>, un Pod peut consommer toutes les ressources d'un nœud et provoquer un OOMKill en cascade sur les autres Pods.
+      </div>
+
+      <div class="callout bad">
+        <strong>Ne pas configurer les probes de santé</strong> - Sans <code>livenessProbe</code>, Kubernetes ne détecte pas si votre application est bloquée (deadlock, boucle infinie). Sans <code>readinessProbe</code>, du trafic est envoyé à des Pods qui ne sont pas encore prêts, causant des erreurs 503.
+      </div>
+
+      <div class="callout bad">
+        <strong>Oublier le Headless Service pour un StatefulSet</strong> - Sans Headless Service, les Pods du StatefulSet n'ont pas d'identité réseau stable. Les autres composants ne peuvent pas les adresser individuellement. Le champ <code>spec.serviceName</code> du StatefulSet <strong>doit</strong> correspondre au nom du Headless Service.
+      </div>
+
+      <div class="callout bad">
+        <strong>Scaler un StatefulSet PostgreSQL sans réplication</strong> - Augmenter les réplicas d'un StatefulSet PostgreSQL ne crée pas automatiquement une réplication master-slave. Chaque nouveau Pod est indépendant. Pour la réplication PostgreSQL, utilisez un opérateur comme <strong>CloudNativePG</strong> ou <strong>Zalando Postgres Operator</strong>.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 12. BEST PRACTICES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>12 - Best practices</h2>
+
+      <div class="callout tip">
+        <strong>Toujours utiliser des tags d'image immutables</strong> - Utilisez le digest SHA256 ou des tags de version sémantique (ex : <code>2.1.0</code>). Ne jamais utiliser <code>:latest</code> en production. Cela garantit que chaque déploiement est reproductible et que les rollbacks fonctionnent correctement.
+      </div>
+
+      <div class="callout tip">
+        <strong>Configurer les trois probes pour les applications web</strong> - <code>startupProbe</code> pour les applications lentes à démarrer (Spring Boot, JVM), <code>livenessProbe</code> pour détecter les blocages, <code>readinessProbe</code> pour contrôler le trafic entrant. Utilisez les endpoints Spring Boot Actuator : <code>/actuator/health/liveness</code> et <code>/actuator/health/readiness</code>.
+      </div>
+
+      <div class="callout tip">
+        <strong>Définir des resource requests ET limits</strong> - Les <code>requests</code> permettent au Scheduler de placer les Pods intelligemment. Les <code>limits</code> protègent contre les fuites mémoire et la surconsommation CPU. Commencez avec des valeurs conservatrices et ajustez en observant les métriques réelles.
+      </div>
+
+      <div class="callout tip">
+        <strong>Utiliser <code>revisionHistoryLimit</code></strong> - Configurez le nombre de révisions conservées (par défaut 10). Cela contrôle combien d'anciens ReplicaSets sont gardés pour les rollbacks. En production, 5 à 10 révisions sont un bon compromis.
+      </div>
+
+      <div class="callout tip">
+        <strong>Séparer ConfigMaps et Secrets</strong> - Utilisez <code>envFrom.configMapRef</code> pour la configuration non sensible et <code>env.valueFrom.secretKeyRef</code> pour les données sensibles (mots de passe, tokens). Ne codez jamais les valeurs en dur dans le manifest du Deployment.
+      </div>
+
+      <div class="callout tip">
+        <strong>Utiliser des Pod Disruption Budgets (PDB)</strong> - Un PDB garantit qu'un nombre minimum de Pods reste disponible lors des opérations de maintenance (drain d'un nœud, mise à jour du cluster). Exemple : <code>minAvailable: 2</code> assure que 2 Pods API restent toujours actifs.
+      </div>
+
+      <div class="callout tip">
+        <strong>Préférer les opérateurs pour les bases de données</strong> - Pour PostgreSQL, Redis, Kafka en production, utilisez des opérateurs Kubernetes dédiés (CloudNativePG, Redis Operator, Strimzi). Ils gèrent automatiquement la réplication, les backups, les failovers et les mises à jour.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ NAV FOOTER ═══════════════════════════════════════════ -->
+    <div class="lesson-nav">
+      <a href="03-kubernetes-architecture.html">
+        <span class="nav-dir">← Leçon précédente</span>
+        <span class="nav-title">Architecture Kubernetes</span>
+      </a>
+      <a href="05-kubernetes-services-ingress.html" class="nav-next">
+        <span class="nav-dir">Leçon suivante →</span>
+        <span class="nav-title">Services &amp; Ingress</span>
+      </a>
+    </div>
+
+  </div>
+  </main>
+
+  </div>
+
+  <button class="back-to-top" id="back-to-top" aria-label="Retour en haut">↑</button>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>La mentalité Production</h2>
+    <p>Passer en production, c'est accepter que <strong>tout peut échouer</strong>. L'objectif n'est pas d'empêcher les pannes, mais de les détecter rapidement et de s'en remettre automatiquement.</p>
+
+    <h3>SLI / SLO / SLA</h3>
+    <table>
+      <thead><tr><th>Concept</th><th>Définition</th><th>Exemple</th></tr></thead>
+      <tbody>
+        <tr><td><strong>SLI</strong> (Indicator)</td><td>Métrique mesurée</td><td>Latence P99, taux d'erreur, disponibilité</td></tr>
+        <tr><td><strong>SLO</strong> (Objective)</td><td>Cible interne</td><td>99.9% de disponibilité, P99 &lt; 500ms</td></tr>
+        <tr><td><strong>SLA</strong> (Agreement)</td><td>Engagement contractuel</td><td>99.5% garanti aux clients</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>Error Budget</strong>
+      <p>Si votre SLO est 99.9%, vous avez un budget d'erreur de 0.1% - soit ~43 minutes d'indisponibilité par mois. Tant que vous restez dans ce budget, vous pouvez déployer rapidement. Si le budget est épuisé, concentrez-vous sur la fiabilité.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Horizontal Pod Autoscaler (HPA)</h2>
+    <p>Le HPA ajuste automatiquement le nombre de réplicas d'un Deployment en fonction des métriques observées.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>hpa.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>stabilizationWindow</strong>
+      <p>Le <code>scaleDown.stabilizationWindowSeconds: 300</code> empêche le HPA de réduire trop vite après un pic. Cela évite les oscillations (flapping) entre scale up et scale down.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Resource Limits - La base de tout</h2>
+    <p>Chaque conteneur doit déclarer ses <strong>requests</strong> (minimum garanti) et <strong>limits</strong> (maximum autorisé).</p>
+
+    <table>
+      <thead><tr><th>Composant</th><th>CPU Request</th><th>CPU Limit</th><th>Mem Request</th><th>Mem Limit</th></tr></thead>
+      <tbody>
+        <tr><td>Spring Boot API</td><td>250m</td><td>500m</td><td>256Mi</td><td>512Mi</td></tr>
+        <tr><td>PostgreSQL</td><td>250m</td><td>1000m</td><td>256Mi</td><td>1Gi</td></tr>
+        <tr><td>Redis</td><td>100m</td><td>250m</td><td>128Mi</td><td>256Mi</td></tr>
+        <tr><td>NGINX Ingress</td><td>100m</td><td>500m</td><td>128Mi</td><td>256Mi</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warning">
+      <strong>OOMKilled</strong>
+      <p>Si un conteneur dépasse sa memory limit, Kubernetes le tue immédiatement (OOMKilled). Fixez les limits mémoire avec une marge suffisante. Pour la CPU, le conteneur est simplement throttlé (ralenti), pas tué.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Zero-Downtime Deployments</h2>
+    <p>Pour garantir zéro interruption pendant les mises à jour :</p>
+
+    <div class="callout tip">
+      <strong>Checklist déploiement sans interruption</strong>
+      <ul>
+        <li><strong>readinessProbe</strong> - Le pod ne reçoit du trafic que quand il est prêt</li>
+        <li><strong>Rolling update</strong> - <code>maxUnavailable: 0</code> garantit que tous les anciens pods restent actifs jusqu'à ce que les nouveaux soient prêts</li>
+        <li><strong>PodDisruptionBudget</strong> - Protège contre les évictions pendant les maintenances du cluster</li>
+        <li><strong>preStop hook</strong> - Donne au pod le temps de terminer les requêtes en cours</li>
+        <li><strong>Graceful shutdown</strong> - <code>server.shutdown=graceful</code> dans Spring Boot</li>
+      </ul>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>pdb.yaml - Pod Disruption Budget</span></div>
+      <pre><code class="language-yaml">apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+spec:
+  minAvailable: 2    # Au moins 2 pods toujours disponibles
+  selector:
+    matchLabels:
+      app: api-backend</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>deployment.yaml - preStop hook</span></div>
+      <pre><code class="language-yaml">spec:
+  containers:
+    - name: api
+      lifecycle:
+        preStop:
+          exec:
+            command: ["/bin/sh", "-c", "sleep 10"]
+  terminationGracePeriodSeconds: 30</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Disaster Recovery</h2>
+    <div class="callout danger">
+      <strong>Règle des backups</strong>
+      <p>Un backup qui n'a jamais été testé en restauration n'est PAS un backup. Testez régulièrement vos procédures de restauration.</p>
+    </div>
+
+    <h3>Checklist production</h3>
+    <table>
+      <thead><tr><th>Élément</th><th>Fréquence</th><th>Outil</th></tr></thead>
+      <tbody>
+        <tr><td>Backup PostgreSQL</td><td>Quotidien</td><td>pg_dump + CronJob K8s</td></tr>
+        <tr><td>Snapshot etcd</td><td>Toutes les 6h</td><td>etcdctl snapshot</td></tr>
+        <tr><td>Test de restauration</td><td>Mensuel</td><td>Procédure documentée</td></tr>
+        <tr><td>Manifestes K8s dans Git</td><td>Chaque changement</td><td>GitOps (ArgoCD, Flux)</td></tr>
+        <tr><td>Runbooks</td><td>MAJ continue</td><td>Documentation opérationnelle</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</app-lesson-page>

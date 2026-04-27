@@ -1,0 +1,180 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ Introduction ═══════════════ -->
+  <section>
+    <h2>Cahier Pratique Final - TaskFlow Entreprise</h2>
+    <p>Ce cahier pratique rassemble les exercices finaux du cours. Chaque exercice met en pratique un pattern ou une technologie abordée dans les chapitres précédents, appliquée au projet TaskFlow.</p>
+
+    <h3>Kafka Topics - Vue d'ensemble</h3>
+    <table>
+      <thead>
+        <tr><th>Topic</th><th>Producteur → Consommateur</th><th>Action déclenchée</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>task-created</code></td>
+          <td>task-service → notification-service</td>
+          <td>Envoi notification + mise à jour cache</td>
+        </tr>
+        <tr>
+          <td><code>task-assigned</code></td>
+          <td>task-service → notification-service</td>
+          <td>Notification utilisateur assigné</td>
+        </tr>
+        <tr>
+          <td><code>project-updated</code></td>
+          <td>project-service → task-service</td>
+          <td>Synchronisation des métadonnées projet</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ═══════════════ Exercice 1 ═══════════════ -->
+  <section>
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 1</span> - Kafka Event : TaskCreated</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Implémenter le flux complet d'un événement Kafka de bout en bout.</p>
+        <ol>
+          <li>Dans <code>task-service</code>, publier un événement <code>TaskCreated</code> sur le topic <code>task-created</code> après la création d'une tâche</li>
+          <li>Dans <code>notification-service</code>, créer un consommateur Kafka qui écoute le topic <code>task-created</code></li>
+          <li>Le consommateur doit envoyer une notification à l'utilisateur assigné</li>
+          <li>Mettre à jour le cache Redis avec la nouvelle tâche</li>
+          <li>Vérifier dans les logs que la notification a bien été envoyée et le cache mis à jour</li>
+        </ol>
+
+        <div class="callout tip">
+          <strong>Indice</strong>
+          <p>Utilisez <code>projectId</code> comme clé de partition Kafka pour garantir l'ordre des événements d'un même projet.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Exercice 2 ═══════════════ -->
+  <section>
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 2</span> - SAGA : Rollback distribué</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Implémenter une SAGA avec compensation en cas d'échec.</p>
+        <ol>
+          <li>Créer une tâche dans <code>task-service</code> qui nécessite une validation du <code>project-service</code></li>
+          <li>Le <code>project-service</code> vérifie que le projet existe et accepte de nouvelles tâches</li>
+          <li>Simuler une panne du <code>project-service</code> (retourner une erreur 500)</li>
+          <li>Vérifier que le <code>task-service</code> effectue le rollback : suppression de la tâche créée</li>
+          <li>Vérifier que le <code>notification-service</code> n'envoie pas de notification pour une tâche annulée</li>
+        </ol>
+
+        <div class="callout warning">
+          <strong>Attention</strong>
+          <p>La compensation doit être idempotente : si le rollback est rejoué (réseau instable), le résultat doit être le même.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Exercice 3 ═══════════════ -->
+  <section>
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 3</span> - CQRS : Séparation lecture/écriture</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Séparer les flux de lecture et d'écriture avec cache Redis.</p>
+        <ol>
+          <li>Créer deux services distincts : <code>TaskCommandService</code> (écriture) et <code>TaskQueryService</code> (lecture)</li>
+          <li>Le <code>TaskCommandService</code> écrit dans PostgreSQL et publie un événement Kafka</li>
+          <li>Le <code>TaskQueryService</code> lit depuis le cache Redis en priorité</li>
+          <li>Implémenter l'endpoint <code>GET /tasks/project/{{ '{' }}id{{ '}' }}</code> qui sert les données depuis Redis sans toucher la base</li>
+          <li>Vérifier que le cache est invalidé quand une nouvelle tâche est créée</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Exercice 4 ═══════════════ -->
+  <section>
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 4</span> - Circuit Breaker : Resilience4j</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Protéger un service avec un Circuit Breaker.</p>
+        <ol>
+          <li>Ajouter Resilience4j au <code>notification-service</code> pour les appels vers le service d'email externe</li>
+          <li>Configurer le Circuit Breaker : seuil d'échec à 50%, durée d'ouverture à 30 secondes</li>
+          <li>Implémenter un fallback qui enregistre la notification en file d'attente</li>
+          <li>Simuler une panne du service d'email (timeout, erreur 503)</li>
+          <li>Vérifier que le circuit s'ouvre après les échecs et que le fallback prend le relais</li>
+          <li>Vérifier que le <code>task-service</code> continue de fonctionner normalement malgré la panne email</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Exercice 5 ═══════════════ -->
+  <section>
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 5</span> - Monitoring : Prometheus + Grafana</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Mettre en place un monitoring complet des microservices.</p>
+        <ol>
+          <li>Activer l'endpoint <code>/actuator/prometheus</code> sur tous les services</li>
+          <li>Configurer Prometheus pour scraper les métriques de chaque service (scrape interval : 15s)</li>
+          <li>Créer un dashboard Grafana avec les panels suivants :
+            <ul>
+              <li>Requêtes HTTP par seconde (par service)</li>
+              <li>Latence P95 et P99</li>
+              <li>Taux d'erreurs (4xx et 5xx)</li>
+              <li>Usage mémoire JVM (heap / non-heap)</li>
+            </ul>
+          </li>
+          <li>Configurer une alerte Alertmanager si la latence P99 dépasse 2 secondes</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Exercice 6 ═══════════════ -->
+  <section>
+    <div class="exercise">
+      <h4><span class="exercise-number">Exercice 6</span> - Tracing distribué : Jaeger</h4>
+      <div class="exercise-body">
+        <p><strong>Objectif :</strong> Tracer une requête à travers tous les microservices.</p>
+        <ol>
+          <li>Ajouter l'instrumentation OpenTelemetry à chaque service Spring Boot</li>
+          <li>Configurer l'export des traces vers Jaeger</li>
+          <li>Créer une tâche via l'API et tracer le flux complet :
+            <ul>
+              <li>API Gateway → task-service → project-service (vérification)</li>
+              <li>task-service → Kafka → notification-service</li>
+              <li>task-service → Redis (mise en cache)</li>
+            </ul>
+          </li>
+          <li>Visualiser la trace complète dans l'interface Jaeger</li>
+          <li>Identifier les goulots d'étranglement (spans les plus longs)</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Bilan ═══════════════ -->
+  <section>
+    <div class="callout tip">
+      <strong>Bilan des compétences acquises</strong>
+      <ul>
+        <li>Concevoir une architecture Clean Architecture en couches</li>
+        <li>Décomposer un monolithe en microservices autonomes</li>
+        <li>Implémenter la communication Event-Driven avec Kafka</li>
+        <li>Appliquer les patterns SAGA, CQRS et Circuit Breaker</li>
+        <li>Mettre en place un cache distribué avec Redis</li>
+        <li>Automatiser le déploiement avec CI/CD et Kubernetes</li>
+        <li>Monitorer et tracer les requêtes en production</li>
+        <li>Penser résilience, scalabilité et maintenabilité à chaque décision</li>
+      </ul>
+    </div>
+
+    <div class="callout info">
+      <strong>Conclusion : du développeur à l'architecte</strong>
+      <p>Vous avez parcouru le chemin complet - de la conception d'une seule couche à l'orchestration d'un système distribué en production. L'architecte backend ne se contente pas d'écrire du code : il prend des décisions structurantes qui impactent la scalabilité, la résilience et la maintenabilité d'un système sur le long terme. Continuez à pratiquer, à challenger vos choix, et à apprendre de chaque incident en production.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

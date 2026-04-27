@@ -1,0 +1,102 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ Section 1 : Prérequis ═══════════════ -->
+  <section>
+    <h2>Prérequis</h2>
+    <p>Avant de commencer ce parcours, assurez-vous de maîtriser les fondamentaux suivants. Chaque domaine sera approfondi et mis en pratique tout au long de la formation.</p>
+
+    <table>
+      <thead>
+        <tr><th>Domaine</th><th>Compétences attendues</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Java</strong></td>
+          <td>POO (héritage, polymorphisme), interfaces, generics, streams, Optional</td>
+        </tr>
+        <tr>
+          <td><strong>Spring Boot</strong></td>
+          <td>Controllers REST, Spring Data JPA, injection de dépendances</td>
+        </tr>
+        <tr>
+          <td><strong>SQL &amp; Bases de données</strong></td>
+          <td>CRUD, relations (1:N, N:N), clés étrangères, propriétés ACID</td>
+        </tr>
+        <tr>
+          <td><strong>HTTP &amp; REST</strong></td>
+          <td>Verbes (GET, POST, PUT, DELETE), codes de statut (2xx, 4xx, 5xx), format JSON</td>
+        </tr>
+        <tr>
+          <td><strong>Git</strong></td>
+          <td>Branches, commits, pull requests, résolution de conflits</td>
+        </tr>
+        <tr>
+          <td><strong>Docker</strong></td>
+          <td>Notions de base : <code>run</code>, <code>build</code>, images, volumes</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <strong>Environnement recommandé</strong>
+      <ul>
+        <li><strong>Java 17 ou 21</strong> (LTS)</li>
+        <li><strong>Spring Boot 3.x</strong></li>
+        <li><strong>IntelliJ IDEA 2024+</strong> ou VS Code avec extensions Java</li>
+        <li><strong>Docker Desktop 4.x</strong></li>
+        <li><strong>Postman</strong> ou <strong>httpie</strong></li>
+        <li><strong>Maven 3.8+</strong> ou <strong>Gradle 8.x</strong></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Section 2 : Introduction ═══════════════ -->
+  <section>
+    <h2>Introduction</h2>
+    <p>Le rôle du développeur évolue profondément à l'ère de l'intelligence artificielle. Le code n'est plus une fin en soi - c'est un <strong>moyen</strong>. Ce qui compte désormais, c'est la capacité à <strong>raisonner en termes de systèmes</strong> : comprendre les interactions, les flux, les dépendances.</p>
+
+    <p>Des outils comme <strong>ChatGPT</strong> ou <strong>GitHub Copilot</strong> peuvent générer du code rapidement, mais c'est au développeur de <strong>concevoir des systèmes complexes</strong>, de prendre des décisions d'architecture, de garantir la maintenabilité et la performance.</p>
+
+    <div class="callout info">
+      <strong>Principe fondamental</strong>
+      <p>Le code n'est plus une finalité, mais un moyen. Ce qui importe désormais, c'est la capacité à raisonner en termes de systèmes.</p>
+    </div>
+
+    <h3>Le parcours d'apprentissage</h3>
+    <p>Ce cours est structuré en 4 grandes étapes progressives :</p>
+
+    <table>
+      <thead>
+        <tr><th>Étape</th><th>Objectif</th><th>Ce que vous apprendrez</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Fondations Backend</strong></td>
+          <td>Renforcer les bases</td>
+          <td>Clean Architecture, séparation des responsabilités, validation, tests</td>
+        </tr>
+        <tr>
+          <td><strong>2. Architectures Distribuées</strong></td>
+          <td>Penser en systèmes</td>
+          <td>Microservices, communication inter-services, brokers de messages, patterns</td>
+        </tr>
+        <tr>
+          <td><strong>3. Pratiques DevOps</strong></td>
+          <td>Automatiser et déployer</td>
+          <td>CI/CD, conteneurisation, Kubernetes, Infrastructure as Code</td>
+        </tr>
+        <tr>
+          <td><strong>4. Observabilité &amp; Performance</strong></td>
+          <td>Surveiller et optimiser</td>
+          <td>Métriques, logs, tracing distribué, alerting, scalabilité</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <strong>Approche pédagogique</strong>
+      <p>Chaque chapitre combine théorie, exemples concrets avec Spring Boot, et exercices pratiques autour d'un projet fil rouge : <strong>TaskFlow</strong>, une API de gestion de tâches.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

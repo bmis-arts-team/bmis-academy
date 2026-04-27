@@ -1,0 +1,89 @@
+<div class="home">
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badge">Plateforme d'apprentissage</div>
+    <h1>Maîtrisez le <span class="accent">Backend</span> &amp; le <span class="accent">DevOps</span></h1>
+    <p class="hero-subtitle">
+      Des cours approfondis et structurés pour devenir un ingénieur backend complet.
+      Architecture, conteneurisation, orchestration, CI/CD et production.
+    </p>
+    <div class="hero-stats">
+      <div class="stat">
+        <span class="stat-value">22</span>
+        <span class="stat-label">Leçons</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">2</span>
+        <span class="stat-label">Cours disponibles</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">100%</span>
+        <span class="stat-label">Gratuit</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Courses Grid -->
+  <section class="courses-section">
+    <h2>Nos cours</h2>
+    <div class="courses-grid">
+      @for (course of courses; track course.id) {
+        <a [routerLink]="['/courses', course.id]" class="course-card" [style.--card-color]="course.color">
+          <div class="card-stripe"></div>
+          <div class="card-icon"><app-icon [name]="course.icon" [size]="32"></app-icon></div>
+          <h3>{{ course.title }}</h3>
+          <p>{{ course.subtitle }}</p>
+          <div class="card-meta">
+            <span>{{ course.sections.length }} sections</span>
+            <span class="dot">·</span>
+            <span>{{ totalLessons(course) }} leçons</span>
+          </div>
+        </a>
+      }
+
+      <!-- Coming soon card -->
+      <div class="course-card coming-soon">
+        <div class="card-stripe"></div>
+        <div class="card-icon"><app-icon name="lock" [size]="32"></app-icon></div>
+        <h3>Sécurité &amp; Performance</h3>
+        <p>OAuth2, JWT, OWASP, optimisation, caching avancé</p>
+        <div class="card-badge">Bientôt disponible</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Learning Path -->
+  <section class="path-section">
+    <h2>Parcours d'apprentissage</h2>
+    <div class="path-timeline">
+      <div class="path-step">
+        <div class="step-marker">1</div>
+        <div class="step-content">
+          <h4>Architecture Backend</h4>
+          <p>Clean Architecture, séparation des responsabilités, validation, tests et structure professionnelle.</p>
+        </div>
+      </div>
+      <div class="path-step">
+        <div class="step-marker">2</div>
+        <div class="step-content">
+          <h4>Systèmes Distribués</h4>
+          <p>Microservices, communication synchrone et asynchrone, Kafka, patterns SAGA et CQRS.</p>
+        </div>
+      </div>
+      <div class="path-step">
+        <div class="step-marker">3</div>
+        <div class="step-content">
+          <h4>Conteneurisation &amp; Orchestration</h4>
+          <p>Docker, Kubernetes, workloads, services, storage, configuration et networking.</p>
+        </div>
+      </div>
+      <div class="path-step">
+        <div class="step-marker">4</div>
+        <div class="step-content">
+          <h4>CI/CD &amp; Production</h4>
+          <p>Pipelines GitHub Actions, observabilité, sécurité réseau, CDN, scaling et bonnes pratiques.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

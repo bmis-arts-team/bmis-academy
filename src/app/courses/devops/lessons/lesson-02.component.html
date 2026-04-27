@@ -1,0 +1,142 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Le problème de la persistance</h2>
+    <p>Par défaut, les données d'un conteneur sont <strong>éphémères</strong>. Quand un conteneur est supprimé, toutes les données écrites dans son filesystem disparaissent. Pour les bases de données et le stockage de fichiers, c'est inacceptable.</p>
+
+    <div class="arch-diagram">
+      <pre>
+  Container (lecture/écriture)
+  ├── /app/data     ← Perdu à la suppression !
+  └── /var/lib/...  ← Perdu aussi !
+
+  Volume Docker (persistant)
+  ├── /var/lib/postgresql/data  ← Survit au conteneur
+  └── /data/redis               ← Survit aussi</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Types de volumes Docker</h2>
+    <table>
+      <thead>
+        <tr><th>Type</th><th>Syntaxe</th><th>Usage</th><th>Persistant</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Named Volume</strong></td><td><code>-v my-data:/data</code></td><td>Bases de données, fichiers applicatifs</td><td>✅ Oui</td></tr>
+        <tr><td><strong>Bind Mount</strong></td><td><code>-v ./src:/app/src</code></td><td>Développement local (hot-reload)</td><td>✅ Oui</td></tr>
+        <tr><td><strong>tmpfs</strong></td><td><code>--tmpfs /tmp</code></td><td>Données temporaires sensibles</td><td>❌ Non</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <strong>Règle d'or</strong>
+      <p>En production, utilisez toujours des <strong>named volumes</strong>. Les bind mounts sont réservés au développement.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Volumes en pratique - PostgreSQL</h2>
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash"># Créer un named volume
+docker volume create postgres-data
+
+# Lancer PostgreSQL avec le volume
+docker run -d \
+  --name my-postgres \
+  -e POSTGRES_DB=app_db \
+  -e POSTGRES_USER=app_user \
+  -e POSTGRES_PASSWORD=secret \
+  -v postgres-data:/var/lib/postgresql/data \
+  -p 5432:5432 \
+  postgres:16-alpine
+
+# Vérifier le volume
+docker volume inspect postgres-data</code></pre>
+    </div>
+    <p>Même après <code>docker rm my-postgres</code>, les données persistent dans le volume <code>postgres-data</code>.</p>
+  </section>
+
+  <section>
+    <h2>Volumes en pratique - Redis</h2>
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash">docker run -d \
+  --name my-redis \
+  -v redis-data:/data \
+  -p 6379:6379 \
+  redis:7-alpine \
+  redis-server --appendonly yes --maxmemory 256mb</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>AOF vs RDB</strong>
+      <p><code>--appendonly yes</code> active l'Append Only File pour une persistance durable. Redis écrit chaque opération dans un fichier journal. Combinez avec des snapshots RDB pour un équilibre performance/durabilité.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Docker Networking - Les fondamentaux</h2>
+    <p>Docker offre plusieurs <strong>drivers réseau</strong> pour connecter les conteneurs entre eux et avec l'extérieur.</p>
+
+    <table>
+      <thead>
+        <tr><th>Driver</th><th>Description</th><th>Usage</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>bridge</code></td><td>Réseau privé isolé</td><td>Communication entre conteneurs sur un même hôte</td></tr>
+        <tr><td><code>host</code></td><td>Partage le réseau de l'hôte</td><td>Performance maximale (pas de NAT)</td></tr>
+        <tr><td><code>overlay</code></td><td>Réseau multi-hôtes</td><td>Docker Swarm, clusters</td></tr>
+        <tr><td><code>none</code></td><td>Pas de réseau</td><td>Conteneurs totalement isolés</td></tr>
+      </tbody>
+    </table>
+
+    <h3>DNS intégré</h3>
+    <p>Dans un réseau bridge personnalisé, Docker fournit un <strong>serveur DNS intégré</strong>. Les conteneurs peuvent se résoudre par nom :</p>
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash"># Créer un réseau
+docker network create app-network
+
+# Lancer les services sur le même réseau
+docker run -d --name postgres --network app-network postgres:16-alpine
+docker run -d --name redis --network app-network redis:7-alpine
+docker run -d --name api --network app-network \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/app_db \
+  -e SPRING_DATA_REDIS_HOST=redis \
+  my-api:1.0.0</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Résolution DNS</strong>
+      <p>Le conteneur <code>api</code> peut atteindre PostgreSQL via <code>postgres:5432</code> et Redis via <code>redis:6379</code>. Le DNS résout automatiquement les noms des conteneurs en adresses IP.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Architecture réseau multi-services</h2>
+    <div class="arch-diagram">
+      <pre>
+              ┌──── app-network (bridge) ────┐
+              │                               │
+  ┌───────┐   │  ┌─────────┐  ┌───────────┐  │
+  │Client ├───┼─▶│  API    ├─▶│ PostgreSQL│  │
+  └───────┘   │  │ :8080   │  │  :5432    │  │
+    :8080     │  └────┬────┘  └───────────┘  │
+              │       │                       │
+              │       ▼                       │
+              │  ┌─────────┐                  │
+              │  │  Redis  │                  │
+              │  │  :6379  │                  │
+              │  └─────────┘                  │
+              └───────────────────────────────┘</pre>
+    </div>
+
+    <div class="callout warning">
+      <strong>Sécurité réseau</strong>
+      <p>Ne publiez pas les ports des services internes (PostgreSQL, Redis) vers l'hôte. Seul le service exposé aux utilisateurs (API, reverse proxy) doit avoir un mapping <code>-p</code>.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

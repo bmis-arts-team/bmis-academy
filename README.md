@@ -1,6 +1,6 @@
-# bmis-academy — Supports de cours
+# bmis-academy - Supports de cours
 
-> Plateforme e-learning professionnelle pour les développeurs — **bmis-academy**
+> Plateforme e-learning professionnelle pour les développeurs - **bmis-academy**
 
 ---
 
@@ -14,7 +14,7 @@ Les supports de cours sont conçus et rédigés par **Gilles Kemgoum**, avec un 
 
 ## Catalogue des cours
 
-### Backend — Java / Spring Boot
+### Backend - Java / Spring Boot
 
 | Cours | Description | Niveau |
 |---|---|---|
@@ -23,7 +23,7 @@ Les supports de cours sont conçus et rédigés par **Gilles Kemgoum**, avec un 
 | Spring Security & Auth avancée *(à venir)* | OAuth2, OIDC, JWT, Keycloak | Avancé |
 | Spring Batch & Scheduling *(à venir)* | Traitements batch, pipelines de données | Intermédiaire |
 
-### Frontend — Angular
+### Frontend - Angular
 
 | Cours | Description | Niveau |
 |---|---|---|
@@ -63,13 +63,13 @@ bmis-academy/
 └── README.md
 ```
 
-> Ce dépôt est actuellement en démarrage — le premier cours **"De Développeur à Architecte Backend"** est disponible.
+> Ce dépôt est actuellement en démarrage - le premier cours **"De Développeur à Architecte Backend"** est disponible.
 
 ---
 
 ## Format des supports
 
-Chaque support de cours est un **fichier HTML autonome** — aucun serveur ni build nécessaire. Il suffit de l'ouvrir dans un navigateur.
+Chaque support de cours est un **fichier HTML autonome** - aucun serveur ni build nécessaire. Il suffit de l'ouvrir dans un navigateur.
 
 **Fonctionnalités communes :**
 - Navigation rapide par chapitre (barre sticky)
@@ -101,5 +101,5 @@ Formateur, Architecte Logiciel & fondateur de bmis-academy
 
 ## Licence
 
-© 2026 bmis-academy — Gilles Kemgoum. Tous droits réservés.
+© 2026 bmis-academy - Gilles Kemgoum. Tous droits réservés.
 Les supports sont destinés à un usage pédagogique dans le cadre de bmis-academy. Toute reproduction ou redistribution sans autorisation est interdite.

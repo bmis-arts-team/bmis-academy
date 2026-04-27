@@ -1,0 +1,166 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Les 3 piliers de l'observabilité</h2>
+    <table>
+      <thead><tr><th>Pilier</th><th>Outil</th><th>Question</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Métriques</strong></td><td>Prometheus + Grafana</td><td>Combien ? À quelle fréquence ? Quelle tendance ?</td></tr>
+        <tr><td><strong>Logs</strong></td><td>ELK Stack (Elasticsearch, Logstash, Kibana)</td><td>Que s'est-il passé ? Pourquoi cette erreur ?</td></tr>
+        <tr><td><strong>Traces</strong></td><td>Jaeger, Zipkin, OpenTelemetry</td><td>Quel chemin a suivi cette requête ?</td></tr>
+      </tbody>
+    </table>
+    <p>Cette leçon se concentre sur le premier pilier : les <strong>métriques</strong> avec Prometheus et Grafana.</p>
+  </section>
+
+  <section>
+    <h2>Prometheus - Architecture</h2>
+    <div class="arch-diagram">
+      <pre>
+  ┌──────────────────────────────────────────────┐
+  │              Prometheus Server                │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
+  │  │ Retrieval │ │  TSDB    │ │  HTTP Server │  │
+  │  │ (scrape)  │ │ (stockage│ │  (PromQL)    │  │
+  │  └─────┬─────┘ └──────────┘ └──────┬───────┘  │
+  └────────┼─────────────────────────────┼─────────┘
+           │                             │
+    ┌──────▼──────┐               ┌──────▼──────┐
+    │  Targets    │               │   Grafana   │
+    │ Spring Boot │               │ (dashboards)│
+    │ /actuator/  │               └─────────────┘
+    │ prometheus  │
+    └─────────────┘</pre>
+    </div>
+    <p>Prometheus fonctionne en <strong>pull</strong> : il interroge (scrape) les endpoints des applications à intervalle régulier.</p>
+  </section>
+
+  <section>
+    <h2>Instrumenter Spring Boot avec Micrometer</h2>
+    <div class="code-block">
+      <div class="code-header"><span>pom.xml - dépendances</span></div>
+      <pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
+    &lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>application.yml</span></div>
+      <pre><code class="language-yaml">management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  metrics:
+    tags:
+      application: my-api</code></pre>
+    </div>
+
+    <h3>Métriques custom</h3>
+    <div class="code-block">
+      <div class="code-header"><span>OrderService.java</span></div>
+      <pre><code class="language-java">&#64;Service
+public class OrderService {{ '{' }}
+
+    private final Counter ordersCounter;
+    private final Timer orderProcessingTimer;
+
+    public OrderService(MeterRegistry registry) {{ '{' }}
+        this.ordersCounter = Counter.builder("app_orders_total")
+            .description("Total des commandes traitées")
+            .tag("service", "order-service")
+            .register(registry);
+
+        this.orderProcessingTimer = Timer.builder("app_order_duration_seconds")
+            .description("Durée de traitement d'une commande")
+            .register(registry);
+    {{ '}' }}
+
+    public OrderResponse processOrder(OrderRequest request) {{ '{' }}
+        return orderProcessingTimer.record(() -> {{ '{' }}
+            ordersCounter.increment();
+            // Logique métier...
+            return new OrderResponse(/* ... */);
+        {{ '}' }});
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Déployer Prometheus sur K8s</h2>
+    <div class="code-block">
+      <div class="code-header"><span>bash - via Helm</span></div>
+      <pre><code class="language-bash"># Ajouter le repo Helm
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Installer le stack complet (Prometheus + Grafana + Alertmanager)
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --set grafana.adminPassword='ChangeMe123!'</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>servicemonitor.yaml - Scraper Spring Boot</span></div>
+      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api-backend-monitor
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: api-backend
+  namespaceSelector:
+    matchNames:
+      - production
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>PromQL - Requêtes essentielles</h2>
+    <div class="code-block">
+      <div class="code-header"><span>PromQL</span></div>
+      <pre><code class="language-bash"># Taux de requêtes HTTP par seconde (5 dernières minutes)
+rate(http_server_requests_seconds_count[5m])
+
+# Latence P99
+histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m]))
+
+# Taux d'erreurs 5xx
+sum(rate(http_server_requests_seconds_count{{ '{' }}status=~"5.."{{ '}' }}[5m]))
+  / sum(rate(http_server_requests_seconds_count[5m]))
+
+# Utilisation mémoire JVM
+jvm_memory_used_bytes{{ '{' }}area="heap"{{ '}' }}
+  / jvm_memory_max_bytes{{ '{' }}area="heap"{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Grafana - Dashboards</h2>
+    <p>Grafana se connecte à Prometheus comme source de données et permet de créer des dashboards visuels.</p>
+    <div class="callout tip">
+      <strong>Dashboards recommandés</strong>
+      <ul>
+        <li><strong>JVM (Micrometer)</strong> - ID: 4701 - Mémoire, GC, threads</li>
+        <li><strong>Spring Boot</strong> - ID: 12900 - HTTP, cache, DB pool</li>
+        <li><strong>K8s Cluster</strong> - ID: 6417 - Nodes, pods, namespaces</li>
+        <li><strong>NGINX Ingress</strong> - ID: 9614 - Trafic, latence, erreurs</li>
+      </ul>
+      <p>Importez-les via le menu <em>Dashboards → Import</em> avec l'ID correspondant.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

@@ -1,0 +1,19 @@
+import { Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { CourseService } from '../../../core/services/course.service';
+import { Course } from '../../../core/models/course.model';
+import { IconComponent } from '../../../shared/components/icon.component';
+
+@Component({
+  selector: 'app-architecte-landing',
+  imports: [RouterLink, IconComponent],
+  templateUrl: './architecte-landing.component.html',
+  styleUrl: './architecte-landing.component.scss'
+})
+export class ArchitecteLandingComponent {
+  course: Course = inject(CourseService).getCourse('architecte-backend')!;
+
+  totalLessons(): number {
+    return this.course.sections.reduce((sum, s) => sum + s.lessons.length, 0);
+  }
+}

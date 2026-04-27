@@ -1,0 +1,254 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>ReplicaSet - La base</h2>
+    <p>Un <strong>ReplicaSet</strong> garantit qu'un nombre exact de réplicas d'un pod sont en cours d'exécution à tout moment. Si un pod crash, le ReplicaSet en crée un nouveau automatiquement.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>replicaset.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+        - name: api
+          image: myregistry/api-backend:1.0.0
+          ports:
+            - containerPort: 8080</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>En pratique</strong>
+      <p>Vous ne créez presque jamais un ReplicaSet directement. Le <strong>Deployment</strong> en crée un pour vous et ajoute la gestion des mises à jour.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Deployment - Le workload standard</h2>
+    <p>Le <strong>Deployment</strong> est la ressource la plus utilisée. Il gère un ReplicaSet et permet les rolling updates, les rollbacks et le scaling.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>deployment.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: api-backend
+        version: "1.0.0"
+    spec:
+      containers:
+        - name: api
+          image: myregistry/api-backend:1.0.0
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rolling Update &amp; Rollback</h2>
+    <p>Le rolling update remplace les pods un par un. À chaque instant, l'application reste disponible :</p>
+
+    <div class="arch-diagram">
+      <pre>
+  Étape 1:  [v1] [v1] [v1]           ← 3 pods v1
+  Étape 2:  [v1] [v1] [v1] [v2]     ← maxSurge=1, nouveau pod v2
+  Étape 3:  [v1] [v1] [v2]          ← ancien pod supprimé
+  Étape 4:  [v1] [v2] [v2]          ← continue...
+  Étape 5:  [v2] [v2] [v2]          ← migration terminée</pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash - Mise à jour et rollback</span></div>
+      <pre><code class="language-bash"># Mettre à jour l'image
+kubectl set image deployment/api-backend api=myregistry/api-backend:1.1.0
+
+# Suivre le déploiement
+kubectl rollout status deployment/api-backend
+
+# Historique des versions
+kubectl rollout history deployment/api-backend
+
+# Rollback à la version précédente
+kubectl rollout undo deployment/api-backend
+
+# Rollback à une révision spécifique
+kubectl rollout undo deployment/api-backend --to-revision=2
+
+# Scaling manuel
+kubectl scale deployment/api-backend --replicas=5</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>StatefulSet - Pour les workloads avec état</h2>
+    <p>Le <strong>StatefulSet</strong> est conçu pour les applications avec état : bases de données, caches, systèmes de messaging. Contrairement au Deployment, il garantit :</p>
+    <ul>
+      <li><strong>Identité stable</strong> - Noms de pod prédictibles : <code>postgres-0</code>, <code>postgres-1</code>, <code>postgres-2</code></li>
+      <li><strong>Déploiement ordonné</strong> - Les pods sont créés séquentiellement (0 → 1 → 2)</li>
+      <li><strong>Stockage persistant</strong> - Chaque pod a son propre PVC qui survit aux redémarrages</li>
+    </ul>
+
+    <div class="code-block">
+      <div class="code-header"><span>statefulset-postgres.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "app_db"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>DaemonSet, Job &amp; CronJob</h2>
+
+    <h3>DaemonSet</h3>
+    <p>Exécute exactement <strong>un pod par node</strong>. Utilisé pour les agents de monitoring, collecteurs de logs, ou plugins réseau.</p>
+
+    <h3>Job</h3>
+    <p>Exécute un pod <strong>jusqu'à complétion</strong>. Idéal pour les migrations de base de données, les tâches batch, etc.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>migration-job.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: myregistry/api-backend:1.1.0
+          command: ["java", "-jar", "app.jar", "--spring.flyway.enabled=true"]
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres-headless:5432/app_db"</code></pre>
+    </div>
+
+    <h3>CronJob</h3>
+    <p>Exécute un Job selon un planning cron. Exemple : sauvegarde quotidienne de la base de données.</p>
+    <div class="code-block">
+      <div class="code-header"><span>backup-cronjob.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+spec:
+  schedule: "0 2 * * *"    # Tous les jours à 2h du matin
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -c
+                - pg_dump -h postgres-headless -U app_user app_db > /backup/dump_$(date +%Y%m%d).sql
+              volumeMounts:
+                - name: backup-volume
+                  mountPath: /backup
+          volumes:
+            - name: backup-volume
+              persistentVolumeClaim:
+                claimName: backup-pvc</code></pre>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Workload</th><th>Réplicas</th><th>Identité</th><th>Usage principal</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Deployment</strong></td><td>N (scalable)</td><td>Aléatoire</td><td>APIs, services stateless</td></tr>
+        <tr><td><strong>StatefulSet</strong></td><td>N (ordonné)</td><td>Stable (pod-0, pod-1)</td><td>Bases de données, caches</td></tr>
+        <tr><td><strong>DaemonSet</strong></td><td>1 par node</td><td>Par node</td><td>Monitoring, logs</td></tr>
+        <tr><td><strong>Job</strong></td><td>1 (run-to-completion)</td><td>-</td><td>Migrations, batch</td></tr>
+        <tr><td><strong>CronJob</strong></td><td>Planifié</td><td>-</td><td>Backups, rapports</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</app-lesson-page>

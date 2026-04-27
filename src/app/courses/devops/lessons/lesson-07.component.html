@@ -1,0 +1,145 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Le défi du stockage dans Kubernetes</h2>
+    <p>Les conteneurs sont éphémères, mais les bases de données ont besoin de persistance. Kubernetes résout ce problème avec un système en trois couches :</p>
+    <div class="arch-diagram">
+      <pre>
+  Pod (consommateur)
+    │
+    └──▶ PVC (PersistentVolumeClaim) ─── "Je veux 10Gi en RWO"
+           │
+           └──▶ PV (PersistentVolume) ─── Disque réel (EBS, GCE PD, NFS)
+                  │
+                  └──▶ StorageClass ─── Provisionneur dynamique</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>PersistentVolume (PV)</h2>
+    <p>Un PV représente un <strong>disque physique</strong> dans le cluster. Il est créé par l'administrateur ou dynamiquement par une StorageClass.</p>
+    <div class="code-block">
+      <div class="code-header"><span>pv.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: standard
+  hostPath:
+    path: /data/postgres    # Dev local uniquement</code></pre>
+    </div>
+
+    <table>
+      <thead><tr><th>Access Mode</th><th>Abréviation</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>ReadWriteOnce</td><td><code>RWO</code></td><td>Un seul node en lecture/écriture</td></tr>
+        <tr><td>ReadOnlyMany</td><td><code>ROX</code></td><td>Plusieurs nodes en lecture seule</td></tr>
+        <tr><td>ReadWriteMany</td><td><code>RWX</code></td><td>Plusieurs nodes en lecture/écriture (NFS, CephFS)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>PersistentVolumeClaim (PVC)</h2>
+    <p>Un PVC est une <strong>demande de stockage</strong> par un pod. Kubernetes trouve un PV compatible ou en provisionne un dynamiquement.</p>
+    <div class="code-block">
+      <div class="code-header"><span>pvc.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>deployment.yaml - utilisation du PVC</span></div>
+      <pre><code class="language-yaml">spec:
+  containers:
+    - name: postgres
+      image: postgres:16-alpine
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: postgres-pvc</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>StorageClass - Provisionnement dynamique</h2>
+    <p>La <strong>StorageClass</strong> automatise la création de PV. Plus besoin de pré-créer des disques manuellement.</p>
+    <div class="code-block">
+      <div class="code-header"><span>storageclass.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/aws-ebs    # ou pd.csi.storage.gke.io
+parameters:
+  type: gp3
+  iopsPerGB: "50"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>WaitForFirstConsumer</strong>
+      <p>Ce mode retarde la création du disque jusqu'à ce qu'un pod le demande. Cela garantit que le disque est créé dans la même zone de disponibilité que le pod.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Namespaces - Isolation logique</h2>
+    <p>Les namespaces divisent un cluster en espaces logiques isolés. Chaque namespace a ses propres ressources, quotas et politiques d'accès.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>namespace.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: production
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: production-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    pods: "50"</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Organisation recommandée</strong>
+      <ul>
+        <li><code>default</code> - Ne pas utiliser en production</li>
+        <li><code>kube-system</code> - Composants système (DNS, proxy, etc.)</li>
+        <li><code>staging</code> - Environnement de pré-production</li>
+        <li><code>production</code> - Environnement live</li>
+        <li><code>monitoring</code> - Prometheus, Grafana, ELK</li>
+      </ul>
+    </div>
+  </section>
+
+</app-lesson-page>

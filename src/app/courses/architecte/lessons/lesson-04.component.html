@@ -1,0 +1,264 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ 2.1 Pourquoi passer aux systèmes distribués ═══════════════ -->
+  <section>
+    <h2>2.1 - Pourquoi passer des monolithes aux systèmes distribués</h2>
+    <p>Un monolithe bien conçu est un excellent point de départ. Mais à mesure que l'équipe et le produit grandissent, ses limites apparaissent :</p>
+
+    <table>
+      <thead>
+        <tr><th>Limite</th><th>Impact</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Goulot d'étranglement d'équipe</strong></td>
+          <td>Plusieurs équipes travaillent sur le même codebase, les conflits se multiplient</td>
+        </tr>
+        <tr>
+          <td><strong>Scalabilité difficile</strong></td>
+          <td>Impossible de scaler uniquement le module qui en a besoin - tout doit scaler ensemble</td>
+        </tr>
+        <tr>
+          <td><strong>Déploiements risqués</strong></td>
+          <td>Chaque déploiement embarque tout le système - un bug dans un module bloque tout</td>
+        </tr>
+        <tr>
+          <td><strong>Maintenance complexe</strong></td>
+          <td>Le code grossit, les dépendances internes deviennent un labyrinthe</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warning">
+      <strong>Attention</strong>
+      <p>Les microservices ne sont pas une solution universelle. Ils ajoutent de la complexité opérationnelle. Commencez par un monolithe modulaire, puis découpez quand c'est justifié.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 2.2 Monolithe vs Microservices ═══════════════ -->
+  <section>
+    <h2>2.2 - Monolithe vs Microservices</h2>
+
+    <div class="comparison-grid">
+      <div class="comparison-card bad">
+        <h4>Monolithe</h4>
+        <ul>
+          <li>Un seul déploiable</li>
+          <li>Une seule base de données</li>
+          <li>Communication interne (appels de méthodes)</li>
+          <li>Simple à développer au début</li>
+          <li>Difficile à scaler indépendamment</li>
+        </ul>
+      </div>
+      <div class="comparison-card good">
+        <h4>Microservices</h4>
+        <ul>
+          <li>Plusieurs services indépendants</li>
+          <li>Chaque service a sa propre base</li>
+          <li>Communication réseau (REST, messaging)</li>
+          <li>Complexe à mettre en place</li>
+          <li>Scalable service par service</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <strong>Exemple concret : e-commerce</strong>
+      <div class="arch-diagram">
+        <pre>
+  Monolithe                              Microservices
+┌──────────────────┐          ┌──────────────┐  ┌──────────────┐
+│  Users           │          │ user-service  │  │ order-service│
+│  Orders          │    →     ├──────────────┤  ├──────────────┤
+│  Payments        │          │payment-service│  │notif-service │
+│  Notifications   │          └──────────────┘  └──────────────┘
+└──────────────────┘          Chaque service = déploiement indépendant</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 2.3 Communication entre services ═══════════════ -->
+  <section>
+    <h2>2.3 - Communication entre services</h2>
+    <p>Les microservices communiquent via le réseau. Deux approches principales :</p>
+
+    <table>
+      <thead>
+        <tr><th>Type</th><th>Technologie</th><th>Caractéristiques</th><th>Cas d'usage</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Synchrone</strong></td>
+          <td>REST (HTTP)</td>
+          <td>Simple, couplage temporel, requête/réponse</td>
+          <td>Lecture de données, opérations simples</td>
+        </tr>
+        <tr>
+          <td><strong>Synchrone</strong></td>
+          <td>gRPC</td>
+          <td>Performant, typage fort (Protobuf), streaming</td>
+          <td>Communication inter-services haute performance</td>
+        </tr>
+        <tr>
+          <td><strong>Asynchrone</strong></td>
+          <td>RabbitMQ</td>
+          <td>File d'attente, routage flexible, acknowledgment</td>
+          <td>Tâches asynchrones, notifications</td>
+        </tr>
+        <tr>
+          <td><strong>Asynchrone</strong></td>
+          <td>Apache Kafka</td>
+          <td>Log distribué, haute performance, replay</td>
+          <td>Event streaming, audit, analytics</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <strong>Règle d'or</strong>
+      <p>Utilisez la communication <strong>synchrone</strong> quand vous avez besoin d'une réponse immédiate, et <strong>asynchrone</strong> quand l'opération peut être traitée en arrière-plan.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 2.4 Brokers de messages ═══════════════ -->
+  <section>
+    <h2>2.4 - Brokers de messages</h2>
+
+    <div class="comparison-grid">
+      <div class="comparison-card good">
+        <h4>RabbitMQ</h4>
+        <ul>
+          <li>Modèle <strong>push</strong> (le broker pousse vers le consommateur)</li>
+          <li>Routage flexible (direct, topic, fanout)</li>
+          <li>Messages supprimés après consommation</li>
+          <li>Idéal pour les tâches et notifications</li>
+        </ul>
+      </div>
+      <div class="comparison-card good">
+        <h4>Apache Kafka</h4>
+        <ul>
+          <li>Modèle <strong>pull</strong> (le consommateur tire les messages)</li>
+          <li>Log immutable avec rétention configurable</li>
+          <li>Replay possible des événements</li>
+          <li>Idéal pour l'event streaming et l'audit</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Producteur Kafka avec Spring Boot</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>TaskEventProducer.java</span></div>
+      <pre><code class="language-java">@Service
+@RequiredArgsConstructor
+public class TaskEventProducer {{ '{' }}
+
+    private final KafkaTemplate&lt;String, TaskEvent&gt; kafkaTemplate;
+
+    public void sendTaskCreated(Task task) {{ '{' }}
+        TaskEvent event = new TaskEvent(
+            task.getId(),
+            task.getTitle(),
+            "CREATED",
+            LocalDateTime.now()
+        );
+        kafkaTemplate.send("tasks-topic", task.getId().toString(), event);
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+
+    <h3>Consommateur Kafka</h3>
+    <div class="code-block" ngNonBindable>
+      <div class="code-header"><span>TaskEventConsumer.java</span></div>
+      <pre><code class="language-java">@Service
+@Slf4j
+public class TaskEventConsumer {{ '{' }}
+
+    @KafkaListener(topics = "tasks-topic", groupId = "notification-group")
+    public void handleTaskEvent(TaskEvent event) {{ '{' }}
+        log.info("Événement reçu : {{ '{' }}{{ '}' }} - {{ '{' }}{{ '}' }}", event.type(), event.title());
+        // Envoyer une notification, mettre à jour un cache, etc.
+    {{ '}' }}
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 2.5 Patterns d'architecture essentiels ═══════════════ -->
+  <section>
+    <h2>2.5 - Patterns d'architecture essentiels</h2>
+
+    <table>
+      <thead>
+        <tr><th>Pattern</th><th>Problème résolu</th><th>Principe</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Event-Driven</strong></td>
+          <td>Couplage fort entre services</td>
+          <td>Les services communiquent par événements via un broker</td>
+        </tr>
+        <tr>
+          <td><strong>Saga</strong></td>
+          <td>Transactions distribuées</td>
+          <td>Séquence de transactions locales avec compensations en cas d'échec</td>
+        </tr>
+        <tr>
+          <td><strong>Circuit Breaker</strong></td>
+          <td>Propagation des pannes</td>
+          <td>Coupe-circuit qui détecte les échecs et évite les appels inutiles</td>
+        </tr>
+        <tr>
+          <td><strong>CQRS</strong></td>
+          <td>Performance lecture/écriture</td>
+          <td>Séparer les modèles de lecture et d'écriture</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>En pratique</strong>
+      <p>Ces patterns seront approfondis dans les chapitres suivants avec des implémentations concrètes en Spring Boot.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 2.6 Cas pratique : découper TaskFlow ═══════════════ -->
+  <section>
+    <h2>2.6 - Cas pratique : découper TaskFlow en microservices</h2>
+    <p>Notre monolithe TaskFlow peut être découpé en services indépendants qui communiquent via Kafka :</p>
+
+    <div class="arch-diagram">
+      <pre>
+┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
+│ user-service │     │ project-service  │     │ task-service  │
+│   :8081      │     │     :8082        │     │    :8083      │
+└──────┬───────┘     └────────┬─────────┘     └──────┬───────┘
+       │                      │                      │
+       │                      │              publish  │
+       │                      │           ┌──────────┘
+       │                      │           ▼
+       │              ┌───────────────────────────┐
+       └──────────────┤     kafka:tasks-topic      │
+                      └────────────┬──────────────┘
+                                   │
+                              consume │
+                                   ▼
+                      ┌──────────────────────┐
+                      │notification-service  │
+                      │       :8084          │
+                      └──────────────────────┘</pre>
+    </div>
+
+    <h3>Principes de découpage</h3>
+    <ul>
+      <li><strong>Un service = un domaine métier</strong> - chaque service gère une responsabilité claire</li>
+      <li><strong>Base de données par service</strong> - pas de base partagée entre services</li>
+      <li><strong>Communication asynchrone</strong> - les événements transitent via Kafka</li>
+      <li><strong>Déploiement indépendant</strong> - chaque service a son propre cycle de vie</li>
+    </ul>
+
+    <div class="callout tip">
+      <strong>Prochaines étapes</strong>
+      <p>Dans les chapitres suivants, nous implémenterons ce découpage avec Docker, Kubernetes, CI/CD et observabilité complète.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

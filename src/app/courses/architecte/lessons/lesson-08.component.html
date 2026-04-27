@@ -1,0 +1,65 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════ Glossaire Technique ═══════════════ -->
+  <section>
+    <h2>Glossaire Technique</h2>
+    <p>Référence rapide des termes et concepts clés abordés dans ce cours.</p>
+
+    <dl>
+      <dt>API REST</dt>
+      <dd>Interface utilisant les verbes HTTP (GET, POST, PUT, DELETE) pour exposer des ressources via URLs standardisées. Retourne du JSON.</dd>
+
+      <dt>Circuit Breaker</dt>
+      <dd>Pattern de résilience interrompant les appels vers un service défaillant. Implémenté avec Resilience4j. Trois états : fermé (normal), ouvert (bloqué), semi-ouvert (test).</dd>
+
+      <dt>Clean Architecture</dt>
+      <dd>Séparation du domaine métier des détails techniques via des couches indépendantes et règles de dépendance strictes. Le domaine ne dépend de rien, tout dépend du domaine.</dd>
+
+      <dt>CQRS</dt>
+      <dd>Command Query Responsibility Segregation : séparation des opérations de lecture (Query) et d'écriture (Command) en deux modèles distincts, chacun optimisé pour son usage.</dd>
+
+      <dt>DTO</dt>
+      <dd>Data Transfer Object : objet de transport de données entre couches ou via API REST, distinct des entités de domaine. Protège le modèle interne de l'exposition externe.</dd>
+
+      <dt>Event-Driven</dt>
+      <dd>Paradigme où les services communiquent via événements asynchrones. Découplage total entre producteur et consommateur. Implémenté avec Apache Kafka.</dd>
+
+      <dt>gRPC</dt>
+      <dd>Framework d'appel de procédure à distance haute performance par Google, basé sur Protocol Buffers. Plus rapide que REST pour la communication inter-services.</dd>
+
+      <dt>HPA</dt>
+      <dd>Horizontal Pod Autoscaler : mécanisme Kubernetes d'ajustement automatique du nombre de pods selon la charge (CPU, mémoire, métriques custom).</dd>
+
+      <dt>IaC</dt>
+      <dd>Infrastructure as Code : gestion d'infrastructure via fichiers versionnés. Outils : Docker Compose, Terraform, Kubernetes YAML. Reproductible et auditable.</dd>
+
+      <dt>JWT</dt>
+      <dd>JSON Web Token : token signé pour authentification stateless sans session serveur. Contient les claims (identité, rôles) et une signature cryptographique.</dd>
+
+      <dt>Kafka</dt>
+      <dd>Plateforme de streaming d'événements distribuée Apache avec persistance durable et partitionnement. Topics, partitions, consumer groups, retention configurable.</dd>
+
+      <dt>Microservice</dt>
+      <dd>Service autonome responsable d'un domaine métier unique, déployable indépendamment. Possède sa propre base de données et communique via API ou événements.</dd>
+
+      <dt>Redis</dt>
+      <dd>Base de données clé-valeur in-memory pour cache distribué, session store ou broker de messages Pub/Sub. Latence sub-milliseconde.</dd>
+
+      <dt>SAGA Pattern</dt>
+      <dd>Gestion de transactions distribuées via une séquence d'étapes locales avec compensation (rollback) en cas d'échec. Alternative aux transactions distribuées classiques (2PC).</dd>
+
+      <dt>Spring Actuator</dt>
+      <dd>Module Spring Boot exposant des endpoints de monitoring : <code>/health</code>, <code>/metrics</code>, <code>/prometheus</code>, <code>/info</code>. Intégration native avec Prometheus et Grafana.</dd>
+
+      <dt>Stateless</dt>
+      <dd>Service sans état en mémoire locale. Aucune donnée de session stockée dans l'instance. Prérequis indispensable pour la scalabilité horizontale.</dd>
+
+      <dt>Use Case</dt>
+      <dd>Classe de la couche application encapsulant une action métier unique et atomique. Orchestre les appels au domaine et à l'infrastructure. Exemple : <code>CreateTaskUseCase</code>.</dd>
+
+      <dt>WebClient</dt>
+      <dd>Client HTTP réactif non-bloquant de Spring WebFlux, remplacement moderne de <code>RestTemplate</code>. Supporte les flux réactifs (Mono, Flux) et le streaming.</dd>
+    </dl>
+  </section>
+
+</app-lesson-page>

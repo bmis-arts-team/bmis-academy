@@ -1,0 +1,178 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Pourquoi les Services ?</h2>
+    <p>Les pods sont éphémères : leurs adresses IP changent à chaque redémarrage. Un <strong>Service</strong> fournit une adresse stable pour accéder à un groupe de pods, sélectionnés par labels.</p>
+
+    <div class="arch-diagram">
+      <pre>
+  Service "api-service" (ClusterIP: 10.96.42.15)
+         │
+         ├──▶ Pod api-backend-abc12  (10.244.1.5)
+         ├──▶ Pod api-backend-def34  (10.244.2.8)
+         └──▶ Pod api-backend-ghi56  (10.244.1.12)</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>ClusterIP - Communication interne</h2>
+    <p>Le type par défaut. Le service est accessible uniquement <strong>depuis l'intérieur du cluster</strong>.</p>
+    <div class="code-block">
+      <div class="code-header"><span>clusterip-service.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+spec:
+  type: ClusterIP
+  selector:
+    app: api-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP</code></pre>
+    </div>
+    <p>Accessible via : <code>api-service.default.svc.cluster.local:80</code></p>
+  </section>
+
+  <section>
+    <h2>NodePort &amp; LoadBalancer</h2>
+
+    <h3>NodePort - Accès depuis l'extérieur (dev)</h3>
+    <p>Expose le service sur un port statique (30000-32767) de chaque node.</p>
+    <div class="code-block">
+      <div class="code-header"><span>nodeport-service.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-nodeport
+spec:
+  type: NodePort
+  selector:
+    app: api-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 30080</code></pre>
+    </div>
+
+    <h3>LoadBalancer - Production</h3>
+    <p>Provisionne automatiquement un load balancer cloud (AWS ALB/NLB, GCP LB, Azure LB).</p>
+    <div class="code-block">
+      <div class="code-header"><span>loadbalancer-service.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-backend
+  ports:
+    - port: 443
+      targetPort: 8080</code></pre>
+    </div>
+
+    <table>
+      <thead><tr><th>Type</th><th>Accès</th><th>Usage</th></tr></thead>
+      <tbody>
+        <tr><td><code>ClusterIP</code></td><td>Interne cluster</td><td>Communication inter-services</td></tr>
+        <tr><td><code>NodePort</code></td><td>IP-du-node:30000+</td><td>Dev, tests</td></tr>
+        <tr><td><code>LoadBalancer</code></td><td>IP publique</td><td>Production (cloud)</td></tr>
+        <tr><td><code>ExternalName</code></td><td>DNS CNAME</td><td>Services externes (RDS, etc.)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Headless Service</h2>
+    <p>Un service avec <code>clusterIP: None</code>. Utilisé pour les StatefulSets car il permet d'accéder directement à chaque pod individuel via DNS.</p>
+    <div class="code-block">
+      <div class="code-header"><span>headless-service.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432</code></pre>
+    </div>
+    <p>Chaque pod est accessible individuellement : <code>postgres-0.postgres-headless.default.svc.cluster.local</code></p>
+  </section>
+
+  <section>
+    <h2>Ingress Controller</h2>
+    <p>L'<strong>Ingress</strong> gère le routage HTTP/HTTPS depuis l'extérieur vers les services internes. Il remplace plusieurs LoadBalancers par un seul point d'entrée.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>ingress.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.example.com
+      secretName: api-tls-secret
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Ingress Controller requis</strong>
+      <p>L'objet Ingress seul ne fait rien. Vous devez installer un Ingress Controller (NGINX, Traefik, HAProxy, etc.) dans le cluster. NGINX est le plus courant :</p>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>TLS/HTTPS avec cert-manager</h2>
+    <p><strong>cert-manager</strong> automatise l'obtention et le renouvellement des certificats TLS via Let's Encrypt.</p>
+    <div class="code-block">
+      <div class="code-header"><span>cluster-issuer.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops&#64;example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx</code></pre>
+    </div>
+    <p>Ajoutez l'annotation <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code> à votre Ingress pour activer le TLS automatique.</p>
+  </section>
+
+</app-lesson-page>

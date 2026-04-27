@@ -1,0 +1,151 @@
+<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Pourquoi CI/CD ?</h2>
+    <p>Le <strong>CI/CD</strong> (Continuous Integration / Continuous Deployment) automatise le cycle de vie du logiciel : build, test, packaging et déploiement. Sans CI/CD, chaque mise en production est manuelle, lente et risquée.</p>
+    <div class="arch-diagram">
+      <pre>
+  git push ──▶ CI Pipeline ──▶ Build ──▶ Test ──▶ Push Image ──▶ Deploy to K8s
+                                                                      │
+                                                         ┌────────────┼──────────┐
+                                                         ▼            ▼          ▼
+                                                      Staging    Production   Rollback</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>GitHub Actions - Concepts</h2>
+    <table>
+      <thead><tr><th>Concept</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Workflow</strong></td><td>Fichier YAML dans <code>.github/workflows/</code></td></tr>
+        <tr><td><strong>Trigger</strong></td><td>Événement déclencheur (<code>push</code>, <code>pull_request</code>, <code>schedule</code>)</td></tr>
+        <tr><td><strong>Job</strong></td><td>Groupe d'étapes exécutées sur un runner</td></tr>
+        <tr><td><strong>Step</strong></td><td>Commande ou action individuelle</td></tr>
+        <tr><td><strong>Action</strong></td><td>Bloc réutilisable (ex: <code>actions/checkout</code>)</td></tr>
+        <tr><td><strong>Secret</strong></td><td>Variable chiffrée (tokens, mots de passe)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Pipeline complet - Build, Test, Deploy</h2>
+    <div class="code-block">
+      <div class="code-header"><span>.github/workflows/ci-cd.yml</span></div>
+      <pre ngNonBindable><code class="language-yaml">name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ── Build & Test ─────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build & Test
+        run: mvn verify -B
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+  # ── Build & Push Docker Image ────────────
+  docker:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  # ── Deploy to Staging ────────────────────
+  deploy-staging:
+    needs: docker
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        env:
+          KUBECONFIG: kubeconfig
+
+      - name: Deploy to staging
+        run: |
+          kubectl set image deployment/api-backend \
+            api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n staging
+          kubectl rollout status deployment/api-backend -n staging --timeout=120s
+
+  # ── Deploy to Production (manual) ───────
+  deploy-prod:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production   # Requires manual approval
+    steps:
+      - name: Deploy to production
+        run: |
+          kubectl set image deployment/api-backend \
+            api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n production
+          kubectl rollout status deployment/api-backend -n production --timeout=180s</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bonnes pratiques CI/CD</h2>
+    <div class="callout tip">
+      <strong>Règles essentielles</strong>
+      <ul>
+        <li>Utilisez des <strong>environnements GitHub</strong> avec approbation manuelle pour la production</li>
+        <li>Taggez les images avec le <strong>SHA du commit</strong>, pas <code>:latest</code></li>
+        <li>Gardez les secrets dans <strong>GitHub Secrets</strong>, jamais dans le code</li>
+        <li>Exécutez les tests <strong>avant</strong> le build Docker pour un feedback rapide</li>
+        <li>Utilisez le <strong>cache Maven/Gradle</strong> pour accélérer les builds</li>
+        <li>Ajoutez un <strong>rollback automatique</strong> si le health check échoue après déploiement</li>
+      </ul>
+    </div>
+  </section>
+
+</app-lesson-page>

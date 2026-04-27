@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Services &amp; Ingress - DevOps BMIS Academy</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/nginx.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..900;1,8..60,300..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="progress-bar"></div>
+
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="docs-layout">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <a href="../../index.html" class="sidebar-brand">
+      <div class="brand-logo">BM</div>
+      <div class="brand-text">
+        <span class="brand-name">BMIS Academy</span>
+        <span class="brand-tagline">DevOps &amp; Production</span>
+      </div>
+    </a>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Vue d'ensemble</div>
+        <a href="index.html" class="nav-link">Accueil du cours</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">1 - Fondations Docker</div>
+        <a href="01-docker-images-containers.html" class="nav-link">Images vs Containers</a>
+        <a href="02-docker-volumes-networking.html" class="nav-link">Volumes &amp; Networking</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">2 - Kubernetes Core</div>
+        <a href="03-kubernetes-architecture.html" class="nav-link">Architecture K8s</a>
+        <a href="04-kubernetes-workloads.html" class="nav-link">Deployments &amp; StatefulSets</a>
+        <a href="05-kubernetes-services-ingress.html" class="nav-link active">Services &amp; Ingress</a>
+        <a href="06-kubernetes-configmaps-secrets.html" class="nav-link">ConfigMaps &amp; Secrets</a>
+        <a href="07-kubernetes-storage-namespaces.html" class="nav-link">Storage &amp; Namespaces</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">3 - Déploiement Système</div>
+        <a href="08-deploy-fintech-system.html" class="nav-link">Déployer le Système Fintech</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">4 - CI/CD</div>
+        <a href="09-cicd-github-actions.html" class="nav-link">Pipeline GitHub Actions</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">5 - Observabilité</div>
+        <a href="10-observability-metrics.html" class="nav-link">Prometheus &amp; Grafana</a>
+        <a href="11-observability-logging-alerting.html" class="nav-link">ELK Stack &amp; Alerting</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">6 - Réseau &amp; Sécurité</div>
+        <a href="12-networking-security.html" class="nav-link">Networking &amp; Security</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">7 - CDN &amp; Assets</div>
+        <a href="13-cdn-asset-delivery.html" class="nav-link">CDN &amp; Distribution</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">8 - Production</div>
+        <a href="14-production-best-practices.html" class="nav-link">Best Practices Production</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../../index.html" class="sidebar-footer-link">← Retour au catalogue</a>
+    </div>
+  </aside>
+
+  <main class="docs-main">
+    <div class="docs-content">
+
+    <!-- ═══════════════════════════════════════════ HEADER ═══════════════════════════════════════════ -->
+    <div class="lesson-header">
+      <div class="lesson-meta">
+        <span class="lesson-number">Leçon 5</span>
+        <span class="lesson-section">Section 2 - Kubernetes Core</span>
+      </div>
+      <h1>Services &amp; Ingress</h1>
+      <p class="lesson-subtitle">Exposer vos applications - ClusterIP, NodePort, LoadBalancer et Ingress Controller.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ 1. POURQUOI LES SERVICES ? ═══════════════════════════════════════════ -->
+    <section>
+      <h2>1 - Pourquoi les Services ?</h2>
+
+      <p>Dans Kubernetes, les <strong>Pods sont éphémères</strong>. Un Deployment peut recréer, supprimer ou déplacer un Pod à tout moment. Chaque fois qu'un Pod est recréé, il reçoit une <strong>nouvelle adresse IP</strong>. Si votre application Spring Boot communique directement avec l'IP d'un Pod PostgreSQL, cette connexion sera cassée dès que le Pod sera recréé.</p>
+
+      <p>C'est là qu'interviennent les <strong>Services</strong> : ils fournissent un <strong>point d'accès réseau stable</strong> vers un ensemble de Pods, quelles que soient leurs IP actuelles.</p>
+
+      <h3>1.1 - Le mécanisme des label selectors</h3>
+
+      <p>Un Service identifie les Pods cibles grâce aux <strong>label selectors</strong>. Le Service ne connaît pas les Pods individuellement - il connaît simplement les labels à rechercher. Le composant <code>kube-proxy</code> maintient les règles de routage réseau sur chaque nœud pour rediriger le trafic vers les Pods correspondants.</p>
+
+      <div class="callout info">
+        <strong>Fonctionnement interne :</strong> Quand un Service est créé, un objet <strong>Endpoints</strong> est automatiquement créé. Cet objet contient la liste des IP:port de tous les Pods qui correspondent au selector. Le controller <code>endpoints</code> surveille en permanence les Pods et met à jour cette liste lorsque des Pods apparaissent ou disparaissent.
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">Relation Pod ↔ Service</span>
+        </div>
+        <pre><code class="language-yaml"># Le Deployment crée des Pods avec le label app: api-backend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend          # ← Ce label est la clé
+        version: "2.1.0"
+    spec:
+      containers:
+        - name: api
+          image: bmis/api-backend:2.1.0
+          ports:
+            - containerPort: 8080
+
+---
+# Le Service sélectionne les Pods via le même label
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-backend-svc
+spec:
+  selector:
+    app: api-backend              # ← Match avec le label du Pod
+  ports:
+    - port: 80                    # Port exposé par le Service
+      targetPort: 8080            # Port du container
+      protocol: TCP</code></pre>
+      </div>
+
+      <p>Le Service <code>api-backend-svc</code> redirigera tout le trafic entrant sur le port 80 vers le port 8080 de l'un des 3 Pods. Le load balancing entre les réplicas est automatique (round-robin par défaut).</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 2. CLUSTERIP ═══════════════════════════════════════════ -->
+    <section>
+      <h2>2 - ClusterIP - Communication interne</h2>
+
+      <p><strong>ClusterIP</strong> est le type de Service par défaut. Il attribue une adresse IP virtuelle interne au cluster, accessible <strong>uniquement depuis l'intérieur du cluster</strong>. C'est le type le plus utilisé pour la communication entre microservices.</p>
+
+      <h3>2.1 - Exemple : Service Spring Boot interne</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">clusterip-service.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-backend-svc
+  namespace: fintech
+  labels:
+    app: api-backend
+    tier: backend
+spec:
+  type: ClusterIP                     # Type par défaut
+  selector:
+    app: api-backend
+  ports:
+    - name: http
+      port: 80                        # Port du Service
+      targetPort: 8080                # Port du container Spring Boot
+      protocol: TCP
+    - name: actuator
+      port: 8081                      # Port pour les métriques
+      targetPort: 8081
+      protocol: TCP</code></pre>
+      </div>
+
+      <h3>2.2 - Résolution DNS interne</h3>
+
+      <p>Kubernetes intègre un serveur DNS (CoreDNS) qui enregistre automatiquement chaque Service. Un Pod peut accéder au Service en utilisant différents formats DNS :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Formats DNS Kubernetes</span>
+        </div>
+        <pre><code class="language-bash"># Format court (même namespace)
+curl http://api-backend-svc
+
+# Format avec namespace
+curl http://api-backend-svc.fintech
+
+# Format FQDN complet
+curl http://api-backend-svc.fintech.svc.cluster.local
+
+# Avec le port spécifique
+curl http://api-backend-svc.fintech.svc.cluster.local:80/api/v1/accounts</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Cas d'usage typique :</strong> Le backend Spring Boot communique avec PostgreSQL via un ClusterIP Service <code>postgres-svc.fintech.svc.cluster.local:5432</code>. La base de données n'a jamais besoin d'être exposée à l'extérieur du cluster - un ClusterIP est parfait pour ça.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 3. NODEPORT ═══════════════════════════════════════════ -->
+    <section>
+      <h2>3 - NodePort - Accès depuis l'extérieur (dev)</h2>
+
+      <p>Un Service de type <strong>NodePort</strong> expose l'application sur un port statique de <strong>chaque nœud</strong> du cluster. Il ouvre un port dans la plage <code>30000-32767</code> sur tous les nœuds, permettant un accès externe via <code>&lt;NodeIP&gt;:&lt;NodePort&gt;</code>.</p>
+
+      <h3>3.1 - YAML NodePort</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">nodeport-service.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-backend-nodeport
+  namespace: fintech
+spec:
+  type: NodePort
+  selector:
+    app: api-backend
+  ports:
+    - name: http
+      port: 80                        # Port interne du Service
+      targetPort: 8080                # Port du container
+      nodePort: 31080                 # Port ouvert sur chaque nœud (30000-32767)
+      protocol: TCP</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Accéder via NodePort</span>
+        </div>
+        <pre><code class="language-bash"># Accès depuis l'extérieur du cluster
+curl http://192.168.1.100:31080/api/v1/health
+
+# Minikube - ouvrir automatiquement dans le navigateur
+minikube service api-backend-nodeport -n fintech
+
+# Obtenir l'URL du service dans minikube
+minikube service api-backend-nodeport -n fintech --url</code></pre>
+      </div>
+
+      <div class="callout bad">
+        <strong>NodePort n'est PAS pour la production :</strong> Les ports dans la plage 30000-32767 ne sont pas standards (pas de port 80/443), il n'y a pas de TLS natif, pas de load balancing intelligent, et chaque nœud expose le port (surface d'attaque élargie). Utilisez NodePort uniquement en développement local avec Minikube ou Kind.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 4. LOADBALANCER ═══════════════════════════════════════════ -->
+    <section>
+      <h2>4 - LoadBalancer - Production externe</h2>
+
+      <p>Le type <strong>LoadBalancer</strong> demande au fournisseur cloud de provisionner un load balancer externe. C'est le moyen standard d'exposer un service individuel directement sur Internet avec une IP publique.</p>
+
+      <h3>4.1 - YAML LoadBalancer</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">loadbalancer-service.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-backend-lb
+  namespace: fintech
+  annotations:
+    # Annotations spécifiques au cloud provider
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Vérifier le LoadBalancer</span>
+        </div>
+        <pre><code class="language-bash"># Vérifier l'IP externe assignée
+kubectl get svc api-backend-lb -n fintech
+
+# Résultat typique sur AWS :
+# NAME             TYPE           CLUSTER-IP     EXTERNAL-IP
+# api-backend-lb   LoadBalancer   10.96.45.12    a1b2c3-abc.eu-west-1.elb.amazonaws.com
+
+# Attendre que l'IP soit assignée (peut prendre 1-2 minutes)
+kubectl get svc api-backend-lb -n fintech -w</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>Intégration cloud :</strong> Sur <strong>AWS</strong>, un Service LoadBalancer crée un ELB (Elastic Load Balancer) ou NLB (Network Load Balancer). Sur <strong>GCP</strong>, il crée un Google Cloud Load Balancer. Sur <strong>Azure</strong>, un Azure Load Balancer. Chaque load balancer a un coût mensuel - c'est pourquoi on préfère utiliser un seul <strong>Ingress Controller</strong> plutôt qu'un LoadBalancer par service.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 5. COMPARAISON ═══════════════════════════════════════════ -->
+    <section>
+      <h2>5 - Tableau comparatif des types de Service</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Critère</th>
+            <th>ClusterIP</th>
+            <th>NodePort</th>
+            <th>LoadBalancer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Accessibilité</strong></td>
+            <td>Interne au cluster uniquement</td>
+            <td>Externe via <code>&lt;NodeIP&gt;:&lt;Port&gt;</code></td>
+            <td>Externe via IP publique / DNS</td>
+          </tr>
+          <tr>
+            <td><strong>Port</strong></td>
+            <td>N'importe quel port</td>
+            <td>30000–32767</td>
+            <td>80, 443, n'importe quel port</td>
+          </tr>
+          <tr>
+            <td><strong>Load balancing</strong></td>
+            <td>kube-proxy (round-robin)</td>
+            <td>kube-proxy (round-robin)</td>
+            <td>Cloud LB + kube-proxy</td>
+          </tr>
+          <tr>
+            <td><strong>TLS</strong></td>
+            <td>Non (applicatif)</td>
+            <td>Non (applicatif)</td>
+            <td>Possible via annotations</td>
+          </tr>
+          <tr>
+            <td><strong>Coût</strong></td>
+            <td>Aucun</td>
+            <td>Aucun</td>
+            <td>~15-25 $/mois par LB</td>
+          </tr>
+          <tr>
+            <td><strong>Cas d'usage</strong></td>
+            <td>Backend ↔ Base de données</td>
+            <td>Dev local, tests</td>
+            <td>Service individuel en production</td>
+          </tr>
+          <tr>
+            <td><strong>Production ?</strong></td>
+            <td>✅ Oui</td>
+            <td>❌ Non</td>
+            <td>✅ Oui (mais coûteux)</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 6. HEADLESS SERVICE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>6 - Headless Service</h2>
+
+      <p>Un <strong>Headless Service</strong> est un Service sans ClusterIP (<code>clusterIP: None</code>). Au lieu de fournir une IP virtuelle unique, il retourne directement les adresses IP de chaque Pod individuel via des enregistrements DNS de type <strong>A</strong>.</p>
+
+      <p>C'est essentiel pour les <strong>StatefulSets</strong> où chaque Pod a une identité unique et doit être adressé individuellement (par exemple, un cluster PostgreSQL avec un primary et des replicas).</p>
+
+      <h3>6.1 - YAML Headless Service pour PostgreSQL</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">headless-postgres.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: fintech
+  labels:
+    app: postgres
+spec:
+  clusterIP: None                     # ← Headless !
+  selector:
+    app: postgres
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: fintech
+spec:
+  serviceName: postgres-headless      # ← Référence au Headless Service
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: fintech_db
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 20Gi</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">DNS du Headless Service</span>
+        </div>
+        <pre><code class="language-bash"># Chaque Pod reçoit un DNS individuel stable :
+# postgres-0.postgres-headless.fintech.svc.cluster.local
+# postgres-1.postgres-headless.fintech.svc.cluster.local
+# postgres-2.postgres-headless.fintech.svc.cluster.local
+
+# Vérifier la résolution DNS depuis un Pod
+kubectl exec -it debug-pod -- nslookup postgres-headless.fintech.svc.cluster.local
+
+# Résultat : retourne les IP de CHAQUE Pod (pas une seule IP virtuelle)
+# Name: postgres-headless.fintech.svc.cluster.local
+# Address: 10.244.1.15
+# Address: 10.244.2.23
+# Address: 10.244.3.11</code></pre>
+      </div>
+
+      <div class="callout info">
+        <strong>Quand utiliser un Headless Service ?</strong> Quand vos Pods ne sont pas interchangeables : clusters de bases de données (PostgreSQL, MySQL), caches distribués (Redis Cluster), brokers de messages (Kafka), ou tout StatefulSet nécessitant une identité stable par Pod.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 7. INGRESS CONTROLLER ═══════════════════════════════════════════ -->
+    <section>
+      <h2>7 - Ingress Controller</h2>
+
+      <h3>7.1 - Qu'est-ce qu'un Ingress ?</h3>
+
+      <p>Un <strong>Ingress</strong> est une ressource Kubernetes qui gère le routage HTTP/HTTPS externe vers les Services internes du cluster. Il opère au <strong>Layer 7</strong> (couche application du modèle OSI), ce qui lui permet de prendre des décisions de routage basées sur les noms d'hôte, les chemins URL, les en-têtes HTTP, et même les cookies.</p>
+
+      <h3>7.2 - Pourquoi pas un LoadBalancer par service ?</h3>
+
+      <p>Imaginez une architecture fintech avec 5 microservices, chacun exposé via un Service LoadBalancer :</p>
+
+      <ul>
+        <li><strong>Coût :</strong> 5 × ~20 $/mois = 100 $/mois rien qu'en load balancers</li>
+        <li><strong>Complexité DNS :</strong> 5 IP publiques à gérer, 5 certificats TLS à maintenir</li>
+        <li><strong>Pas de routage intelligent :</strong> Chaque LB est indépendant, impossible de router <code>/api</code> vers un service et <code>/admin</code> vers un autre</li>
+      </ul>
+
+      <p>Avec un <strong>Ingress Controller</strong>, vous n'avez besoin que d'<strong>un seul LoadBalancer</strong> qui route intelligemment le trafic vers tous vos services internes.</p>
+
+      <h3>7.3 - Controllers populaires</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Controller</th>
+            <th>Maintenu par</th>
+            <th>Points forts</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>NGINX Ingress Controller</strong></td>
+            <td>Kubernetes Community</td>
+            <td>Le plus utilisé, documentation riche, très stable</td>
+          </tr>
+          <tr>
+            <td><strong>Traefik</strong></td>
+            <td>Traefik Labs</td>
+            <td>Auto-discovery, dashboard intégré, Let's Encrypt natif</td>
+          </tr>
+          <tr>
+            <td><strong>HAProxy Ingress</strong></td>
+            <td>HAProxy Technologies</td>
+            <td>Haute performance, configuration avancée du load balancing</td>
+          </tr>
+          <tr>
+            <td><strong>AWS ALB Ingress</strong></td>
+            <td>Amazon</td>
+            <td>Intégration native AWS, utilise les ALB directement</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>7.4 - Installer NGINX Ingress Controller</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Installation NGINX Ingress Controller</span>
+        </div>
+        <pre><code class="language-bash"># Méthode 1 : Installation via le manifeste officiel
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml
+
+# Méthode 2 : Installation via Helm (recommandé en production)
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace \
+  --set controller.replicaCount=2 \
+  --set controller.resources.requests.memory=256Mi \
+  --set controller.resources.requests.cpu=100m
+
+# Vérifier l'installation
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx
+
+# Résultat attendu :
+# NAME                                    TYPE           CLUSTER-IP     EXTERNAL-IP
+# ingress-nginx-controller                LoadBalancer   10.96.12.45    203.0.113.50
+
+# Pour Minikube - activer l'addon Ingress
+minikube addons enable ingress</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 8. INGRESS RESOURCE ═══════════════════════════════════════════ -->
+    <section>
+      <h2>8 - Ingress Resource - Exemples complets</h2>
+
+      <h3>8.1 - Routage basé sur l'hôte (Host-based)</h3>
+
+      <p>Chaque sous-domaine est routé vers un Service différent :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">ingress-host-based.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bmis-host-routing
+  namespace: fintech
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-backend-svc
+                port:
+                  number: 80
+
+    - host: admin.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-frontend-svc
+                port:
+                  number: 80
+
+    - host: partner.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: partner-frontend-svc
+                port:
+                  number: 80</code></pre>
+      </div>
+
+      <h3>8.2 - Routage basé sur le chemin (Path-based)</h3>
+
+      <p>Différents chemins URL sont routés vers différents Services sur le même hôte :</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">ingress-path-based.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bmis-path-routing
+  namespace: fintech
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          # /v1/* → Service Spring Boot principal
+          - path: /v1(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: spring-boot-svc
+                port:
+                  number: 80
+
+          # /admin/* → Application Angular d'administration
+          - path: /admin(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: angular-admin-svc
+                port:
+                  number: 80
+
+          # /docs/* → Documentation Swagger
+          - path: /docs(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: swagger-ui-svc
+                port:
+                  number: 8080</code></pre>
+      </div>
+
+      <h3>8.3 - Terminaison TLS avec cert-manager</h3>
+
+      <p>La terminaison TLS est gérée au niveau de l'Ingress. <strong>cert-manager</strong> automatise l'obtention et le renouvellement des certificats Let's Encrypt.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Installation cert-manager</span>
+        </div>
+        <pre><code class="language-bash"># Installer cert-manager via Helm
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+
+helm install cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --create-namespace \
+  --set installCRDs=true</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">clusterissuer-letsencrypt.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># ClusterIssuer pour Let's Encrypt (production)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops@bmis.cm
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">ingress-tls.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bmis-tls-ingress
+  namespace: fintech
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.bmis.cm
+        - admin.bmis.cm
+      secretName: bmis-tls-secret         # cert-manager crée ce Secret automatiquement
+  rules:
+    - host: api.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-backend-svc
+                port:
+                  number: 80
+    - host: admin.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-frontend-svc
+                port:
+                  number: 80</code></pre>
+      </div>
+
+      <h3>8.4 - Multi-hôtes avec TLS par domaine</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">ingress-multi-tls.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bmis-multi-tls
+  namespace: fintech
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.bmis.cm
+      secretName: api-bmis-tls
+    - hosts:
+        - admin.bmis.cm
+      secretName: admin-bmis-tls
+    - hosts:
+        - partner.bmis.cm
+      secretName: partner-bmis-tls
+  rules:
+    - host: api.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-backend-svc
+                port:
+                  number: 80
+    - host: admin.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-frontend-svc
+                port:
+                  number: 80
+    - host: partner.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: partner-frontend-svc
+                port:
+                  number: 80</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 9. ARCHITECTURE FINTECH ═══════════════════════════════════════════ -->
+    <section>
+      <h2>9 - Architecture du routage fintech</h2>
+
+      <p>Voici comment le système fintech BMIS utilise Ingress pour router le trafic vers les différentes applications. Un seul Ingress Controller (NGINX) gère tout le trafic entrant, avec terminaison TLS et routage intelligent.</p>
+
+      <h3>9.1 - Schéma du routage</h3>
+
+      <div class="callout info">
+        <strong>Flux de trafic :</strong><br>
+        Internet → <strong>DNS (CloudFlare)</strong> → <strong>LoadBalancer (NGINX Ingress)</strong> → Routage par host :<br>
+        • <code>api.bmis.cm</code> → Service <code>api-backend-svc</code> → Pods Spring Boot (3 réplicas)<br>
+        • <code>admin.bmis.cm</code> → Service <code>admin-frontend-svc</code> → Pods Angular Admin (2 réplicas)<br>
+        • <code>partner.bmis.cm</code> → Service <code>partner-frontend-svc</code> → Pods Angular Partner (2 réplicas)
+      </div>
+
+      <h3>9.2 - Services internes du système</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">fintech-services.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># ──────────────── Service Backend API ────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-backend-svc
+  namespace: fintech
+  labels:
+    app: api-backend
+    tier: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: api-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+
+---
+# ──────────────── Service Admin Angular ────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-frontend-svc
+  namespace: fintech
+  labels:
+    app: admin-frontend
+    tier: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: admin-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
+# ──────────────── Service Partner Angular ────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: partner-frontend-svc
+  namespace: fintech
+  labels:
+    app: partner-frontend
+    tier: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: partner-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
+# ──────────────── Service PostgreSQL (Headless) ────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-svc
+  namespace: fintech
+  labels:
+    app: postgres
+    tier: database
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+
+---
+# ──────────────── Service Redis (ClusterIP) ────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: fintech
+  labels:
+    app: redis
+    tier: cache
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379</code></pre>
+      </div>
+
+      <h3>9.3 - Ingress complet de production</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">fintech-ingress-production.yaml</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fintech-ingress
+  namespace: fintech
+  annotations:
+    # TLS automatique via cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Redirection HTTPS obligatoire
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Sécurité
+    nginx.ingress.kubernetes.io/server-snippets: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # Limites
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    # CORS pour les frontends
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://admin.bmis.cm,https://partner.bmis.cm"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.bmis.cm
+      secretName: api-bmis-cm-tls
+    - hosts:
+        - admin.bmis.cm
+      secretName: admin-bmis-cm-tls
+    - hosts:
+        - partner.bmis.cm
+      secretName: partner-bmis-cm-tls
+  rules:
+    # ─── API Spring Boot Backend ───
+    - host: api.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-backend-svc
+                port:
+                  number: 80
+
+    # ─── Admin Angular Frontend ───
+    - host: admin.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-frontend-svc
+                port:
+                  number: 80
+
+    # ─── Partner Angular Frontend ───
+    - host: partner.bmis.cm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: partner-frontend-svc
+                port:
+                  number: 80</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 10. EXTERNALNAME ═══════════════════════════════════════════ -->
+    <section>
+      <h2>10 - ExternalName Service</h2>
+
+      <p>Un Service de type <strong>ExternalName</strong> crée un alias DNS vers un service externe au cluster. Aucun proxy n'est créé - c'est un simple <code>CNAME</code> DNS. C'est utile pour mapper des services managés (AWS RDS, ElastiCache, etc.) dans le DNS interne de Kubernetes.</p>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">externalname-rds.yaml</span>
+        </div>
+        <pre><code class="language-yaml"># Mapper un service RDS externe dans le DNS Kubernetes
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-external
+  namespace: fintech
+spec:
+  type: ExternalName
+  externalName: fintech-db.abc123xyz.eu-west-1.rds.amazonaws.com</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">yaml</span>
+          <span class="file-label">spring-boot-config.yaml - Utilisation</span>
+        </div>
+        <pre><code class="language-yaml"># Dans la config Spring Boot, utilisez le nom du Service Kubernetes
+# au lieu de l'URL RDS complète
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres-external.fintech.svc.cluster.local:5432/fintech_db
+    # Si vous migrez vers un PostgreSQL interne plus tard,
+    # changez uniquement le Service - pas la config applicative</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <strong>Avantage :</strong> Vos applications référencent toujours un nom de Service Kubernetes. Si vous migrez d'un RDS externe vers un PostgreSQL hébergé dans le cluster, il suffit de changer le type du Service de <code>ExternalName</code> à <code>ClusterIP</code> - aucune modification du code applicatif n'est nécessaire.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 11. DEBUGGING ═══════════════════════════════════════════ -->
+    <section>
+      <h2>11 - Debugging des Services</h2>
+
+      <p>Quand un Service ne fonctionne pas comme prévu, voici les commandes de diagnostic essentielles :</p>
+
+      <h3>11.1 - Vérifier les Endpoints</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Diagnostic des Services</span>
+        </div>
+        <pre><code class="language-bash"># 1. Vérifier que le Service existe et a des endpoints
+kubectl get endpoints api-backend-svc -n fintech
+
+# Résultat OK :
+# NAME              ENDPOINTS                                      AGE
+# api-backend-svc   10.244.1.15:8080,10.244.2.23:8080,10.244.3.11:8080   5d
+
+# Résultat PROBLÈME - pas d'endpoints :
+# NAME              ENDPOINTS   AGE
+# api-backend-svc   <none>      5d
+# → Les labels du selector ne matchent aucun Pod !</code></pre>
+      </div>
+
+      <h3>11.2 - Décrire le Service</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Describe et Port-forward</span>
+        </div>
+        <pre><code class="language-bash"># 2. Détails complets du Service
+kubectl describe service api-backend-svc -n fintech
+
+# 3. Vérifier les labels des Pods
+kubectl get pods -n fintech --show-labels
+
+# 4. Vérifier que le selector du Service correspond aux labels
+kubectl get pods -n fintech -l app=api-backend
+
+# 5. Port-forward pour tester localement
+kubectl port-forward svc/api-backend-svc 8080:80 -n fintech
+# Puis ouvrir http://localhost:8080 dans le navigateur
+
+# 6. Port-forward direct vers un Pod spécifique
+kubectl port-forward pod/api-backend-7d8f5b9c6-abc12 8080:8080 -n fintech
+
+# 7. Tester la connectivité DNS depuis un Pod de debug
+kubectl run debug-dns --rm -it --image=busybox:1.36 --restart=Never -- \
+  nslookup api-backend-svc.fintech.svc.cluster.local
+
+# 8. Vérifier les logs de l'Ingress Controller
+kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=50</code></pre>
+      </div>
+
+      <h3>11.3 - Debugging Ingress</h3>
+
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="lang-label">bash</span>
+          <span class="file-label">Diagnostic Ingress</span>
+        </div>
+        <pre><code class="language-bash"># Vérifier la configuration de l'Ingress
+kubectl describe ingress fintech-ingress -n fintech
+
+# Vérifier la config NGINX générée
+kubectl exec -n ingress-nginx \
+  $(kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx -o name | head -1) \
+  -- cat /etc/nginx/nginx.conf | grep -A 20 "server_name api.bmis.cm"
+
+# Tester le routage avec curl
+curl -H "Host: api.bmis.cm" http://EXTERNAL-IP/api/v1/health
+
+# Vérifier les certificats TLS
+kubectl get certificate -n fintech
+kubectl describe certificate api-bmis-cm-tls -n fintech</code></pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 12. ERREURS COURANTES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>12 - Erreurs courantes</h2>
+
+      <div class="callout bad">
+        <strong>Selector qui ne matche aucun Pod</strong> - L'erreur la plus fréquente. Le label dans le selector du Service (<code>app: api-backend</code>) doit correspondre <strong>exactement</strong> aux labels définis dans le <code>template.metadata.labels</code> du Deployment. Une simple faute de frappe suffit pour que le Service n'ait aucun endpoint.
+      </div>
+
+      <div class="callout bad">
+        <strong>targetPort incorrect</strong> - Le <code>targetPort</code> du Service doit correspondre au <code>containerPort</code> du Pod. Si votre Spring Boot écoute sur 8080 mais que le Service pointe vers 80, aucune connexion ne passera.
+      </div>
+
+      <div class="callout bad">
+        <strong>Utiliser NodePort en production</strong> - Les ports non-standards (30000+), l'absence de TLS, et l'exposition sur chaque nœud font de NodePort un choix inadapté à la production. Utilisez un Ingress Controller avec TLS.
+      </div>
+
+      <div class="callout bad">
+        <strong>Oublier les health checks</strong> - Sans <code>readinessProbe</code>, Kubernetes enverra du trafic vers des Pods qui ne sont pas encore prêts (démarrage Spring Boot). Le Service ajoutera le Pod aux endpoints dès qu'il est Running, même si l'application n'a pas fini de démarrer.
+      </div>
+
+      <div class="callout bad">
+        <strong>Pas de resource requests/limits</strong> - Un Pod sans limites de ressources peut consommer toute la mémoire d'un nœud et provoquer des OOMKills en cascade sur les autres Pods du même nœud.
+      </div>
+
+      <div class="callout bad">
+        <strong>Ignorer les logs de l'Ingress Controller</strong> - Les erreurs 502/503/504 sont souvent liées à des problèmes de routage, de timeout ou de backend indisponible. Consultez toujours les logs du controller NGINX pour comprendre les erreurs HTTP.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ 13. BEST PRACTICES ═══════════════════════════════════════════ -->
+    <section>
+      <h2>13 - Best practices</h2>
+
+      <div class="callout tip">
+        <strong>Utiliser ClusterIP par défaut</strong> - La grande majorité des Services n'ont pas besoin d'être exposés à l'extérieur du cluster. Les bases de données, caches et services internes doivent rester en ClusterIP. Seul le trafic entrant passe par l'Ingress Controller.
+      </div>
+
+      <div class="callout tip">
+        <strong>Un seul Ingress Controller pour tout le cluster</strong> - Évitez de multiplier les LoadBalancers. Un seul Ingress Controller NGINX avec plusieurs ressources Ingress est plus économique, plus simple à gérer et plus sécurisé.
+      </div>
+
+      <div class="callout tip">
+        <strong>Automatiser les certificats TLS avec cert-manager</strong> - Ne gérez jamais les certificats manuellement. cert-manager + Let's Encrypt renouvelle automatiquement les certificats 30 jours avant leur expiration.
+      </div>
+
+      <div class="callout tip">
+        <strong>Nommer les ports dans les Services</strong> - Utilisez toujours l'attribut <code>name</code> dans la définition des ports (<code>name: http</code>, <code>name: grpc</code>). C'est requis si le Service expose plusieurs ports, et c'est une bonne pratique même avec un seul port.
+      </div>
+
+      <div class="callout tip">
+        <strong>Configurer les readinessProbes sur tous les Pods exposés</strong> - Le readinessProbe garantit que seuls les Pods réellement prêts reçoivent du trafic. Pour Spring Boot, utilisez <code>/actuator/health/readiness</code>.
+      </div>
+
+      <div class="callout tip">
+        <strong>Activer le rate limiting sur l'Ingress</strong> - Protégez vos APIs contre les abus en configurant <code>limit-rps</code> et <code>limit-burst-multiplier</code> dans les annotations NGINX Ingress. Pour les APIs financières, c'est critique.
+      </div>
+
+      <div class="callout tip">
+        <strong>Ajouter les en-têtes de sécurité</strong> - Configurez les en-têtes HTTP de sécurité (<code>X-Frame-Options</code>, <code>X-Content-Type-Options</code>, <code>Strict-Transport-Security</code>) au niveau de l'Ingress via les annotations <code>server-snippets</code>.
+      </div>
+
+      <div class="callout tip">
+        <strong>Surveiller les métriques de l'Ingress Controller</strong> - NGINX Ingress expose des métriques Prometheus. Configurez des alertes sur le taux d'erreurs 5xx, la latence P99 et le nombre de connexions actives.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ NAV FOOTER ═══════════════════════════════════════════ -->
+    <div class="lesson-nav">
+      <a href="04-kubernetes-workloads.html">
+        <span class="nav-dir">← Leçon précédente</span>
+        <span class="nav-title">Deployments &amp; StatefulSets</span>
+      </a>
+      <a href="06-kubernetes-configmaps-secrets.html" class="nav-next">
+        <span class="nav-dir">Leçon suivante →</span>
+        <span class="nav-title">ConfigMaps &amp; Secrets</span>
+      </a>
+    </div>
+
+    </div>
+  </main>
+
+  </div>
+
+  <button class="back-to-top" id="back-to-top" aria-label="Retour en haut">↑</button>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>
