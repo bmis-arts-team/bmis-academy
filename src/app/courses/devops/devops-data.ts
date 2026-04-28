@@ -5,7 +5,7 @@ export const DEVOPS_COURSE: Course = {
   title: 'DevOps, Kubernetes & Production',
   subtitle: 'Du conteneur au cluster en production',
   icon: 'terminal',
-  color: '#7c3aed',
+  color: '#4a85cc',
   sections: [
     {
       title: 'Docker',

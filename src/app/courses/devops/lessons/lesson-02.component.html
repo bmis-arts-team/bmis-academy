@@ -1,19 +1,78 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Le problème de la persistance</h2>
-    <p>Par défaut, les données d'un conteneur sont <strong>éphémères</strong>. Quand un conteneur est supprimé, toutes les données écrites dans son filesystem disparaissent. Pour les bases de données et le stockage de fichiers, c'est inacceptable.</p>
+    <h2>Comprendre le filesystem d'un conteneur</h2>
+    <p>
+      Dans la leçon précédente, nous avons vu qu'une image Docker est composée de <strong>couches (layers) en lecture seule</strong>.
+      Lorsque vous démarrez un conteneur à partir de cette image, Docker ajoute automatiquement une couche supplémentaire au-dessus :
+      la <strong>couche d'écriture (writable layer)</strong>. C'est dans cette couche que toutes les modifications apportées
+      au filesystem du conteneur sont stockées - nouveaux fichiers, modifications, suppressions.
+    </p>
 
     <div class="arch-diagram">
       <pre>
-  Container (lecture/écriture)
-  ├── /app/data     ← Perdu à la suppression !
-  └── /var/lib/...  ← Perdu aussi !
-
-  Volume Docker (persistant)
-  ├── /var/lib/postgresql/data  ← Survit au conteneur
-  └── /data/redis               ← Survit aussi</pre>
+  ┌───────────────────────────────┐
+  │  Writable Layer (conteneur)   │  ← Créée au démarrage, détruite à la suppression
+  ├───────────────────────────────┤
+  │  Layer 3 - App binaries       │  ← Lecture seule (image)
+  ├───────────────────────────────┤
+  │  Layer 2 - JDK 17             │  ← Lecture seule (image)
+  ├───────────────────────────────┤
+  │  Layer 1 - Ubuntu base        │  ← Lecture seule (image)
+  └───────────────────────────────┘</pre>
     </div>
+
+    <p>
+      Ce mécanisme est géré par <strong>OverlayFS</strong> (le driver de stockage par défaut de Docker).
+      Il présente les couches en lecture seule et la couche d'écriture comme un seul filesystem unifié,
+      transparent pour les processus du conteneur.
+    </p>
+
+    <div class="callout info">
+      <strong>Copy-on-Write (CoW)</strong>
+      <p>
+        Quand un processus du conteneur modifie un fichier existant dans une couche inférieure (lecture seule),
+        OverlayFS copie d'abord le fichier dans la writable layer puis applique la modification - sans toucher aux couches de l'image.
+        C'est pourquoi plusieurs conteneurs peuvent partager la même image sans interférer.
+      </p>
+    </div>
+
+    <h2>Le problème de la persistance</h2>
+    <p>
+      Le problème vient du fait que la <strong>writable layer est liée au cycle de vie du conteneur</strong>.
+      Quand vous exécutez <code>docker rm mon-conteneur</code>, cette couche est supprimée définitivement
+      avec toutes les données qu'elle contient. Pour une API sans état, ça n'est pas un problème.
+      Mais pour une base de données ou un service de fichiers, c'est inacceptable.
+    </p>
+
+    <div class="arch-diagram">
+      <pre>
+  Sans volume - données perdues :
+  ┌──────────────────────────────────────────┐
+  │  Writable Layer                          │
+  │  ├── /var/lib/postgresql/data  ✗ perdu   │
+  │  └── /data/uploads             ✗ perdu   │
+  └────────── supprimée avec le conteneur ───┘
+
+  Avec volume - données persistantes :
+  ┌─────────────────────────────────────────┐
+  │  Writable Layer (conteneur)             │
+  │  ├── /var/lib/postgresql/data  ──┐      │
+  │  └── /data/uploads           ──┐ │      │
+  └─────────────────────────────── │ │ ─────┘
+                                   ▼ ▼
+                        ┌────────────────────┐
+                        │  Volume Docker     │  ← Survit au conteneur
+                        │  (hôte / géré)     │
+                        └────────────────────┘</pre>
+    </div>
+
+    <p>
+      Un <strong>volume</strong> est un mécanisme qui permet de <em>monter</em> un répertoire externe
+      (géré par Docker ou issu de l'hôte) dans le filesystem du conteneur.
+      Les données écrites dans ce répertoire contournent la writable layer et persistent
+      indépendamment du cycle de vie du conteneur.
+    </p>
   </section>
 
   <section>
@@ -32,6 +91,113 @@
     <div class="callout tip">
       <strong>Règle d'or</strong>
       <p>En production, utilisez toujours des <strong>named volumes</strong>. Les bind mounts sont réservés au développement.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Les drivers de volumes - qu'est-ce que c'est ?</h2>
+    <p>
+      Tout comme les drivers réseau déterminent <em>comment</em> Docker connecte les conteneurs,
+      un <strong>driver de volume</strong> détermine <em>où</em> et <em>comment</em> Docker stocke
+      physiquement les données d'un volume. Par défaut, Docker utilise le driver <code>local</code>
+      qui écrit sur le disque de la machine hôte. Mais selon l'infrastructure - serveur unique, cloud,
+      cluster - d'autres drivers permettent de stocker les données sur un NAS, un bucket S3,
+      un système de fichiers distribué, etc.
+    </p>
+    <p>
+      Vous choisissez le driver au moment de déclarer le volume, avec l'option <code>--driver</code>
+      (ou <code>-d</code>). En Docker Compose, c'est la clé <code>driver:</code> sous la déclaration du volume.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash"># Créer un volume avec un driver explicite
+docker volume create --driver local    my-data      # disque local (défaut)
+docker volume create --driver nfs      my-nfs-data  # partage NFS distant
+docker volume create --driver vieux/sshfs my-remote # dossier SSH distant (plugin)
+
+# En Docker Compose
+volumes:
+  my-data:
+    driver: local   # explicite mais équivalent à ne rien mettre</code></pre>
+    </div>
+
+    <h3>Les drivers disponibles</h3>
+    <table>
+      <thead>
+        <tr><th>Driver</th><th>Ce que fait concrètement Docker</th><th>Quand l'utiliser</th><th>Exemple applicatif</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>local</code></td>
+          <td>
+            Stocke les données dans un répertoire géré par Docker sur le disque de l'hôte
+            (<code>/var/lib/docker/volumes/&lt;nom&gt;/_data</code> sur Linux).
+            Docker gère entièrement le cycle de vie : création, suppression, inspection.
+            C'est le driver par défaut si vous ne précisez rien.
+          </td>
+          <td>Cas standard - serveur unique, développement local, VPS</td>
+          <td>Volume PostgreSQL ou Redis sur un VPS : les données survivent aux redémarrages de conteneurs mais restent sur la même machine</td>
+        </tr>
+        <tr>
+          <td><code>local</code> (NFS)</td>
+          <td>
+            Variante du driver <code>local</code> avec des options de montage avancées.
+            Permet de monter un partage NFS distant comme s'il était local, en passant
+            les options <code>type</code>, <code>device</code> et <code>o</code> dans la configuration du volume.
+            Aucun plugin supplémentaire nécessaire.
+          </td>
+          <td>Stockage sur un NAS réseau (Synology, QNAP…) depuis un serveur unique</td>
+          <td>Stocker les uploads d'une API sur un NAS d'entreprise partagé entre plusieurs applications</td>
+        </tr>
+        <tr>
+          <td>Plugin tiers<br><small>(ex. <code>vieux/sshfs</code>, <code>rexray</code>)</small></td>
+          <td>
+            Des plugins Docker étendent le système de volumes pour se connecter à des stockages
+            externes : SSH, Amazon EBS, Google Persistent Disk, Azure Disk, Ceph, GlusterFS.
+            Le plugin s'installe via <code>docker plugin install</code> et s'utilise ensuite
+            comme n'importe quel driver natif.
+          </td>
+          <td>Infrastructure cloud ou stockage distribué en production</td>
+          <td>Volumes PostgreSQL sur Amazon EBS dans un cluster EC2 - les données persistent même si l'instance est remplacée</td>
+        </tr>
+        <tr>
+          <td><em>Non applicable<br>aux volumes<br>tmpfs</em></td>
+          <td>
+            <code>tmpfs</code> n'est pas un driver de volume au sens strict - c'est un type de montage
+            différent. Les données sont écrites en RAM uniquement et ne passent jamais par un driver
+            de stockage. Elles disparaissent dès l'arrêt du conteneur.
+          </td>
+          <td>Données sensibles temporaires (tokens, sessions) qui ne doivent jamais toucher le disque</td>
+          <td>Stocker un token OAuth en mémoire pendant la durée d'une session - pas de trace sur disque en cas de compromission</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>Driver local avec options NFS - exemple concret</strong>
+      <p>Le driver <code>local</code> accepte des options de montage Linux directement dans Docker Compose :</p>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span>docker-compose.yml</span></div>
+      <pre><code class="language-yaml">volumes:
+  uploads-data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=192.168.1.100,rw,nfsvers=4   # IP du NAS, lecture/écriture, NFS v4
+      device: ":/volume1/app-uploads"       # chemin exporté sur le NAS</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Quel driver choisir ?</strong>
+      <p>
+        Pour un serveur unique ou un VPS, <code>local</code> est le bon choix dans 95% des cas.
+        N'utilisez un driver tiers que si vous avez un besoin concret de stockage partagé entre
+        plusieurs machines (cluster) ou de persistance indépendante de l'hôte (cloud).
+        En Kubernetes, les volumes sont gérés par des <strong>PersistentVolumes</strong> et des
+        <strong>StorageClasses</strong> - les drivers Docker ne s'appliquent plus.
+      </p>
     </div>
   </section>
 
@@ -77,40 +243,219 @@ docker volume inspect postgres-data</code></pre>
   </section>
 
   <section>
-    <h2>Docker Networking - Les fondamentaux</h2>
-    <p>Docker offre plusieurs <strong>drivers réseau</strong> pour connecter les conteneurs entre eux et avec l'extérieur.</p>
+    <h2>Comprendre l'isolation réseau de Docker</h2>
+    <p>
+      Quand Docker démarre, il crée une <strong>interface réseau virtuelle</strong> sur l'hôte appelée <code>docker0</code>.
+      C'est un commutateur (switch) logiciel qui joue le rôle de passerelle entre les conteneurs et l'extérieur.
+      Par défaut, chaque conteneur lancé sans option <code>--network</code> est connecté à ce réseau <code>bridge</code> par défaut.
+    </p>
 
+    <div class="arch-diagram">
+      <pre>
+  Hôte Linux
+  ┌─────────────────────────────────────────────────────┐
+  │                                                     │
+  │   Interface physique : eth0 (172.16.0.5)            │
+  │          │                                          │
+  │   ┌──────▼──────────────────────────────────┐      │
+  │   │  docker0 - bridge par défaut             │      │
+  │   │  172.17.0.1 (passerelle)                 │      │
+  │   │  ┌─────────────┐   ┌─────────────┐      │      │
+  │   │  │ conteneur A │   │ conteneur B │      │      │
+  │   │  │ 172.17.0.2  │   │ 172.17.0.3  │      │      │
+  │   │  └─────────────┘   └─────────────┘      │      │
+  │   └─────────────────────────────────────────┘      │
+  └─────────────────────────────────────────────────────┘</pre>
+    </div>
+
+    <p>
+      Chaque conteneur reçoit sa propre <strong>adresse IP privée</strong> dans le sous-réseau du bridge.
+      Pour communiquer, les conteneurs passent par <code>docker0</code> qui fait du <strong>NAT</strong>
+      (Network Address Translation) vers l'extérieur. C'est pourquoi, sans publier de port, un conteneur
+      est accessible depuis l'hôte mais pas depuis l'extérieur.
+    </p>
+
+    <div class="callout info">
+      <strong>Publication de ports (<code>-p</code>)</strong>
+      <p>
+        L'option <code>-p 8080:80</code> demande à Docker d'ajouter une règle <code>iptables</code> sur l'hôte :
+        tout trafic arrivant sur le port <strong>8080 de l'hôte</strong> est redirigé vers le port <strong>80 du conteneur</strong>.
+        Le conteneur lui-même n'est pas conscient de ce mapping - il écoute toujours sur son port 80.
+      </p>
+    </div>
+
+    <h2>Le problème du bridge par défaut</h2>
+    <p>
+      Quand vous lancez un conteneur sans préciser de réseau, Docker le connecte automatiquement au réseau
+      <code>bridge</code> par défaut. Ce réseau a une limitation majeure : il n'a <strong>pas de serveur DNS</strong>,
+      donc les conteneurs <strong>ne peuvent pas se résoudre par nom</strong>. Ils ne connaissent que les adresses IP,
+      qui changent à chaque redémarrage du conteneur. Pour faire communiquer une API avec sa base de données, c'est ingérable.
+    </p>
+
+    <div class="arch-diagram">
+      <pre>
+  Bridge par défaut (automatique, sans DNS) :
+  ┌────────────────────────────────────────────┐
+  │  api (172.17.0.2)  ──✗──▶  "postgres"     │  ← Échec : nom inconnu
+  │  api (172.17.0.2)  ──✓──▶  172.17.0.3     │  ← Fonctionne, mais l'IP change au redémarrage
+  └────────────────────────────────────────────┘</pre>
+    </div>
+
+    <p>
+      La solution est de <strong>créer manuellement un réseau bridge personnalisé</strong> avec
+      <code>docker network create</code>, puis de <strong>rattacher explicitement chaque conteneur</strong>
+      à ce réseau via l'option <code>--network</code>. Ce n'est pas automatique : si vous oubliez
+      <code>--network</code> sur un conteneur, il tombe dans le bridge par défaut et ne sera pas visible
+      par les autres.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash"># Étape 1 - créer le réseau (une seule fois)
+docker network create app-network
+
+# Étape 2 - rattacher chaque conteneur à ce réseau avec --network
+docker run -d --name postgres --network app-network postgres:16-alpine
+docker run -d --name redis    --network app-network redis:7-alpine
+docker run -d --name api      --network app-network my-api:1.0.0
+
+# Sans --network, le conteneur va dans le bridge par défaut
+# et ne verra pas postgres ni redis !</code></pre>
+    </div>
+
+    <p>
+      Une fois tous les conteneurs sur le même réseau personnalisé, Docker active automatiquement
+      un <strong>serveur DNS embarqué</strong> qui enregistre chaque conteneur sous son <code>--name</code>
+      comme entrée DNS. Les conteneurs se trouvent donc par nom, de façon stable.
+    </p>
+
+    <div class="arch-diagram">
+      <pre>
+  Bridge personnalisé (créé manuellement, avec DNS) :
+  ┌────────────────────────────────────────────┐
+  │  api  ──✓──▶  "postgres"  ──▶  172.18.0.3 │  ← Docker DNS résout le nom
+  │  api  ──✓──▶  "redis"     ──▶  172.18.0.4 │  ← même si l'IP change
+  └────────────────────────────────────────────┘</pre>
+    </div>
+
+    <h2>Les drivers réseau - qu'est-ce que c'est ?</h2>
+    <p>
+      Un <strong>driver réseau</strong> est le composant qui détermine <em>comment</em> Docker construit et gère
+      le réseau d'un conteneur au niveau du système d'exploitation. Concrètement, quand vous créez un réseau
+      avec <code>docker network create</code>, Docker délègue la création des interfaces virtuelles, les règles
+      de routage et l'isolation à un driver. C'est lui qui décide :
+    </p>
+    <ul>
+      <li>comment les paquets transitent entre les conteneurs,</li>
+      <li>si le conteneur est isolé de l'hôte ou non,</li>
+      <li>si la communication peut traverser plusieurs machines physiques.</li>
+    </ul>
+
+    <p>
+      Vous choisissez le driver au moment de créer le réseau, avec l'option <code>--driver</code>
+      (ou <code>-d</code>). Si vous ne précisez rien, Docker utilise <code>bridge</code> par défaut.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash"># Créer un réseau avec un driver explicite
+docker network create --driver bridge app-network
+docker network create --driver host   host-network   # rarement utile en pratique
+docker network create --driver overlay swarm-network  # requiert Docker Swarm
+
+# Sans --driver, bridge est utilisé automatiquement
+docker network create app-network  # équivalent à --driver bridge</code></pre>
+    </div>
+
+    <h3>Les quatre drivers disponibles</h3>
     <table>
       <thead>
-        <tr><th>Driver</th><th>Description</th><th>Usage</th></tr>
+        <tr><th>Driver</th><th>Ce que fait concrètement Docker</th><th>Quand l'utiliser</th><th>Exemple applicatif</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>bridge</code></td><td>Réseau privé isolé</td><td>Communication entre conteneurs sur un même hôte</td></tr>
-        <tr><td><code>host</code></td><td>Partage le réseau de l'hôte</td><td>Performance maximale (pas de NAT)</td></tr>
-        <tr><td><code>overlay</code></td><td>Réseau multi-hôtes</td><td>Docker Swarm, clusters</td></tr>
-        <tr><td><code>none</code></td><td>Pas de réseau</td><td>Conteneurs totalement isolés</td></tr>
+        <tr>
+          <td><code>bridge</code></td>
+          <td>
+            Crée une interface réseau virtuelle (<code>docker0</code> ou une interface nommée) sur l'hôte.
+            Chaque conteneur reçoit une IP privée dans ce sous-réseau. Les paquets sortants passent par du NAT
+            pour accéder à l'extérieur. Les conteneurs du même réseau se voient directement.
+          </td>
+          <td>Cas standard - tous vos services tournent sur un seul hôte</td>
+          <td>Une API Spring Boot, une base PostgreSQL et un Redis qui tournent ensemble sur votre serveur de développement ou un petit VPS</td>
+        </tr>
+        <tr>
+          <td><code>host</code></td>
+          <td>
+            Supprime toute isolation réseau. Le conteneur utilise directement les interfaces réseau de l'hôte
+            (<code>eth0</code>, <code>lo</code>…). Il n'y a ni interface virtuelle, ni NAT, ni sous-réseau séparé.
+            Un service qui écoute sur le port 8080 du conteneur écoute sur le port 8080 de la machine physique.
+          </td>
+          <td>Performance critique (le NAT a un coût), outils de monitoring qui doivent voir le réseau hôte</td>
+          <td>Prometheus Node Exporter qui collecte les métriques réseau réelles de la machine hôte, ou un proxy Nginx à très haut trafic où le surcoût du NAT est mesurable</td>
+        </tr>
+        <tr>
+          <td><code>overlay</code></td>
+          <td>
+            Crée un réseau virtuel qui s'étend sur plusieurs machines physiques en encapsulant les paquets dans
+            du VXLAN (UDP port 4789). Les conteneurs sur des hôtes différents se voient comme s'ils étaient
+            sur le même réseau local. Nécessite Docker Swarm ou un orchestrateur compatible.
+          </td>
+          <td>Clusters multi-hôtes, Docker Swarm - pas utile en dehors de ce contexte</td>
+          <td>Un cluster Docker Swarm de 5 nœuds où les réplicas d'un service web (sur les nœuds 1, 2, 3) doivent communiquer avec une base de données (nœud 4) comme s'ils étaient sur le même LAN</td>
+        </tr>
+        <tr>
+          <td><code>none</code></td>
+          <td>
+            Docker ne crée aucune interface réseau dans le conteneur (seulement <code>lo</code>, la loopback locale).
+            Le conteneur ne peut ni envoyer ni recevoir de trafic réseau depuis l'extérieur.
+          </td>
+          <td>Traitements isolés (calcul, compression, chiffrement), sécurité maximale</td>
+          <td>Un job de génération de rapport PDF à partir de données déjà injectées en volume - il n'a aucune raison d'accéder au réseau, l'isoler réduit la surface d'attaque</td>
+        </tr>
       </tbody>
     </table>
 
-    <h3>DNS intégré</h3>
-    <p>Dans un réseau bridge personnalisé, Docker fournit un <strong>serveur DNS intégré</strong>. Les conteneurs peuvent se résoudre par nom :</p>
+    <div class="callout tip">
+      <strong>Quel driver choisir ?</strong>
+      <p>Dans 90% des cas, <code>bridge</code> personnalisé est le bon choix. N'utilisez <code>host</code> que si vous avez mesuré un problème de performance lié au NAT. <code>overlay</code> est réservé aux environnements Swarm.</p>
+      <p><strong>Kubernetes</strong> n'utilise pas ces drivers Docker. Il gère son propre modèle réseau via un plugin CNI (Container Network Interface) - Calico, Flannel, Cilium. Ce sont ces plugins qui prennent en charge la communication entre pods, y compris sur plusieurs nœuds. Vous n'avez donc pas à choisir un driver Docker dans un cluster Kubernetes.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Créer et utiliser un réseau bridge personnalisé</h2>
     <div class="code-block">
       <div class="code-header"><span>bash</span></div>
-      <pre><code class="language-bash"># Créer un réseau
+      <pre><code class="language-bash"># Créer un réseau dédié à l'application
 docker network create app-network
 
-# Lancer les services sur le même réseau
+# Inspecter le réseau (sous-réseau, passerelle, conteneurs connectés)
+docker network inspect app-network
+
+# Lancer les services sur ce réseau - ils se voient par nom
 docker run -d --name postgres --network app-network postgres:16-alpine
-docker run -d --name redis --network app-network redis:7-alpine
-docker run -d --name api --network app-network \
+docker run -d --name redis    --network app-network redis:7-alpine
+docker run -d --name api      --network app-network \
   -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/app_db \
   -e SPRING_DATA_REDIS_HOST=redis \
+  -p 8080:8080 \
   my-api:1.0.0</code></pre>
     </div>
 
+    <p>
+      Notez que seul le conteneur <code>api</code> expose un port vers l'hôte (<code>-p 8080:8080</code>).
+      <code>postgres</code> et <code>redis</code> n'ont aucun port publié - ils sont accessibles
+      <em>uniquement depuis l'intérieur du réseau <code>app-network</code></em>, ce qui est la bonne pratique.
+    </p>
+
     <div class="callout tip">
-      <strong>Résolution DNS</strong>
-      <p>Le conteneur <code>api</code> peut atteindre PostgreSQL via <code>postgres:5432</code> et Redis via <code>redis:6379</code>. Le DNS résout automatiquement les noms des conteneurs en adresses IP.</p>
+      <strong>Résolution DNS en pratique</strong>
+      <p>
+        Dans la variable d'environnement <code>SPRING_DATASOURCE_URL</code>, on utilise directement
+        <code>postgres</code> comme hostname. Docker DNS traduit ce nom en l'IP courante du conteneur
+        <code>postgres</code>. Si vous redémarrez ce conteneur (nouvelle IP), la résolution reste valide -
+        ce qui ne serait pas le cas avec une IP codée en dur.
+      </p>
     </div>
   </section>
 
@@ -118,24 +463,35 @@ docker run -d --name api --network app-network \
     <h2>Architecture réseau multi-services</h2>
     <div class="arch-diagram">
       <pre>
-              ┌──── app-network (bridge) ────┐
-              │                               │
-  ┌───────┐   │  ┌─────────┐  ┌───────────┐  │
-  │Client ├───┼─▶│  API    ├─▶│ PostgreSQL│  │
-  └───────┘   │  │ :8080   │  │  :5432    │  │
-    :8080     │  └────┬────┘  └───────────┘  │
-              │       │                       │
-              │       ▼                       │
-              │  ┌─────────┐                  │
-              │  │  Redis  │                  │
-              │  │  :6379  │                  │
-              │  └─────────┘                  │
-              └───────────────────────────────┘</pre>
+                            Hôte
+  ┌──────────────────────────────────────────────────────┐
+  │  Trafic externe                                      │
+  │       │  :8080                                       │
+  │       ▼                                              │
+  │  ┌──────────────── app-network (bridge) ───────────┐ │
+  │  │                                                  │ │
+  │  │   ┌─────────┐      ┌───────────┐                │ │
+  │  │   │   api   │─────▶│ postgres  │  (pas de -p)   │ │
+  │  │   │  :8080  │      │  :5432    │                │ │
+  │  │   └────┬────┘      └───────────┘                │ │
+  │  │        │                                         │ │
+  │  │        ▼                                         │ │
+  │  │   ┌─────────┐                                    │ │
+  │  │   │  redis  │  (pas de -p)                       │ │
+  │  │   │  :6379  │                                    │ │
+  │  │   └─────────┘                                    │ │
+  │  └──────────────────────────────────────────────────┘ │
+  └──────────────────────────────────────────────────────┘</pre>
     </div>
 
     <div class="callout warning">
-      <strong>Sécurité réseau</strong>
-      <p>Ne publiez pas les ports des services internes (PostgreSQL, Redis) vers l'hôte. Seul le service exposé aux utilisateurs (API, reverse proxy) doit avoir un mapping <code>-p</code>.</p>
+      <strong>Règle de sécurité fondamentale</strong>
+      <p>
+        Ne publiez jamais les ports de vos services internes (<code>postgres</code>, <code>redis</code>)
+        vers l'hôte avec <code>-p</code>. Un port publié est accessible depuis n'importe quelle machine
+        sur le réseau de l'hôte. Vos bases de données ne doivent être joignables que depuis les conteneurs
+        applicatifs, via le réseau Docker interne.
+      </p>
     </div>
   </section>
 

@@ -144,7 +144,7 @@ pre:not(.code-block pre) {
   border-left: 4px solid;
   font-size: 0.92rem;
 
-  strong:first-child {
+  > strong:first-child {
     display: block;
     margin-bottom: 0.3rem;
     font-family: var(--font-ui);
@@ -247,8 +247,8 @@ table {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 0.55rem 1rem;
-  &.bad  { background: #ffe8e8; color: #c0392b; }
-  &.good { background: #e6f9ee; color: #1e8449; }
+  &.bad  { background: #ffe8e8; color: #c7431f; }
+  &.good { background: #e6f9ee; color: #1a6d69; }
 }
 .compare-card-body {
   padding: 0.9rem 1rem;
