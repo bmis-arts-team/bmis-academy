@@ -251,4 +251,174 @@ spec:
     </table>
   </section>
 
-</app-lesson-page>
+  <section class="lab-section">
+    <h2>Travaux Pratiques — Workloads Kubernetes</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> en cours d'exécution (voir Leçon 3 — Lab 1).
+        Ces exercices couvrent les workloads essentiels : Deployment, self-healing et rolling update.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 1</span>
+        <span class="lab-title">Déployer une application avec 3 réplicas</span>
+        <span class="lab-time">~15 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Créer un Deployment multi-réplicas</li>
+          <li>Vérifier la distribution des pods sur les worker nodes</li>
+          <li>Observer le ReplicaSet créé automatiquement</li>
+        </ul>
+
+        <div class="code-block">
+          <div class="code-header"><span>httpbin-deployment.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpbin
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: httpbin
+  template:
+    metadata:
+      labels:
+        app: httpbin
+    spec:
+      containers:
+        - name: httpbin
+          image: kennethreitz/httpbin:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f httpbin-deployment.yaml
+
+# Voir les 3 pods et sur quel node ils tournent
+kubectl get pods -o wide
+
+# Voir le ReplicaSet créé automatiquement
+kubectl get replicaset
+
+# Accéder à l'app
+kubectl port-forward deployment/httpbin 8080:80
+# → http://localhost:8080</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>3 pods <code>Running</code>, répartis entre les 2 workers. Un ReplicaSet <code>httpbin-xxxxxxx</code> apparaît avec <code>DESIRED=3 CURRENT=3 READY=3</code>.</p>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 2</span>
+        <span class="lab-title">Observer le Self-Healing en action</span>
+        <span class="lab-time">~10 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Confirmer que Kubernetes ne laisse jamais un pod mort</li>
+          <li>Tuer un pod manuellement et observer sa recréation immédiate</li>
+          <li>Simuler la panne d'un node entier</li>
+        </ul>
+
+        <div class="code-block">
+          <div class="code-header"><span>bash — Terminal 1 : observer en temps réel</span></div>
+          <pre><code class="language-bash">kubectl get pods -w</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash — Terminal 2 : tuer un pod</span></div>
+          <pre><code class="language-bash"># Récupérer le nom d'un pod
+kubectl get pods
+
+# Le supprimer (simule un crash)
+kubectl delete pod &lt;nom-du-pod&gt;
+
+# Dans le Terminal 1 vous verrez :
+# httpbin-xxx   Terminating
+# httpbin-yyy   Pending → ContainerCreating → Running   ← recréé automatiquement</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash — Simuler la panne d'un node</span></div>
+          <pre><code class="language-bash"># Stopper le conteneur Docker d'un worker (simule une panne machine)
+docker stop k8s-lab-worker
+
+# Attendre ~1 min
+kubectl get nodes
+# k8s-lab-worker   NotReady
+
+kubectl get pods -o wide
+# Les pods du worker tombé sont re-schedulés sur worker2
+
+# Redémarrer le node
+docker start k8s-lab-worker</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Le cluster maintient toujours 3 pods <code>Running</code>. Même avec un node en panne, K8s replace les pods sur les nodes disponibles. C'est la boucle de réconciliation en action.</p>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 3</span>
+        <span class="lab-title">Rolling Update & Rollback sans downtime</span>
+        <span class="lab-time">~15 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Mettre à jour une application sans interruption de service</li>
+          <li>Observer le remplacement progressif des pods</li>
+          <li>Faire un rollback instantané en cas de problème</li>
+        </ul>
+
+        <div class="code-block">
+          <div class="code-header"><span>bash — Terminal 1 : watcher</span></div>
+          <pre><code class="language-bash">kubectl get pods -l app=httpbin -w</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash — Terminal 2 : mise à jour et rollback</span></div>
+          <pre><code class="language-bash"># Changer l'image (simule une nouvelle version)
+kubectl set image deployment/httpbin httpbin=nginx:1.25
+
+# Suivre le déploiement
+kubectl rollout status deployment/httpbin
+
+# Consulter l'historique
+kubectl rollout history deployment/httpbin
+
+# Rollback immédiat vers la version précédente
+kubectl rollout undo deployment/httpbin
+
+# Vérifier
+kubectl describe deployment/httpbin | grep Image</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Les pods sont remplacés un à un. L'application reste disponible pendant toute la durée du déploiement. Le rollback remet l'image précédente en quelques secondes.</p>
+      </div>
+    </div>
+
+  </section>
+

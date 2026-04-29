@@ -159,6 +159,23 @@ pre:not(.code-block pre) {
   &.danger  { border-color: #ef4444; background: #fef2f2; strong:first-child { color: #991b1b; } }
 }
 
+// ── Prerequisite inline note ───────────────────────────────────
+.prereq-note {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 6px;
+  background: #fefce8;
+  border-left: 3px solid #eab308;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: #713f12;
+  strong { color: #92400e; white-space: nowrap; }
+  a { color: #92400e; font-weight: 600; }
+}
+
 // ── Tables ─────────────────────────────────────────────────────
 table {
   width: 100%;
@@ -207,6 +224,31 @@ table {
     white-space: pre;
     color: #e6edf3;
   }
+}
+
+// ── Kubernetes SVG Diagram ─────────────────────────────────────
+.k8s-diagram-wrapper {
+  margin: 1.5rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.k8s-diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #f8fafc;
+}
+
+.diagram-caption {
+  font-size: 0.82rem;
+  color: var(--color-text-light);
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
+  opacity: 0.75;
 }
 
 // ── Comparison Cards ───────────────────────────────────────────
@@ -593,6 +635,164 @@ table {
     text-transform: uppercase;
     color: #1e8449;
     margin-bottom: 0.8rem;
+  }
+}
+
+// ── Lab Sections ───────────────────────────────────────────────
+.lab-section {
+  margin: 2.5rem 0;
+}
+
+.lab-intro {
+  background: linear-gradient(135deg, #0f2040 0%, #0d1a10 100%);
+  border: 1px solid #2a4a7f;
+  border-left: 4px solid var(--color-accent);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+
+  p { margin: 0; font-size: 0.95rem; color: var(--color-text-light); }
+  strong { color: var(--color-text); }
+}
+
+.lab {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  margin: 1.75rem 0;
+  overflow: hidden;
+
+  .lab-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1.4rem;
+    background: #111827;
+    border-bottom: 1px solid var(--color-border);
+
+    .lab-badge {
+      background: var(--color-accent);
+      color: #fff;
+      font-family: var(--font-ui);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .lab-title {
+      font-family: var(--font-ui);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--color-text);
+      margin: 0;
+    }
+
+    .lab-time {
+      margin-left: auto;
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      color: var(--color-text-light);
+      opacity: 0.7;
+      white-space: nowrap;
+    }
+  }
+
+  .lab-body {
+    padding: 1.4rem 1.5rem;
+
+    h4 {
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-accent);
+      margin: 1.25rem 0 0.5rem;
+      &:first-child { margin-top: 0; }
+    }
+
+    .objective-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1rem;
+      li {
+        padding: 0.3rem 0 0.3rem 1.6rem;
+        position: relative;
+        font-size: 0.9rem;
+        &::before {
+          content: '✓';
+          position: absolute;
+          left: 0;
+          color: #4ade80;
+          font-weight: 700;
+        }
+      }
+    }
+  }
+
+  .lab-result {
+    background: #0d1f0d;
+    border-top: 1px solid #1a3a1a;
+    padding: 1.1rem 1.5rem;
+
+    .lab-result-title {
+      font-family: var(--font-ui);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #4ade80;
+      margin-bottom: 0.6rem;
+    }
+    p { margin: 0; font-size: 0.88rem; color: var(--color-text-light); }
+  }
+}
+
+// ── OS Tabs ────────────────────────────────────────────────────
+.os-tabs {
+  margin: 1.25rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+
+  .os-tab-bar {
+    display: flex;
+    background: #111827;
+    border-bottom: 1px solid var(--color-border);
+
+    button {
+      padding: 0.5rem 1.1rem;
+      font-family: var(--font-ui, sans-serif);
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--color-text-light);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+
+      &.os-tab-active {
+        color: var(--color-accent);
+        border-bottom-color: var(--color-accent);
+      }
+
+      &:hover:not(.os-tab-active) {
+        color: var(--color-text);
+      }
+    }
+  }
+
+  > div {
+    .code-block {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
   }
 }
 

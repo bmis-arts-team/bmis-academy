@@ -142,4 +142,150 @@ spec:
     </div>
   </section>
 
-</app-lesson-page>
+  <section class="lab-section">
+    <h2>Travaux Pratiques — Stockage & Namespaces</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code>.
+        Ces labs couvrent la persistance des données avec les PersistentVolumeClaims
+        et l'isolation entre environnements avec les namespaces.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 1</span>
+        <span class="lab-title">PersistentVolumeClaim avec PostgreSQL</span>
+        <span class="lab-time">~20 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Créer un PVC et le monter dans un pod PostgreSQL</li>
+          <li>Insérer des données, supprimer le pod et vérifier la persistance</li>
+          <li>Observer le cycle de vie du PVC indépendamment du pod</li>
+        </ul>
+
+        <div class="code-block">
+          <div class="code-header"><span>postgres-pvc.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard   # StorageClass fournie par Kind
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  containers:
+    - name: postgres
+      image: postgres:16-alpine
+      env:
+        - name: POSTGRES_DB
+          value: myapp
+        - name: POSTGRES_USER
+          value: dev
+        - name: POSTGRES_PASSWORD
+          value: devpass
+      volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql/data
+  volumes:
+    - name: pgdata
+      persistentVolumeClaim:
+        claimName: postgres-pvc</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f postgres-pvc.yaml
+
+# Vérifier que le PVC est Bound
+kubectl get pvc
+# NAME           STATUS   VOLUME       CAPACITY
+# postgres-pvc   Bound    pvc-xxx...   1Gi
+
+# Créer des données
+kubectl exec -it postgres -- psql -U dev -d myapp
+# CREATE TABLE demo (id SERIAL, val TEXT);
+# INSERT INTO demo(val) VALUES ('test-persistance');
+# \q
+
+# Supprimer le pod (PAS le PVC)
+kubectl delete pod postgres
+
+# Recréer le pod
+kubectl apply -f postgres-pvc.yaml
+
+# Les données sont toujours là !
+kubectl exec -it postgres -- psql -U dev -d myapp -c "SELECT * FROM demo;"</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Après suppression et recréation du pod, la table <code>demo</code> et ses données existent toujours. Le PVC survit indépendamment du cycle de vie des pods.</p>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 2</span>
+        <span class="lab-title">Isoler des environnements avec les namespaces</span>
+        <span class="lab-time">~10 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Créer des namespaces staging et production</li>
+          <li>Déployer la même app dans les deux, confirmer l'isolation</li>
+          <li>Appliquer un ResourceQuota sur staging</li>
+        </ul>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl create namespace staging
+kubectl create namespace production
+
+# Déployer httpbin dans les deux namespaces
+kubectl create deployment httpbin --image=kennethreitz/httpbin -n staging
+kubectl create deployment httpbin --image=kennethreitz/httpbin -n production
+
+# Les pods de staging ne voient PAS ceux de production
+kubectl get pods -n staging
+kubectl get pods -n production
+
+# Appliquer un quota sur staging
+kubectl apply -f - &lt;&lt;EOF
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: staging-quota
+  namespace: staging
+spec:
+  hard:
+    pods: "5"
+    requests.cpu: "1"
+    requests.memory: "1Gi"
+EOF
+
+# Vérifier le quota
+kubectl describe resourcequota staging-quota -n staging</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Les deux déploiements coexistent sans interférence. Toute tentative de dépasser le quota dans <code>staging</code> est bloquée par Kubernetes avec un message d'erreur clair.</p>
+      </div>
+    </div>
+
+  </section>
+

@@ -128,4 +128,113 @@ kubectl create secret generic tls-cert \
     </div>
   </section>
 
-</app-lesson-page>
+  <section class="lab-section">
+    <h2>Travaux Pratiques — ConfigMaps & Secrets</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code>. Ces labs montrent comment
+        externaliser la configuration d'une app et modifier sa config à chaud, sans rebuilder l'image.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 1</span>
+        <span class="lab-title">Injecter ConfigMap & Secret dans un pod</span>
+        <span class="lab-time">~20 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Créer un ConfigMap avec des paramètres applicatifs</li>
+          <li>Créer un Secret avec des données sensibles</li>
+          <li>Les injecter dans un pod et vérifier qu'ils sont disponibles</li>
+          <li>Modifier la config à chaud sans rebuilder l'image</li>
+        </ul>
+
+        <h4>Étape 1 — Créer le ConfigMap</h4>
+        <div class="code-block">
+          <div class="code-header"><span>app-config.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APP_ENV: "staging"
+  LOG_LEVEL: "DEBUG"
+  MAX_CONNECTIONS: "25"
+  API_ENDPOINT: "http://backend-service:8080"</code></pre>
+        </div>
+
+        <h4>Étape 2 — Créer le Secret</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># K8s encode automatiquement en Base64
+kubectl create secret generic app-secret \
+  --from-literal=DB_PASSWORD=MonMotDePasse123 \
+  --from-literal=JWT_SECRET=ma-cle-jwt-secrete
+
+# Vérifier (valeurs masquées)
+kubectl get secret app-secret -o yaml</code></pre>
+        </div>
+
+        <h4>Étape 3 — Pod consommant ConfigMap + Secret</h4>
+        <div class="code-block">
+          <div class="code-header"><span>config-demo.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: config-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: ["sh", "-c", "env | sort && sleep 3600"]
+      envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secret</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f app-config.yaml
+kubectl apply -f config-demo.yaml
+
+# Vérifier les variables injectées dans le conteneur
+kubectl logs config-demo | grep -E "APP_ENV|LOG_LEVEL|DB_PASSWORD"
+# APP_ENV=staging
+# DB_PASSWORD=MonMotDePasse123
+# LOG_LEVEL=DEBUG
+
+# Entrer dans le conteneur
+kubectl exec -it config-demo -- sh
+# / # echo $JWT_SECRET
+# ma-cle-jwt-secrete</code></pre>
+        </div>
+
+        <h4>Étape 4 — Modifier la config sans rebuilder</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Modifier le ConfigMap en live
+kubectl edit configmap app-config
+# Changer LOG_LEVEL: DEBUG → INFO, sauvegarder
+
+# Redémarrer le pod pour prendre la nouvelle config
+kubectl delete pod config-demo
+kubectl apply -f config-demo.yaml
+
+# Vérifier
+kubectl logs config-demo | grep LOG_LEVEL
+# LOG_LEVEL=INFO</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Le pod affiche toutes les variables de config et de secret sans qu'elles soient dans l'image Docker. Changer le ConfigMap et redémarrer suffit pour modifier la configuration en production.</p>
+      </div>
+    </div>
+
+  </section>
+

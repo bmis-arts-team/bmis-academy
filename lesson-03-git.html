@@ -1,0 +1,211 @@
+﻿<app-lesson-page [data]="data">
+
+  <section>
+    <h2>Pourquoi Kubernetes ?</h2>
+    <p>Docker est excellent pour ex├®cuter des conteneurs individuels. Mais en production, vous avez besoin de :</p>
+    <ul>
+      <li><strong>Scaling automatique</strong> - Ajouter/retirer des instances selon la charge</li>
+      <li><strong>Self-healing</strong> - Red├®marrer automatiquement les conteneurs crash├®s</li>
+      <li><strong>Service discovery</strong> - Trouver les services sans IP cod├®es en dur</li>
+      <li><strong>Rolling updates</strong> - D├®ployer sans interruption de service</li>
+      <li><strong>Load balancing</strong> - Distribuer le trafic entre les r├®plicas</li>
+    </ul>
+    <p>C'est exactement ce que fait <strong>Kubernetes</strong> (souvent abr├®g├® K8s).</p>
+  </section>
+
+  <section>
+    <h2>Vue d'ensemble de l'architecture</h2>
+    <div class="arch-diagram">
+      <pre>
+ÔöîÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Kubernetes Cluster ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÉ
+Ôöé                                                           Ôöé
+Ôöé  ÔöîÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Control Plane ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÉ                Ôöé
+Ôöé  Ôöé  ÔöîÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÉ  ÔöîÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÉ    Ôöé                Ôöé
+Ôöé  Ôöé  Ôöé API      Ôöé  Ôöé etcd            Ôöé    Ôöé                Ôöé
+Ôöé  Ôöé  Ôöé Server   Ôöé  Ôöé (key-value DB)  Ôöé    Ôöé                Ôöé
+Ôöé  Ôöé  ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ  ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ    Ôöé                Ôöé
+Ôöé  Ôöé  ÔöîÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÉ  ÔöîÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÉ    Ôöé                Ôöé
+Ôöé  Ôöé  ÔöéScheduler Ôöé  ÔöéController       Ôöé    Ôöé                Ôöé
+Ôöé  Ôöé  Ôöé          Ôöé  ÔöéManager          Ôöé    Ôöé                Ôöé
+Ôöé  Ôöé  ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ  ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ    Ôöé                Ôöé
+Ôöé  ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ                Ôöé
+Ôöé                                                           Ôöé
+Ôöé  ÔöîÔöÇÔöÇÔöÇ Worker Node 1 ÔöÇÔöÇÔöÇÔöÉ  ÔöîÔöÇÔöÇÔöÇ Worker Node 2 ÔöÇÔöÇÔöÇÔöÉ       Ôöé
+Ôöé  Ôöé ÔöîÔöÇPodÔöÇÔöÇÔöÉ ÔöîÔöÇPodÔöÇÔöÇÔöÉ   Ôöé  Ôöé ÔöîÔöÇPodÔöÇÔöÇÔöÉ ÔöîÔöÇPodÔöÇÔöÇÔöÉ   Ôöé       Ôöé
+Ôöé  Ôöé Ôöé API  Ôöé ÔöéRedis Ôöé   Ôöé  Ôöé Ôöé API  Ôöé Ôöé API  Ôöé   Ôöé       Ôöé
+Ôöé  Ôöé ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ   Ôöé  Ôöé ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ   Ôöé       Ôöé
+Ôöé  Ôöé  kubelet Ôöé kube-proxyÔöé  Ôöé  kubelet Ôöé kube-proxyÔöé       Ôöé
+Ôöé  ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ  ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ       Ôöé
+ÔööÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÿ</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Control Plane - Le cerveau du cluster</h2>
+
+    <h3>kube-apiserver</h3>
+    <p>Le point d'entr├®e unique du cluster. Toutes les op├®rations passent par l'API REST. <code>kubectl</code>, le dashboard et les composants internes communiquent exclusivement via l'API Server.</p>
+
+    <h3>etcd</h3>
+    <p>Base de donn├®es cl├®-valeur distribu├®e qui stocke <strong>tout l'├®tat du cluster</strong> : configurations, secrets, ├®tat des pods, etc. C'est la seule source de v├®rit├®.</p>
+
+    <div class="callout warning">
+      <strong>Sauvegardez etcd</strong>
+      <p>Si etcd est perdu, tout l'├®tat du cluster est perdu. Programmez des snapshots r├®guliers : <code>etcdctl snapshot save backup.db</code></p>
+    </div>
+
+    <h3>kube-scheduler</h3>
+    <p>D├®cide sur quel node un nouveau pod sera plac├®, en tenant compte des ressources disponibles, des affinit├®s et des contraintes.</p>
+
+    <h3>kube-controller-manager</h3>
+    <p>Ex├®cute les boucles de contr├┤le : ReplicaSet controller (maintenir le bon nombre de pods), Node controller (d├®tecter les nodes d├®faillants), Endpoint controller, etc.</p>
+  </section>
+
+  <section>
+    <h2>Worker Nodes - L'ex├®cution</h2>
+
+    <h3>kubelet</h3>
+    <p>Agent pr├®sent sur chaque node. Il re├ºoit les instructions de l'API Server et s'assure que les conteneurs demand├®s sont en cours d'ex├®cution.</p>
+
+    <h3>kube-proxy</h3>
+    <p>G├¿re les r├¿gles r├®seau sur chaque node. Il permet aux Services Kubernetes de router le trafic vers les bons pods (via iptables ou IPVS).</p>
+
+    <h3>Container Runtime</h3>
+    <p>Le moteur qui ex├®cute r├®ellement les conteneurs : <strong>containerd</strong> (standard), CRI-O, ou d'autres runtimes compatibles CRI.</p>
+  </section>
+
+  <section>
+    <h2>Pods - L'unit├® atomique</h2>
+    <p>Un <strong>Pod</strong> est la plus petite unit├® d├®ployable dans Kubernetes. Il encapsule un ou plusieurs conteneurs qui partagent le r├®seau et le stockage.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>pod.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: api-backend
+  labels:
+    app: api-backend
+    version: "1.0"
+spec:
+  containers:
+    - name: api
+      image: myregistry/api-backend:1.0.0
+      ports:
+        - containerPort: 8080
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "250m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+      livenessProbe:
+        httpGet:
+          path: /actuator/health/liveness
+          port: 8080
+        initialDelaySeconds: 30
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /actuator/health/readiness
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 5</code></pre>
+    </div>
+
+    <div class="callout tip">
+      <strong>Ne d├®ployez jamais de Pods seuls</strong>
+      <p>En production, utilisez toujours un <strong>Deployment</strong> ou un <strong>StatefulSet</strong>. Un pod seul ne sera pas recr├®├® s'il crash ou si le node tombe.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>kubectl - L'outil de commande</h2>
+    <div class="code-block">
+      <div class="code-header"><span>bash - Commandes essentielles</span></div>
+      <pre><code class="language-bash"># Contexte et cluster
+kubectl cluster-info
+kubectl config get-contexts
+
+# Cr├®er des ressources
+kubectl apply -f pod.yaml
+
+# Lister les ressources
+kubectl get pods
+kubectl get pods -o wide          # avec IP et node
+kubectl get all                   # pods, services, deployments...
+
+# D├®tails d'un pod
+kubectl describe pod api-backend
+
+# Logs
+kubectl logs api-backend -f       # follow
+kubectl logs api-backend -c api   # conteneur sp├®cifique
+
+# Ex├®cuter une commande
+kubectl exec -it api-backend -- /bin/sh
+
+# Supprimer
+kubectl delete pod api-backend</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Installation locale avec Kind</h2>
+    <p><strong>Kind</strong> (Kubernetes in Docker) cr├®e un cluster K8s complet dans des conteneurs Docker. Id├®al pour le d├®veloppement local.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>kind-config.yaml</span></div>
+      <pre><code class="language-yaml">kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: dev-cluster
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 80
+  - role: worker
+  - role: worker</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash"># Cr├®er le cluster
+kind create cluster --config kind-config.yaml
+
+# V├®rifier
+kubectl get nodes
+
+# Supprimer
+kind delete cluster --name dev-cluster</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Namespaces</h2>
+    <p>Les namespaces isolent logiquement les ressources dans un cluster. Par d├®faut, tout est dans le namespace <code>default</code>.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash"># Cr├®er un namespace
+kubectl create namespace staging
+kubectl create namespace production
+
+# D├®ployer dans un namespace sp├®cifique
+kubectl apply -f deployment.yaml -n staging
+
+# Lister les pods d'un namespace
+kubectl get pods -n production
+
+# Changer le namespace par d├®faut
+kubectl config set-context --current --namespace=staging</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Bonnes pratiques des namespaces</strong>
+      <p>Utilisez des namespaces pour s├®parer les environnements (<code>staging</code>, <code>production</code>) ou les ├®quipes. Appliquez des quotas de ressources par namespace pour ├®viter qu'un service consomme toutes les ressources du cluster.</p>
+    </div>
+  </section>
+
+</app-lesson-page>

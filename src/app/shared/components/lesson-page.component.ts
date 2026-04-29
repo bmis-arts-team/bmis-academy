@@ -1,17 +1,18 @@
 import { Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { DecimalPipe } from '@angular/common';
 import { LessonNav } from '../../core/models/course.model';
 import { HighlightDirective } from '../directives/highlight.directive';
 
 @Component({
   selector: 'app-lesson-page',
-  imports: [RouterLink, HighlightDirective],
+  imports: [RouterLink, HighlightDirective, DecimalPipe],
   template: `
     @let d = data();
     @if (d) {
       <div class="lesson-header">
         <div class="lesson-meta">
-          <span class="lesson-number">Leçon {{ d.lesson.route }}</span>
+          <span class="lesson-number">Leçon {{ d.lesson.number | number:'2.0-0' }}</span>
           <span>{{ d.section }}</span>
         </div>
         <h1>{{ d.lesson.title }}</h1>

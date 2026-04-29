@@ -175,4 +175,93 @@ spec:
     <p>Ajoutez l'annotation <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code> à votre Ingress pour activer le TLS automatique.</p>
   </section>
 
-</app-lesson-page>
+  <section class="lab-section">
+    <h2>Travaux Pratiques — Services & Ingress</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> avec le Deployment <code>httpbin</code>
+        du Lab précédent (Leçon 4). Nous allons exposer cette application de trois manières différentes.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 1</span>
+        <span class="lab-title">Exposer une application via ClusterIP, NodePort et port-forward</span>
+        <span class="lab-time">~20 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Créer un Service ClusterIP et tester la communication interne</li>
+          <li>Créer un Service NodePort et accéder depuis l'extérieur</li>
+          <li>Utiliser le port-forward comme alternative rapide</li>
+          <li>Observer le load balancing entre les pods</li>
+        </ul>
+
+        <h4>Étape 1 — Service ClusterIP (communication interne)</h4>
+        <div class="code-block">
+          <div class="code-header"><span>httpbin-svc.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin-svc
+  namespace: default
+spec:
+  selector:
+    app: httpbin
+  ports:
+    - port: 80
+      targetPort: 80</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f httpbin-svc.yaml
+
+# Vérifier le service et son ClusterIP
+kubectl get service httpbin-svc
+# NAME          TYPE        CLUSTER-IP    PORT(S)
+# httpbin-svc   ClusterIP   10.96.x.x     80/TCP
+
+# Tester depuis un pod éphémère dans le cluster
+kubectl run test-curl --image=curlimages/curl:8.5.0 --restart=Never --rm -it -- \
+  curl http://httpbin-svc/ip
+# &#123;"origin": "10.244.x.x"&#125;   ← IP du pod test, pas la nôtre
+
+# Observer l'Endpoints : liste des IPs de pods derrière le Service
+kubectl get endpoints httpbin-svc</code></pre>
+        </div>
+
+        <h4>Étape 2 — Port-forward (accès local rapide)</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Forward le port 8080 local vers le service
+kubectl port-forward service/httpbin-svc 8080:80
+
+# Dans un autre terminal :
+curl http://localhost:8080/ip
+curl http://localhost:8080/headers
+# Ouvrir http://localhost:8080 dans le navigateur</code></pre>
+        </div>
+
+        <h4>Étape 3 — Observer le load balancing</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Lancer 10 requêtes successives via le Service
+for i in $(seq 1 10); do
+  kubectl run test-$i --image=curlimages/curl:8.5.0 --restart=Never --rm -it -- \
+    curl -s http://httpbin-svc/ip | grep origin
+done
+
+# Vous verrez des IPs différentes → chaque requête atterrit sur un pod différent</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Le Service ClusterIP expose un DNS stable (<code>httpbin-svc.default.svc.cluster.local</code>). Les 10 requêtes retournent des IPs de pods différentes : c'est le load balancing natif de Kubernetes.</p>
+      </div>
+    </div>
+
+  </section>
+

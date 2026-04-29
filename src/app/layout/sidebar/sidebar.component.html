@@ -60,7 +60,7 @@
                          routerLinkActive="active"
                          class="lesson-link"
                          (click)="onNavigate()">
-                        <span class="lesson-num">{{ lesson.route }}</span>
+                        <span class="lesson-num">{{ lesson.number | number:'2.0-0' }}</span>
                         <span class="lesson-title">{{ lesson.title }}</span>
                       </a>
                     }

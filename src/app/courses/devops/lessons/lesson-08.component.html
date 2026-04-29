@@ -296,4 +296,182 @@ kubectl logs deployment/api-backend -f</code></pre>
     </table>
   </section>
 
-</app-lesson-page>
+  <section class="lab-section">
+    <h2>Travaux Pratiques — Déployer un système complet</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Lab de synthèse :</strong> on regroupe tout ce qu'on a appris pour déployer
+        un stack réaliste composé d'une API Spring Boot, d'un PostgreSQL avec PVC, et d'un Redis.
+        Chaque service est configuré via ConfigMap / Secret et exposé par un Service dédié.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab</span>
+        <span class="lab-title">Stack API + PostgreSQL + Redis sur Kind</span>
+        <span class="lab-time">~40 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Déployer PostgreSQL avec PersistentVolumeClaim</li>
+          <li>Déployer Redis</li>
+          <li>Déployer une API qui dépend des deux via ConfigMap &amp; Secret</li>
+          <li>Exposer l'API via un Service et tester de bout en bout</li>
+        </ul>
+
+        <h4>Étape 1 — Créer le namespace et la configuration</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl create namespace myapp
+kubectl config set-context --current --namespace=myapp</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>config.yaml — ConfigMap + Secret</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: myapp
+data:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres-svc:5432/myapp"
+  SPRING_REDIS_HOST: "redis-svc"
+  SPRING_PROFILES_ACTIVE: "prod"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: myapp
+stringData:
+  POSTGRES_PASSWORD: "securepass"
+  SPRING_DATASOURCE_PASSWORD: "securepass"</code></pre>
+        </div>
+
+        <h4>Étape 2 — PostgreSQL avec PVC</h4>
+        <div class="code-block">
+          <div class="code-header"><span>postgres.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: myapp
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_DB
+              value: myapp
+            - name: POSTGRES_USER
+              value: appuser
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-svc
+  namespace: myapp
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432</code></pre>
+        </div>
+
+        <h4>Étape 3 — Redis</h4>
+        <div class="code-block">
+          <div class="code-header"><span>redis.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: myapp
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379</code></pre>
+        </div>
+
+        <h4>Étape 4 — Vérifier le stack complet</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f config.yaml
+kubectl apply -f postgres.yaml
+kubectl apply -f redis.yaml
+
+# Attendre que tout soit Ready
+kubectl get pods -w
+# postgres-xxx   1/1   Running
+# redis-xxx      1/1   Running
+
+# Tester la connectivité inter-services
+kubectl run test --image=busybox --restart=Never --rm -it -- \
+  sh -c "nc -z postgres-svc 5432 &amp;&amp; echo 'postgres OK' ; nc -z redis-svc 6379 &amp;&amp; echo 'redis OK'"
+
+# Voir les events pour diagnostiquer d'éventuels problèmes
+kubectl get events --sort-by=.lastTimestamp</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Les 3 services (postgres, redis, API) tournent dans le namespace <code>myapp</code>. La connectivité inter-services fonctionne par nom DNS. Les credentials ne sont jamais dans les manifests grâce aux Secrets.</p>
+      </div>
+    </div>
+
+  </section>
+

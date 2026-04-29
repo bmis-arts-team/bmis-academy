@@ -9,17 +9,46 @@
       au filesystem du conteneur sont stockées - nouveaux fichiers, modifications, suppressions.
     </p>
 
-    <div class="arch-diagram">
-      <pre>
-  ┌───────────────────────────────┐
-  │  Writable Layer (conteneur)   │  ← Créée au démarrage, détruite à la suppression
-  ├───────────────────────────────┤
-  │  Layer 3 - App binaries       │  ← Lecture seule (image)
-  ├───────────────────────────────┤
-  │  Layer 2 - JDK 17             │  ← Lecture seule (image)
-  ├───────────────────────────────┤
-  │  Layer 1 - Ubuntu base        │  ← Lecture seule (image)
-  └───────────────────────────────┘</pre>
+    <div class="k8s-diagram-wrapper">
+      <svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg" class="k8s-diagram" role="img" aria-label="Docker OverlayFS layers">
+        <defs>
+          <linearGradient id="l2rwGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#f0fdf4;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#dcfce7;stop-opacity:1"/>
+          </linearGradient>
+          <linearGradient id="l2roGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#f8fafc;stop-opacity:1"/>
+          </linearGradient>
+          <filter id="l2shadow" x="-5%" y="-5%" width="110%" height="120%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#94a3b8" flood-opacity="0.15"/>
+          </filter>
+        </defs>
+
+        <rect x="100" y="15" width="400" height="255" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+        <text x="300" y="38" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#334155" letter-spacing="1">OVERLAYFS — FILESYSTEM EN COUCHES</text>
+
+        <!-- R/W layer — y=48 h=42 → bottom=90 -->
+        <rect x="120" y="48" width="360" height="42" rx="7" fill="url(#l2rwGrad)" stroke="#86efac" stroke-width="1.5"/>
+        <text x="220" y="72" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#15803d">Writable Layer (conteneur)</text>
+        <text x="465" y="65" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#16a34a">R/W</text>
+        <text x="465" y="78" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">créée au démarrage · détruite à la suppression</text>
+
+        <!-- R/O 3 — y=104 h=40 → bottom=144 -->
+        <rect x="120" y="104" width="360" height="40" rx="7" fill="url(#l2roGrad)" stroke="#cbd5e1" stroke-width="1"/>
+        <text x="220" y="124" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e293b">Layer 3 — App binaries</text>
+        <text x="465" y="127" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">R/O · image</text>
+
+        <!-- R/O 2 — y=158 h=40 → bottom=198 -->
+        <rect x="120" y="158" width="360" height="40" rx="7" fill="url(#l2roGrad)" stroke="#cbd5e1" stroke-width="1"/>
+        <text x="220" y="178" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e293b">Layer 2 — JDK 17</text>
+        <text x="465" y="181" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">R/O · image</text>
+
+        <!-- R/O 1 — y=212 h=40 → bottom=252 -->
+        <rect x="120" y="212" width="360" height="40" rx="7" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+        <text x="220" y="232" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e40af">Layer 1 — Ubuntu base</text>
+        <text x="465" y="235" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">R/O · partagée</text>
+      </svg>
     </div>
 
     <p>
@@ -45,26 +74,74 @@
       Mais pour une base de données ou un service de fichiers, c'est inacceptable.
     </p>
 
-    <div class="arch-diagram">
-      <pre>
-  Sans volume - données perdues :
-  ┌──────────────────────────────────────────┐
-  │  Writable Layer                          │
-  │  ├── /var/lib/postgresql/data  ✗ perdu   │
-  │  └── /data/uploads             ✗ perdu   │
-  └────────── supprimée avec le conteneur ───┘
+    <div class="k8s-diagram-wrapper">
+      <svg viewBox="0 0 740 280" xmlns="http://www.w3.org/2000/svg" class="k8s-diagram" role="img" aria-label="Docker volumes persistence">
+        <defs>
+          <linearGradient id="l2vGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#fef2f2;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#fee2e2;stop-opacity:1"/>
+          </linearGradient>
+          <linearGradient id="l2vGoodGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#f0fdf4;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#dcfce7;stop-opacity:1"/>
+          </linearGradient>
+          <linearGradient id="l2vVolGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#eff6ff;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:1"/>
+          </linearGradient>
+          <marker id="l2varrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.8"/>
+          </marker>
+          <symbol id="l2ic-database" viewBox="0 0 16 16">
+            <ellipse cx="8" cy="4" rx="5.5" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M2.5 4v3.5c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2V4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M2.5 7.5v3.5c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2V7.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          </symbol>
+        </defs>
 
-  Avec volume - données persistantes :
-  ┌─────────────────────────────────────────┐
-  │  Writable Layer (conteneur)             │
-  │  ├── /var/lib/postgresql/data  ──┐      │
-  │  └── /data/uploads           ──┐ │      │
-  └─────────────────────────────── │ │ ─────┘
-                                   ▼ ▼
-                        ┌────────────────────┐
-                        │  Volume Docker     │  ← Survit au conteneur
-                        │  (hôte / géré)     │
-                        └────────────────────┘</pre>
+        <!-- ── SANS VOLUME (left) ── -->
+        <rect x="20" y="15" width="320" height="250" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+        <text x="180" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#dc2626" letter-spacing="1">SANS VOLUME</text>
+
+        <!-- Writable layer -->
+        <rect x="40" y="52" width="280" height="90" rx="8" fill="url(#l2vGrad)" stroke="#fca5a5" stroke-width="1.5"/>
+        <text x="180" y="72" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#991b1b">Writable Layer (conteneur)</text>
+        <text x="55" y="95" font-family="'Segoe UI',sans-serif" font-size="9" fill="#dc2626">&#x2717;  /var/lib/postgresql/data</text>
+        <text x="55" y="114" font-family="'Segoe UI',sans-serif" font-size="9" fill="#dc2626">&#x2717;  /data/uploads</text>
+
+        <!-- Deleted bar -->
+        <rect x="40" y="152" width="280" height="24" rx="5" fill="#fca5a5" opacity="0.4"/>
+        <text x="180" y="168" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#7f1d1d">supprimée avec le conteneur</text>
+
+        <text x="180" y="215" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" fill="#ef4444" font-weight="600">docker rm → tout est perdu</text>
+        <text x="180" y="252" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#94a3b8">Inacceptable pour une base de données</text>
+
+        <!-- VS divider -->
+        <line x1="370" y1="20" x2="370" y2="260" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,3"/>
+        <circle cx="370" cy="140" r="18" fill="#1e293b"/>
+        <text x="370" y="145" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#f8fafc">VS</text>
+
+        <!-- ── AVEC VOLUME (right) ── -->
+        <rect x="400" y="15" width="320" height="250" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+        <text x="560" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#15803d" letter-spacing="1">AVEC VOLUME</text>
+
+        <!-- Writable layer -->
+        <rect x="420" y="52" width="280" height="90" rx="8" fill="url(#l2vGoodGrad)" stroke="#86efac" stroke-width="1.5"/>
+        <text x="560" y="72" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#15803d">Writable Layer (conteneur)</text>
+        <text x="435" y="95" font-family="'Segoe UI',sans-serif" font-size="9" fill="#374151">/var/lib/postgresql/data</text>
+        <text x="435" y="114" font-family="'Segoe UI',sans-serif" font-size="9" fill="#374151">/data/uploads</text>
+
+        <!-- Mount arrows from layer to volume -->
+        <line x1="560" y1="144" x2="560" y2="170" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#l2varrow)"/>
+
+        <!-- Volume box -->
+        <rect x="430" y="172" width="260" height="58" rx="8" fill="url(#l2vVolGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+        <use href="#l2ic-database" x="443" y="185" width="14" height="14" color="#2563eb"/>
+        <text x="465" y="197" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#1e40af">Volume Docker</text>
+        <text x="465" y="213" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">Survit au conteneur · géré par Docker</text>
+
+        <text x="560" y="252" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#16a34a" font-weight="600">docker rm → volume intact ✓</text>
+      </svg>
     </div>
 
     <p>
@@ -250,22 +327,69 @@ docker volume inspect postgres-data</code></pre>
       Par défaut, chaque conteneur lancé sans option <code>--network</code> est connecté à ce réseau <code>bridge</code> par défaut.
     </p>
 
-    <div class="arch-diagram">
-      <pre>
-  Hôte Linux
-  ┌─────────────────────────────────────────────────────┐
-  │                                                     │
-  │   Interface physique : eth0 (172.16.0.5)            │
-  │          │                                          │
-  │   ┌──────▼──────────────────────────────────┐      │
-  │   │  docker0 - bridge par défaut             │      │
-  │   │  172.17.0.1 (passerelle)                 │      │
-  │   │  ┌─────────────┐   ┌─────────────┐      │      │
-  │   │  │ conteneur A │   │ conteneur B │      │      │
-  │   │  │ 172.17.0.2  │   │ 172.17.0.3  │      │      │
-  │   │  └─────────────┘   └─────────────┘      │      │
-  │   └─────────────────────────────────────────┘      │
-  └─────────────────────────────────────────────────────┘</pre>
+    <div class="k8s-diagram-wrapper">
+      <svg viewBox="0 0 700 310" xmlns="http://www.w3.org/2000/svg" class="k8s-diagram" role="img" aria-label="Docker default bridge network">
+        <defs>
+          <linearGradient id="l2netGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#f1f5f9;stop-opacity:1"/>
+          </linearGradient>
+          <linearGradient id="l2bridgeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#eff6ff;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:1"/>
+          </linearGradient>
+          <linearGradient id="l2ctGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#f8fafc;stop-opacity:1"/>
+          </linearGradient>
+          <filter id="l2netshadow" x="-5%" y="-5%" width="110%" height="120%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#94a3b8" flood-opacity="0.15"/>
+          </filter>
+          <marker id="l2netarrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.8"/>
+          </marker>
+          <symbol id="l2ic-server" viewBox="0 0 16 16">
+            <rect x="1.5" y="2" width="13" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="1.5" y="9" width="13" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="4" cy="4.25" r="1" fill="currentColor"/>
+            <circle cx="4" cy="11.25" r="1" fill="currentColor"/>
+            <line x1="7" y1="4.25" x2="12" y2="4.25" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="7" y1="11.25" x2="12" y2="11.25" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </symbol>
+        </defs>
+
+        <!-- HOST wrapper -->
+        <rect x="15" y="15" width="670" height="285" rx="14" fill="url(#l2netGrad)" stroke="#cbd5e1" stroke-width="1.5"/>
+        <text x="350" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="12" font-weight="700" fill="#334155" letter-spacing="1">HÔTE LINUX</text>
+
+        <!-- eth0 -->
+        <rect x="270" y="48" width="160" height="32" rx="6" fill="url(#l2ctGrad)" stroke="#94a3b8" stroke-width="1"/>
+        <text x="350" y="69" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">eth0 — 172.16.0.5</text>
+        <line x1="350" y1="80" x2="350" y2="100" stroke="#64748b" stroke-width="1.5" marker-end="url(#l2netarrow)"/>
+
+        <!-- docker0 bridge -->
+        <rect x="100" y="100" width="500" height="130" rx="10" fill="url(#l2bridgeGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+        <text x="200" y="120" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#1d4ed8">docker0 — bridge par défaut</text>
+        <text x="200" y="133" font-family="'Segoe UI',sans-serif" font-size="9" fill="#3b82f6">172.17.0.1 — passerelle / NAT</text>
+
+        <!-- Container A -->
+        <rect x="125" y="145" width="160" height="70" rx="8" fill="url(#l2ctGrad)" stroke="#cbd5e1" stroke-width="1.2"/>
+        <use href="#l2ic-server" x="137" y="156" width="12" height="12" color="#2563eb"/>
+        <text x="155" y="167" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#1e293b">Conteneur A</text>
+        <text x="137" y="183" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.17.0.2</text>
+        <text x="137" y="197" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#94a3b8">IP réassignée au redémarrage</text>
+
+        <!-- Container B -->
+        <rect x="415" y="145" width="160" height="70" rx="8" fill="url(#l2ctGrad)" stroke="#cbd5e1" stroke-width="1.2"/>
+        <use href="#l2ic-server" x="427" y="156" width="12" height="12" color="#2563eb"/>
+        <text x="445" y="167" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#1e293b">Conteneur B</text>
+        <text x="427" y="183" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.17.0.3</text>
+        <text x="427" y="197" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#94a3b8">IP réassignée au redémarrage</text>
+
+        <!-- Trafic externe -->
+        <text x="350" y="262" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Trafic externe → NAT via docker0 → conteneur</text>
+        <text x="350" y="283" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#94a3b8">Sans DNS — les conteneurs ne se voient que par IP</text>
+      </svg>
     </div>
 
     <p>
@@ -292,13 +416,64 @@ docker volume inspect postgres-data</code></pre>
       qui changent à chaque redémarrage du conteneur. Pour faire communiquer une API avec sa base de données, c'est ingérable.
     </p>
 
-    <div class="arch-diagram">
-      <pre>
-  Bridge par défaut (automatique, sans DNS) :
-  ┌────────────────────────────────────────────┐
-  │  api (172.17.0.2)  ──✗──▶  "postgres"     │  ← Échec : nom inconnu
-  │  api (172.17.0.2)  ──✓──▶  172.17.0.3     │  ← Fonctionne, mais l'IP change au redémarrage
-  └────────────────────────────────────────────┘</pre>
+    <div class="k8s-diagram-wrapper">
+      <svg viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" class="k8s-diagram" role="img" aria-label="Default bridge vs custom bridge DNS">
+        <defs>
+          <filter id="l2dnsshadow" x="-5%" y="-5%" width="110%" height="120%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#94a3b8" flood-opacity="0.15"/>
+          </filter>
+          <marker id="l2dnsarrowRed" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#ef4444" opacity="0.8"/>
+          </marker>
+          <marker id="l2dnsarrowGreen" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#16a34a" opacity="0.8"/>
+          </marker>
+        </defs>
+
+        <!-- Bad side -->
+        <rect x="20" y="15" width="340" height="190" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+        <text x="190" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#dc2626">BRIDGE PAR DÉFAUT — sans DNS</text>
+
+        <rect x="40" y="55" width="130" height="36" rx="7" fill="#fff" stroke="#fca5a5" stroke-width="1"/>
+        <text x="105" y="78" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">api</text>
+
+        <rect x="215" y="55" width="130" height="36" rx="7" fill="#fff" stroke="#fca5a5" stroke-width="1"/>
+        <text x="280" y="78" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">postgres</text>
+
+        <!-- api -X-> "postgres" (name) -->
+        <line x1="170" y1="73" x2="215" y2="73" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#l2dnsarrowRed)"/>
+        <text x="192" y="65" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#ef4444">✗ "postgres"</text>
+
+        <!-- api -> 172.17.0.3 -->
+        <line x1="170" y1="85" x2="215" y2="85" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#l2dnsarrowRed)"/>
+        <text x="192" y="97" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#f59e0b">✓ 172.17.0.3 (change)</text>
+
+        <text x="190" y="130" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Pas de serveur DNS embarqué</text>
+        <text x="190" y="147" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#dc2626">Nom de conteneur inconnu</text>
+        <text x="190" y="164" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#dc2626">IP change à chaque redémarrage</text>
+        <text x="190" y="192" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#94a3b8">Créé automatiquement</text>
+
+        <!-- Good side -->
+        <rect x="400" y="15" width="340" height="190" rx="12" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+        <text x="570" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#15803d">BRIDGE PERSONNALISÉ — avec DNS</text>
+
+        <rect x="420" y="55" width="130" height="36" rx="7" fill="#fff" stroke="#86efac" stroke-width="1"/>
+        <text x="485" y="78" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">api</text>
+
+        <rect x="590" y="55" width="130" height="36" rx="7" fill="#fff" stroke="#86efac" stroke-width="1"/>
+        <text x="655" y="78" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">postgres</text>
+
+        <!-- api -> "postgres" resolves -->
+        <line x1="550" y1="73" x2="590" y2="73" stroke="#16a34a" stroke-width="1.5" marker-end="url(#l2dnsarrowGreen)"/>
+        <text x="570" y="65" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#16a34a">✓ "postgres"</text>
+
+        <!-- DNS box -->
+        <rect x="490" y="105" width="160" height="32" rx="6" fill="#dcfce7" stroke="#86efac" stroke-width="1"/>
+        <text x="570" y="126" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" font-weight="600" fill="#15803d">Docker DNS embarqué</text>
+
+        <text x="570" y="165" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#16a34a">Résout le nom même si l'IP change</text>
+        <text x="570" y="192" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#94a3b8">docker network create app-network</text>
+      </svg>
     </div>
 
     <p>
@@ -329,13 +504,53 @@ docker run -d --name api      --network app-network my-api:1.0.0
       comme entrée DNS. Les conteneurs se trouvent donc par nom, de façon stable.
     </p>
 
-    <div class="arch-diagram">
-      <pre>
-  Bridge personnalisé (créé manuellement, avec DNS) :
-  ┌────────────────────────────────────────────┐
-  │  api  ──✓──▶  "postgres"  ──▶  172.18.0.3 │  ← Docker DNS résout le nom
-  │  api  ──✓──▶  "redis"     ──▶  172.18.0.4 │  ← même si l'IP change
-  └────────────────────────────────────────────┘</pre>
+    <div class="k8s-diagram-wrapper">
+      <svg viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" class="k8s-diagram" role="img" aria-label="Custom bridge with DNS resolution">
+        <defs>
+          <filter id="l2cdnsshadow" x="-5%" y="-5%" width="110%" height="120%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#94a3b8" flood-opacity="0.15"/>
+          </filter>
+          <marker id="l2cdnsarrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#16a34a" opacity="0.8"/>
+          </marker>
+          <marker id="l2cdnsarrowBlue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.8"/>
+          </marker>
+        </defs>
+
+        <!-- Network wrapper -->
+        <rect x="20" y="20" width="720" height="185" rx="12" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+        <text x="380" y="45" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#15803d" letter-spacing="1">BRIDGE PERSONNALISÉ — app-network</text>
+
+        <!-- api box -->
+        <rect x="50" y="60" width="150" height="100" rx="8" fill="#fff" stroke="#86efac" stroke-width="1.5"/>
+        <text x="125" y="82" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#1e293b">api</text>
+        <text x="125" y="98" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.18.0.2</text>
+        <text x="125" y="112" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#94a3b8">-p 8080:8080</text>
+        <text x="125" y="148" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8" fill="#16a34a">port publié vers l'hôte</text>
+
+        <!-- postgres box -->
+        <rect x="300" y="60" width="150" height="100" rx="8" fill="#fff" stroke="#86efac" stroke-width="1.5"/>
+        <text x="375" y="82" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#1e293b">postgres</text>
+        <text x="375" y="98" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.18.0.3</text>
+        <text x="375" y="112" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#94a3b8">aucun port publié</text>
+        <text x="375" y="148" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8" fill="#dc2626">injoignable depuis l'ext.</text>
+
+        <!-- redis box -->
+        <rect x="550" y="60" width="150" height="100" rx="8" fill="#fff" stroke="#86efac" stroke-width="1.5"/>
+        <text x="625" y="82" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#1e293b">redis</text>
+        <text x="625" y="98" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.18.0.4</text>
+        <text x="625" y="112" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#94a3b8">aucun port publié</text>
+        <text x="625" y="148" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8" fill="#dc2626">injoignable depuis l'ext.</text>
+
+        <!-- Arrows api -> postgres / redis -->
+        <line x1="200" y1="100" x2="300" y2="100" stroke="#16a34a" stroke-width="1.5" marker-end="url(#l2cdnsarrow)"/>
+        <text x="250" y="92" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#16a34a">✓ "postgres"</text>
+        <line x1="200" y1="120" x2="550" y2="120" stroke="#16a34a" stroke-width="1.5" marker-end="url(#l2cdnsarrow)"/>
+        <text x="380" y="135" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#16a34a">✓ "redis"</text>
+
+        <text x="380" y="195" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#15803d">Docker DNS résout les noms — stables même après redémarrage</text>
+      </svg>
     </div>
 
     <h2>Les drivers réseau - qu'est-ce que c'est ?</h2>
@@ -461,27 +676,105 @@ docker run -d --name api      --network app-network \
 
   <section>
     <h2>Architecture réseau multi-services</h2>
-    <div class="arch-diagram">
-      <pre>
-                            Hôte
-  ┌──────────────────────────────────────────────────────┐
-  │  Trafic externe                                      │
-  │       │  :8080                                       │
-  │       ▼                                              │
-  │  ┌──────────────── app-network (bridge) ───────────┐ │
-  │  │                                                  │ │
-  │  │   ┌─────────┐      ┌───────────┐                │ │
-  │  │   │   api   │─────▶│ postgres  │  (pas de -p)   │ │
-  │  │   │  :8080  │      │  :5432    │                │ │
-  │  │   └────┬────┘      └───────────┘                │ │
-  │  │        │                                         │ │
-  │  │        ▼                                         │ │
-  │  │   ┌─────────┐                                    │ │
-  │  │   │  redis  │  (pas de -p)                       │ │
-  │  │   │  :6379  │                                    │ │
-  │  │   └─────────┘                                    │ │
-  │  └──────────────────────────────────────────────────┘ │
-  └──────────────────────────────────────────────────────┘</pre>
+    <div class="k8s-diagram-wrapper">
+      <svg viewBox="0 0 760 365" xmlns="http://www.w3.org/2000/svg" class="k8s-diagram" role="img" aria-label="Docker multi-service network architecture">
+        <defs>
+          <linearGradient id="l2msHostGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#f1f5f9;stop-opacity:1"/>
+          </linearGradient>
+          <linearGradient id="l2msNetGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#f0fdf4;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#dcfce7;stop-opacity:1"/>
+          </linearGradient>
+          <linearGradient id="l2msApiGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#eff6ff;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:1"/>
+          </linearGradient>
+          <filter id="l2msshadow" x="-5%" y="-5%" width="110%" height="120%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#94a3b8" flood-opacity="0.15"/>
+          </filter>
+          <marker id="l2msarrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.8"/>
+          </marker>
+          <marker id="l2msarrowGreen" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#16a34a" opacity="0.8"/>
+          </marker>
+          <marker id="l2msarrowPurple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#7c3aed" opacity="0.8"/>
+          </marker>
+          <symbol id="l2msic-server" viewBox="0 0 16 16">
+            <rect x="1.5" y="2" width="13" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="1.5" y="9" width="13" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="4" cy="4.25" r="1" fill="currentColor"/>
+            <circle cx="4" cy="11.25" r="1" fill="currentColor"/>
+            <line x1="7" y1="4.25" x2="12" y2="4.25" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="7" y1="11.25" x2="12" y2="11.25" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </symbol>
+          <symbol id="l2msic-database" viewBox="0 0 16 16">
+            <ellipse cx="8" cy="4" rx="5.5" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M2.5 4v3.5c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2V4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M2.5 7.5v3.5c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2V7.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          </symbol>
+          <symbol id="l2msic-cpu" viewBox="0 0 16 16">
+            <rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="5.5" y="5.5" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.1"/>
+            <line x1="6" y1="1.5" x2="6" y2="3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="10" y1="1.5" x2="10" y2="3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="6" y1="12.5" x2="6" y2="14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="10" y1="12.5" x2="10" y2="14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="1.5" y1="6" x2="3.5" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="1.5" y1="10" x2="3.5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="12.5" y1="6" x2="14.5" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="12.5" y1="10" x2="14.5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </symbol>
+        </defs>
+        <!-- HOST wrapper -->
+        <rect x="15" y="15" width="730" height="340" rx="14" fill="url(#l2msHostGrad)" stroke="#cbd5e1" stroke-width="1.5"/>
+        <text x="380" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="12" font-weight="700" fill="#334155" letter-spacing="1">H&#xd4;TE</text>
+        <!-- External traffic -->
+        <rect x="290" y="48" width="180" height="28" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1"/>
+        <text x="380" y="67" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" fill="#6d28d9">Trafic externe &#x2014; :8080</text>
+        <line x1="380" y1="76" x2="380" y2="100" stroke="#6d28d9" stroke-width="1.5" marker-end="url(#l2msarrow)"/>
+        <!-- app-network bridge -->
+        <rect x="50" y="100" width="660" height="190" rx="10" fill="url(#l2msNetGrad)" stroke="#86efac" stroke-width="1.5"/>
+        <text x="80" y="122" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#15803d">app-network (bridge)</text>
+        <!-- api container -->
+        <rect x="80" y="135" width="160" height="130" rx="8" fill="url(#l2msApiGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+        <use href="#l2msic-server" x="92" y="147" width="13" height="13" color="#2563eb"/>
+        <text x="112" y="159" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#1e293b">api</text>
+        <text x="92" y="178" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Spring Boot :8080</text>
+        <text x="92" y="193" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.18.0.2</text>
+        <rect x="92" y="205" width="136" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd" stroke-width="0.8"/>
+        <text x="160" y="220" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#1d4ed8">-p 8080:8080 (publi&#233;)</text>
+        <text x="160" y="252" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8" fill="#16a34a">accessible depuis l'ext.</text>
+        <!-- postgres container -->
+        <rect x="300" y="135" width="170" height="130" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+        <use href="#l2msic-database" x="312" y="147" width="13" height="13" color="#ea580c"/>
+        <text x="332" y="159" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#1e293b">postgres</text>
+        <text x="312" y="178" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">PostgreSQL :5432</text>
+        <text x="312" y="193" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.18.0.3</text>
+        <rect x="312" y="205" width="146" height="22" rx="4" fill="#ffedd5" stroke="#fdba74" stroke-width="0.8"/>
+        <text x="385" y="220" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#9a3412">pas de -p (interne)</text>
+        <text x="385" y="252" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8" fill="#dc2626">hors r&#233;seau = injoignable</text>
+        <!-- redis container -->
+        <rect x="530" y="135" width="155" height="130" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+        <use href="#l2msic-cpu" x="542" y="147" width="13" height="13" color="#7c3aed"/>
+        <text x="562" y="159" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#1e293b">redis</text>
+        <text x="542" y="178" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Redis :6379</text>
+        <text x="542" y="193" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">172.18.0.4</text>
+        <rect x="542" y="205" width="131" height="22" rx="4" fill="#ede9fe" stroke="#c4b5fd" stroke-width="0.8"/>
+        <text x="607" y="220" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#6d28d9">pas de -p (interne)</text>
+        <text x="607" y="252" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8" fill="#dc2626">hors r&#233;seau = injoignable</text>
+        <!-- arrows -->
+        <!-- JDBC: api → postgres (direct horizontal between the two boxes) -->
+        <line x1="240" y1="185" x2="300" y2="185" stroke="#16a34a" stroke-width="1.5" marker-end="url(#l2msarrowGreen)"/>
+        <text x="270" y="177" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#16a34a">JDBC</text>
+        <!-- Redis client: api → redis routed below the containers to avoid overlap -->
+        <path d="M 160 265 L 160 285 L 607 285 L 607 265" fill="none" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#l2msarrowPurple)"/>
+        <text x="385" y="299" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#7c3aed">Redis client</text>
+        <text x="380" y="350" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Seul le port de l'api est publié vers l'extérieur — postgres et redis sont isolés</text>
+      </svg>
     </div>
 
     <div class="callout warning">
@@ -495,4 +788,180 @@ docker run -d --name api      --network app-network \
     </div>
   </section>
 
-</app-lesson-page>
+  <section class="lab-section">
+    <h2>Travaux Pratiques — Volumes & Réseau Docker</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Docker Desktop installé. Ces labs montrent comment persister les données
+        d'une base de données et faire communiquer plusieurs conteneurs via un réseau Docker nommé.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 1</span>
+        <span class="lab-title">PostgreSQL avec persistance de données</span>
+        <span class="lab-time">~15 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Lancer PostgreSQL dans un conteneur avec un volume nommé</li>
+          <li>Créer une table et insérer des données</li>
+          <li>Redémarrer le conteneur et vérifier que les données persistent</li>
+        </ul>
+
+        <h4>Étape 1 — Lancer PostgreSQL avec un volume</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Créer le volume nommé (géré par Docker)
+docker volume create pg-data
+
+# Lancer PostgreSQL
+docker run -d \
+  --name postgres-dev \
+  -e POSTGRES_DB=myapp \
+  -e POSTGRES_USER=dev \
+  -e POSTGRES_PASSWORD=devpass \
+  -v pg-data:/var/lib/postgresql/data \
+  -p 5432:5432 \
+  postgres:16-alpine
+
+docker ps  # vérifier qu'il tourne</code></pre>
+        </div>
+
+        <h4>Étape 2 — Créer des données</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Se connecter à psql dans le conteneur
+docker exec -it postgres-dev psql -U dev -d myapp
+
+-- Dans psql :
+CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT);
+INSERT INTO users (name) VALUES ('Alice'), ('Bob');
+SELECT * FROM users;
+-- id | name
+-- 1  | Alice
+-- 2  | Bob
+\q</code></pre>
+        </div>
+
+        <h4>Étape 3 — Redémarrer et vérifier la persistance</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Supprimer le conteneur (PAS le volume)
+docker rm -f postgres-dev
+
+# Relancer avec le même volume
+docker run -d \
+  --name postgres-dev \
+  -e POSTGRES_DB=myapp \
+  -e POSTGRES_USER=dev \
+  -e POSTGRES_PASSWORD=devpass \
+  -v pg-data:/var/lib/postgresql/data \
+  -p 5432:5432 \
+  postgres:16-alpine
+
+docker exec -it postgres-dev psql -U dev -d myapp -c "SELECT * FROM users;"
+# Les données Alice et Bob sont toujours là !</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Après suppression et recréation du conteneur, les données sont intactes grâce au volume <code>pg-data</code>. Sans le <code>-v</code>, elles auraient disparu.</p>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 2</span>
+        <span class="lab-title">Communication inter-conteneurs avec docker-compose</span>
+        <span class="lab-time">~20 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Déclarer un stack multi-services dans un docker-compose.yml</li>
+          <li>Faire communiquer une API avec sa base de données par nom de service</li>
+          <li>Observer que les conteneurs s'isolent sur leur propre réseau</li>
+        </ul>
+
+        <h4>docker-compose.yml</h4>
+        <div class="code-block">
+          <div class="code-header"><span>docker-compose.yml</span></div>
+          <pre><code class="language-yaml">services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: devpass
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "dev"]
+      interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myapp
+      SPRING_DATASOURCE_USERNAME: dev
+      SPRING_DATASOURCE_PASSWORD: devpass
+      SPRING_REDIS_HOST: redis   # Nom du service = hostname réseau
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  pg-data:
+  redis-data:</code></pre>
+        </div>
+
+        <h4>Commandes essentielles</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Démarrer le stack complet
+docker compose up -d
+
+# Voir l'état de tous les services
+docker compose ps
+
+# Logs d'un service spécifique
+docker compose logs -f api
+
+# Tester la communication : l'API atteint postgres par son nom
+docker compose exec api ping postgres
+docker compose exec api ping redis
+
+# Vérifier le réseau créé automatiquement
+docker network ls
+docker network inspect monprojet_default
+
+# Arrêter (sans supprimer les volumes)
+docker compose down
+
+# Arrêter ET supprimer les volumes
+docker compose down -v</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Les trois services démarrent dans l'ordre. L'API se connecte à PostgreSQL via le hostname <code>postgres</code> sans aucune IP codée en dur. <code>docker network inspect</code> confirme qu'ils partagent le même réseau privé.</p>
+      </div>
+    </div>
+
+  </section>
+

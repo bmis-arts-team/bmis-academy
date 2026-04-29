@@ -1,5 +1,6 @@
 import { Component, inject, input, output, signal, OnInit, DestroyRef } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
+import { DecimalPipe } from '@angular/common';
 import { filter } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CourseService } from '../../core/services/course.service';
@@ -7,7 +8,7 @@ import { IconComponent } from '../../shared/components/icon.component';
 
 @Component({
   selector: 'app-sidebar',
-  imports: [RouterLink, RouterLinkActive, IconComponent],
+  imports: [RouterLink, RouterLinkActive, IconComponent, DecimalPipe],
   templateUrl: './sidebar.component.html',
   styleUrl: './sidebar.component.scss'
 })

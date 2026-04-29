@@ -163,4 +163,116 @@ jvm_memory_used_bytes{{ '{' }}area="heap"{{ '}' }}
     </div>
   </section>
 
-</app-lesson-page>
+  <section class="lab-section">
+    <h2>Travaux Pratiques — Prometheus & Grafana sur Kind</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> et <strong>Helm</strong> installé.
+        Ce lab installe une stack de monitoring complète en quelques commandes grâce au chart
+        <code>kube-prometheus-stack</code>.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab</span>
+        <span class="lab-title">Stack Prometheus + Grafana avec Helm</span>
+        <span class="lab-time">~25 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Installer Helm et ajouter le repo Prometheus</li>
+          <li>Déployer la stack de monitoring sur le cluster</li>
+          <li>Accéder à Grafana et explorer les dashboards pré-configurés</li>
+          <li>Visualiser les métriques CPU/mémoire de vos pods en temps réel</li>
+        </ul>
+
+        <h4>Étape 1 — Installer Helm</h4>
+        <app-os-tabs>
+          <div linux>
+            <div class="code-block">
+              <div class="code-header"><span>bash — Linux</span></div>
+              <pre><code class="language-bash">curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+helm version</code></pre>
+            </div>
+          </div>
+          <div mac>
+            <div class="code-block">
+              <div class="code-header"><span>bash — macOS</span></div>
+              <pre><code class="language-bash">brew install helm
+helm version</code></pre>
+            </div>
+          </div>
+          <div win>
+            <div class="code-block">
+              <div class="code-header"><span>PowerShell — Windows</span></div>
+              <pre><code class="language-powershell">choco install kubernetes-helm
+helm version</code></pre>
+            </div>
+          </div>
+        </app-os-tabs>
+
+        <h4>Étape 2 — Installer kube-prometheus-stack</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Ajouter le repo Helm
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Créer le namespace monitoring
+kubectl create namespace monitoring
+
+# Installer la stack complète (Prometheus + Grafana + AlertManager + node-exporter)
+helm install prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --set grafana.adminPassword=admin \
+  --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false
+
+# Attendre que tout soit prêt (peut prendre 2-3 minutes)
+kubectl get pods -n monitoring -w</code></pre>
+        </div>
+
+        <h4>Étape 3 — Accéder à Grafana</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Port-forward vers Grafana
+kubectl port-forward -n monitoring service/prometheus-stack-grafana 3000:80
+
+# Ouvrir http://localhost:3000
+# Login : admin / admin
+
+# Dashboards pré-installés utiles :
+# - "Kubernetes / Compute Resources / Cluster"  (CPU/mémoire globale)
+# - "Kubernetes / Compute Resources / Pod"      (par pod)
+# - "Kubernetes / Nodes"                        (métriques des nodes)</code></pre>
+        </div>
+
+        <h4>Étape 4 — Accéder à Prometheus</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Port-forward vers Prometheus
+kubectl port-forward -n monitoring service/prometheus-stack-kube-prom-prometheus 9090:9090
+
+# Ouvrir http://localhost:9090
+# Essayer ces requêtes PromQL :
+
+# CPU utilisé par tous les pods
+sum(rate(container_cpu_usage_seconds_total[5m])) by (pod)
+
+# Mémoire utilisée par namespace
+sum(container_memory_usage_bytes) by (namespace)
+
+# Nombre de pods en Running
+kube_pod_status_phase&#123;phase="Running"&#125;</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Grafana s'ouvre sur <code>localhost:3000</code> avec des dashboards Kubernetes pré-configurés. Vous visualisez en temps réel le CPU, la mémoire et l'état de vos pods. Prometheus exécute vos premières requêtes PromQL.</p>
+      </div>
+    </div>
+
+  </section>
+
