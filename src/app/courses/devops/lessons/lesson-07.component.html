@@ -1,289 +1,238 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Le défi du stockage dans Kubernetes</h2>
-    <p>Les conteneurs sont éphémères, mais les bases de données ont besoin de persistance. Kubernetes résout ce problème avec un système en trois couches :</p>
-    <div class="arch-diagram">
-      <pre>
-  Pod (consommateur)
-    │
-    └──▶ PVC (PersistentVolumeClaim) ─── "Je veux 10Gi en RWO"
-           │
-           └──▶ PV (PersistentVolume) ─── Disque réel (EBS, GCE PD, NFS)
-                  │
-                  └──▶ StorageClass ─── Provisionneur dynamique</pre>
+    <h2>Le problème : configuration hardcodée</h2>
+    <div class="comparison-grid">
+      <div class="comparison-card bad">
+        <h4>❌ Hardcodé dans le code</h4>
+        <div class="code-block">
+          <div class="code-header"><span>application.yml</span></div>
+          <pre><code class="language-yaml">spring:
+  datasource:
+    url: jdbc:postgresql://prod-db:5432/mydb
+    username: admin
+    password: SuperSecret123!</code></pre>
+        </div>
+      </div>
+      <div class="comparison-card good">
+        <h4>✅ Externalisé via K8s</h4>
+        <div class="code-block">
+          <div class="code-header"><span>application.yml</span></div>
+          <pre><code class="language-yaml">spring:
+  datasource:
+    url: ${{ '{' }}SPRING_DATASOURCE_URL{{ '}' }}
+    username: ${{ '{' }}DB_USERNAME{{ '}' }}
+    password: ${{ '{' }}DB_PASSWORD{{ '}' }}</code></pre>
+        </div>
+      </div>
     </div>
+    <p>Kubernetes résout ce problème avec deux ressources : <strong>ConfigMap</strong> pour les données non-sensibles et <strong>Secret</strong> pour les données sensibles.</p>
   </section>
 
   <section>
-    <h2>PersistentVolume (PV)</h2>
-    <p>Un PV représente un <strong>disque physique</strong> dans le cluster. Il est créé par l'administrateur ou dynamiquement par une StorageClass.</p>
+    <h2>ConfigMap - Configuration non-sensible</h2>
+
+    <h3>Créer un ConfigMap</h3>
     <div class="code-block">
-      <div class="code-header"><span>pv.yaml</span></div>
+      <div class="code-header"><span>configmap.yaml</span></div>
       <pre><code class="language-yaml">apiVersion: v1
-kind: PersistentVolume
+kind: ConfigMap
 metadata:
-  name: postgres-pv
-spec:
-  capacity:
-    storage: 20Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: standard
-  hostPath:
-    path: /data/postgres    # Dev local uniquement</code></pre>
+  name: api-config
+data:
+  APP_NAME: "my-application"
+  LOG_LEVEL: "INFO"
+  SPRING_PROFILES_ACTIVE: "production"
+  SERVER_PORT: "8080"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres-headless:5432/app_db"
+  SPRING_DATA_REDIS_HOST: "redis-service"</code></pre>
     </div>
 
-    <table>
-      <thead><tr><th>Access Mode</th><th>Abréviation</th><th>Description</th></tr></thead>
-      <tbody>
-        <tr><td>ReadWriteOnce</td><td><code>RWO</code></td><td>Un seul node en lecture/écriture</td></tr>
-        <tr><td>ReadOnlyMany</td><td><code>ROX</code></td><td>Plusieurs nodes en lecture seule</td></tr>
-        <tr><td>ReadWriteMany</td><td><code>RWX</code></td><td>Plusieurs nodes en lecture/écriture (NFS, CephFS)</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section>
-    <h2>PersistentVolumeClaim (PVC)</h2>
-    <p>Un PVC est une <strong>demande de stockage</strong> par un pod. Kubernetes trouve un PV compatible ou en provisionne un dynamiquement.</p>
+    <h3>Utiliser en variables d'environnement</h3>
     <div class="code-block">
-      <div class="code-header"><span>pvc.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: standard</code></pre>
-    </div>
-
-    <div class="code-block">
-      <div class="code-header"><span>deployment.yaml - utilisation du PVC</span></div>
+      <div class="code-header"><span>deployment.yaml - extrait</span></div>
       <pre><code class="language-yaml">spec:
   containers:
-    - name: postgres
-      image: postgres:16-alpine
+    - name: api
+      image: myregistry/api-backend:1.0.0
+      envFrom:
+        - configMapRef:
+            name: api-config</code></pre>
+    </div>
+
+    <h3>Monter comme fichier</h3>
+    <div class="code-block">
+      <div class="code-header"><span>deployment.yaml - volume mount</span></div>
+      <pre><code class="language-yaml">spec:
+  containers:
+    - name: api
       volumeMounts:
-        - name: data
-          mountPath: /var/lib/postgresql/data
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
   volumes:
-    - name: data
-      persistentVolumeClaim:
-        claimName: postgres-pvc</code></pre>
+    - name: config-volume
+      configMap:
+        name: api-config</code></pre>
     </div>
   </section>
 
   <section>
-    <h2>StorageClass - Provisionnement dynamique</h2>
-    <p>La <strong>StorageClass</strong> automatise la création de PV. Plus besoin de pré-créer des disques manuellement.</p>
+    <h2>Secret - Données sensibles</h2>
+
+    <div class="callout warning">
+      <strong>Les Secrets ne sont pas chiffrés par défaut</strong>
+      <p>Les Secrets Kubernetes sont encodés en base64, pas chiffrés. Activez le chiffrement au repos (<code>EncryptionConfiguration</code>) ou utilisez un gestionnaire externe (HashiCorp Vault, AWS Secrets Manager, Sealed Secrets).</p>
+    </div>
+
     <div class="code-block">
-      <div class="code-header"><span>storageclass.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: fast-ssd
-provisioner: kubernetes.io/aws-ebs    # ou pd.csi.storage.gke.io
-parameters:
-  type: gp3
-  iopsPerGB: "50"
-reclaimPolicy: Retain
-allowVolumeExpansion: true
-volumeBindingMode: WaitForFirstConsumer</code></pre>
+      <div class="code-header"><span>bash - Créer un Secret</span></div>
+      <pre><code class="language-bash"># Depuis des valeurs littérales
+kubectl create secret generic db-credentials \
+  --from-literal=username=app_user \
+  --from-literal=password='P@ssw0rd!'
+
+# Depuis un fichier
+kubectl create secret generic tls-cert \
+  --from-file=tls.crt=./cert.pem \
+  --from-file=tls.key=./key.pem</code></pre>
+    </div>
+
+    <h3>Utiliser dans un Deployment</h3>
+    <div class="code-block">
+      <div class="code-header"><span>deployment.yaml - extrait</span></div>
+      <pre><code class="language-yaml">spec:
+  containers:
+    - name: api
+      env:
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password</code></pre>
     </div>
 
     <div class="callout tip">
-      <strong>WaitForFirstConsumer</strong>
-      <p>Ce mode retarde la création du disque jusqu'à ce qu'un pod le demande. Cela garantit que le disque est créé dans la même zone de disponibilité que le pod.</p>
-    </div>
-  </section>
-
-  <section>
-    <h2>Namespaces - Isolation logique</h2>
-    <p>Les namespaces divisent un cluster en espaces logiques isolés. Chaque namespace a ses propres ressources, quotas et politiques d'accès.</p>
-
-    <div class="code-block">
-      <div class="code-header"><span>namespace.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Namespace
-metadata:
-  name: production
-  labels:
-    environment: production
----
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: production-quota
-  namespace: production
-spec:
-  hard:
-    requests.cpu: "8"
-    requests.memory: 16Gi
-    limits.cpu: "16"
-    limits.memory: 32Gi
-    pods: "50"</code></pre>
-    </div>
-
-    <div class="callout info">
-      <strong>Organisation recommandée</strong>
+      <strong>Bonnes pratiques</strong>
       <ul>
-        <li><code>default</code> - Ne pas utiliser en production</li>
-        <li><code>kube-system</code> - Composants système (DNS, proxy, etc.)</li>
-        <li><code>staging</code> - Environnement de pré-production</li>
-        <li><code>production</code> - Environnement live</li>
-        <li><code>monitoring</code> - Prometheus, Grafana, ELK</li>
+        <li>Ne committez jamais de Secrets en clair dans Git</li>
+        <li>Utilisez <strong>Sealed Secrets</strong> (Bitnami) pour stocker des secrets chiffrés dans Git</li>
+        <li>Séparez les ConfigMaps et Secrets par environnement (dev, staging, prod)</li>
+        <li>Limitez l'accès aux Secrets via RBAC</li>
       </ul>
     </div>
   </section>
 
   <section class="lab-section">
-    <h2>Travaux Pratiques — Stockage & Namespaces</h2>
+    <h2>Travaux Pratiques - ConfigMaps & Secrets</h2>
 
     <div class="lab-intro">
       <p>
-        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code>.
-        Ces labs couvrent la persistance des données avec les PersistentVolumeClaims
-        et l'isolation entre environnements avec les namespaces.
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code>. Ces labs montrent comment
+        externaliser la configuration d'une app et modifier sa config à chaud, sans rebuilder l'image.
       </p>
     </div>
 
     <div class="lab">
       <div class="lab-header">
         <span class="lab-badge">Lab 1</span>
-        <span class="lab-title">PersistentVolumeClaim avec PostgreSQL</span>
+        <span class="lab-title">Injecter ConfigMap & Secret dans un pod</span>
         <span class="lab-time">~20 min</span>
       </div>
       <div class="lab-body">
         <h4>Objectifs</h4>
         <ul class="objective-list">
-          <li>Créer un PVC et le monter dans un pod PostgreSQL</li>
-          <li>Insérer des données, supprimer le pod et vérifier la persistance</li>
-          <li>Observer le cycle de vie du PVC indépendamment du pod</li>
+          <li>Créer un ConfigMap avec des paramètres applicatifs</li>
+          <li>Créer un Secret avec des données sensibles</li>
+          <li>Les injecter dans un pod et vérifier qu'ils sont disponibles</li>
+          <li>Modifier la config à chaud sans rebuilder l'image</li>
         </ul>
 
+        <h4>Étape 1 - Créer le ConfigMap</h4>
         <div class="code-block">
-          <div class="code-header"><span>postgres-pvc.yaml</span></div>
+          <div class="code-header"><span>app-config.yaml</span></div>
           <pre><code class="language-yaml">apiVersion: v1
-kind: PersistentVolumeClaim
+kind: ConfigMap
 metadata:
-  name: postgres-pvc
-  namespace: default
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  storageClassName: standard   # StorageClass fournie par Kind
----
-apiVersion: v1
+  name: app-config
+data:
+  APP_ENV: "staging"
+  LOG_LEVEL: "DEBUG"
+  MAX_CONNECTIONS: "25"
+  API_ENDPOINT: "http://backend-service:8080"</code></pre>
+        </div>
+
+        <h4>Étape 2 - Créer le Secret</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># K8s encode automatiquement en Base64
+kubectl create secret generic app-secret \
+  --from-literal=DB_PASSWORD=MonMotDePasse123 \
+  --from-literal=JWT_SECRET=ma-cle-jwt-secrete
+
+# Vérifier (valeurs masquées)
+kubectl get secret app-secret -o yaml</code></pre>
+        </div>
+
+        <h4>Étape 3 - Pod consommant ConfigMap + Secret</h4>
+        <div class="code-block">
+          <div class="code-header"><span>config-demo.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
 kind: Pod
 metadata:
-  name: postgres
-  namespace: default
+  name: config-demo
 spec:
   containers:
-    - name: postgres
-      image: postgres:16-alpine
-      env:
-        - name: POSTGRES_DB
-          value: myapp
-        - name: POSTGRES_USER
-          value: dev
-        - name: POSTGRES_PASSWORD
-          value: devpass
-      volumeMounts:
-        - name: pgdata
-          mountPath: /var/lib/postgresql/data
-  volumes:
-    - name: pgdata
-      persistentVolumeClaim:
-        claimName: postgres-pvc</code></pre>
+    - name: app
+      image: busybox:1.36
+      command: ["sh", "-c", "env | sort && sleep 3600"]
+      envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secret</code></pre>
         </div>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash">kubectl apply -f postgres-pvc.yaml
+          <pre><code class="language-bash">kubectl apply -f app-config.yaml
+kubectl apply -f config-demo.yaml
 
-# Vérifier que le PVC est Bound
-kubectl get pvc
-# NAME           STATUS   VOLUME       CAPACITY
-# postgres-pvc   Bound    pvc-xxx...   1Gi
+# Vérifier les variables injectées dans le conteneur
+kubectl logs config-demo | grep -E "APP_ENV|LOG_LEVEL|DB_PASSWORD"
+# APP_ENV=staging
+# DB_PASSWORD=MonMotDePasse123
+# LOG_LEVEL=DEBUG
 
-# Créer des données
-kubectl exec -it postgres -- psql -U dev -d myapp
-# CREATE TABLE demo (id SERIAL, val TEXT);
-# INSERT INTO demo(val) VALUES ('test-persistance');
-# \q
+# Entrer dans le conteneur
+kubectl exec -it config-demo -- sh
+# / # echo $JWT_SECRET
+# ma-cle-jwt-secrete</code></pre>
+        </div>
 
-# Supprimer le pod (PAS le PVC)
-kubectl delete pod postgres
+        <h4>Étape 4 - Modifier la config sans rebuilder</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Modifier le ConfigMap en live
+kubectl edit configmap app-config
+# Changer LOG_LEVEL: DEBUG → INFO, sauvegarder
 
-# Recréer le pod
-kubectl apply -f postgres-pvc.yaml
+# Redémarrer le pod pour prendre la nouvelle config
+kubectl delete pod config-demo
+kubectl apply -f config-demo.yaml
 
-# Les données sont toujours là !
-kubectl exec -it postgres -- psql -U dev -d myapp -c "SELECT * FROM demo;"</code></pre>
+# Vérifier
+kubectl logs config-demo | grep LOG_LEVEL
+# LOG_LEVEL=INFO</code></pre>
         </div>
       </div>
       <div class="lab-result">
         <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Après suppression et recréation du pod, la table <code>demo</code> et ses données existent toujours. Le PVC survit indépendamment du cycle de vie des pods.</p>
-      </div>
-    </div>
-
-    <div class="lab">
-      <div class="lab-header">
-        <span class="lab-badge">Lab 2</span>
-        <span class="lab-title">Isoler des environnements avec les namespaces</span>
-        <span class="lab-time">~10 min</span>
-      </div>
-      <div class="lab-body">
-        <h4>Objectifs</h4>
-        <ul class="objective-list">
-          <li>Créer des namespaces staging et production</li>
-          <li>Déployer la même app dans les deux, confirmer l'isolation</li>
-          <li>Appliquer un ResourceQuota sur staging</li>
-        </ul>
-        <div class="code-block">
-          <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash">kubectl create namespace staging
-kubectl create namespace production
-
-# Déployer httpbin dans les deux namespaces
-kubectl create deployment httpbin --image=kennethreitz/httpbin -n staging
-kubectl create deployment httpbin --image=kennethreitz/httpbin -n production
-
-# Les pods de staging ne voient PAS ceux de production
-kubectl get pods -n staging
-kubectl get pods -n production
-
-# Appliquer un quota sur staging
-kubectl apply -f - &lt;&lt;EOF
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: staging-quota
-  namespace: staging
-spec:
-  hard:
-    pods: "5"
-    requests.cpu: "1"
-    requests.memory: "1Gi"
-EOF
-
-# Vérifier le quota
-kubectl describe resourcequota staging-quota -n staging</code></pre>
-        </div>
-      </div>
-      <div class="lab-result">
-        <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Les deux déploiements coexistent sans interférence. Toute tentative de dépasser le quota dans <code>staging</code> est bloquée par Kubernetes avec un message d'erreur clair.</p>
+        <p>Le pod affiche toutes les variables de config et de secret sans qu'elles soient dans l'image Docker. Changer le ConfigMap et redémarrer suffit pour modifier la configuration en production.</p>
       </div>
     </div>
 

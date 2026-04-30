@@ -26,27 +26,27 @@
         </defs>
 
         <rect x="100" y="15" width="400" height="255" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
-        <text x="300" y="38" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#334155" letter-spacing="1">OVERLAYFS — FILESYSTEM EN COUCHES</text>
+        <text x="300" y="38" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#334155" letter-spacing="1">OVERLAYFS - FILESYSTEM EN COUCHES</text>
 
-        <!-- R/W layer — y=48 h=42 → bottom=90 -->
+        <!-- R/W layer - y=48 h=42 → bottom=90 -->
         <rect x="120" y="48" width="360" height="42" rx="7" fill="url(#l2rwGrad)" stroke="#86efac" stroke-width="1.5"/>
         <text x="220" y="72" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#15803d">Writable Layer (conteneur)</text>
         <text x="465" y="65" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#16a34a">R/W</text>
         <text x="465" y="78" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">créée au démarrage · détruite à la suppression</text>
 
-        <!-- R/O 3 — y=104 h=40 → bottom=144 -->
+        <!-- R/O 3 - y=104 h=40 → bottom=144 -->
         <rect x="120" y="104" width="360" height="40" rx="7" fill="url(#l2roGrad)" stroke="#cbd5e1" stroke-width="1"/>
-        <text x="220" y="124" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e293b">Layer 3 — App binaries</text>
+        <text x="220" y="124" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e293b">Layer 3 - App binaries</text>
         <text x="465" y="127" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">R/O · image</text>
 
-        <!-- R/O 2 — y=158 h=40 → bottom=198 -->
+        <!-- R/O 2 - y=158 h=40 → bottom=198 -->
         <rect x="120" y="158" width="360" height="40" rx="7" fill="url(#l2roGrad)" stroke="#cbd5e1" stroke-width="1"/>
-        <text x="220" y="178" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e293b">Layer 2 — JDK 17</text>
+        <text x="220" y="178" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e293b">Layer 2 - JDK 17</text>
         <text x="465" y="181" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">R/O · image</text>
 
-        <!-- R/O 1 — y=212 h=40 → bottom=252 -->
+        <!-- R/O 1 - y=212 h=40 → bottom=252 -->
         <rect x="120" y="212" width="360" height="40" rx="7" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
-        <text x="220" y="232" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e40af">Layer 1 — Ubuntu base</text>
+        <text x="220" y="232" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#1e40af">Layer 1 - Ubuntu base</text>
         <text x="465" y="235" text-anchor="end" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#64748b">R/O · partagée</text>
       </svg>
     </div>
@@ -364,13 +364,13 @@ docker volume inspect postgres-data</code></pre>
 
         <!-- eth0 -->
         <rect x="270" y="48" width="160" height="32" rx="6" fill="url(#l2ctGrad)" stroke="#94a3b8" stroke-width="1"/>
-        <text x="350" y="69" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">eth0 — 172.16.0.5</text>
+        <text x="350" y="69" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">eth0 - 172.16.0.5</text>
         <line x1="350" y1="80" x2="350" y2="100" stroke="#64748b" stroke-width="1.5" marker-end="url(#l2netarrow)"/>
 
         <!-- docker0 bridge -->
         <rect x="100" y="100" width="500" height="130" rx="10" fill="url(#l2bridgeGrad)" stroke="#93c5fd" stroke-width="1.5"/>
-        <text x="200" y="120" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#1d4ed8">docker0 — bridge par défaut</text>
-        <text x="200" y="133" font-family="'Segoe UI',sans-serif" font-size="9" fill="#3b82f6">172.17.0.1 — passerelle / NAT</text>
+        <text x="200" y="120" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="700" fill="#1d4ed8">docker0 - bridge par défaut</text>
+        <text x="200" y="133" font-family="'Segoe UI',sans-serif" font-size="9" fill="#3b82f6">172.17.0.1 - passerelle / NAT</text>
 
         <!-- Container A -->
         <rect x="125" y="145" width="160" height="70" rx="8" fill="url(#l2ctGrad)" stroke="#cbd5e1" stroke-width="1.2"/>
@@ -388,7 +388,7 @@ docker volume inspect postgres-data</code></pre>
 
         <!-- Trafic externe -->
         <text x="350" y="262" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Trafic externe → NAT via docker0 → conteneur</text>
-        <text x="350" y="283" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#94a3b8">Sans DNS — les conteneurs ne se voient que par IP</text>
+        <text x="350" y="283" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#94a3b8">Sans DNS - les conteneurs ne se voient que par IP</text>
       </svg>
     </div>
 
@@ -432,7 +432,7 @@ docker volume inspect postgres-data</code></pre>
 
         <!-- Bad side -->
         <rect x="20" y="15" width="340" height="190" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
-        <text x="190" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#dc2626">BRIDGE PAR DÉFAUT — sans DNS</text>
+        <text x="190" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#dc2626">BRIDGE PAR DÉFAUT - sans DNS</text>
 
         <rect x="40" y="55" width="130" height="36" rx="7" fill="#fff" stroke="#fca5a5" stroke-width="1"/>
         <text x="105" y="78" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">api</text>
@@ -455,7 +455,7 @@ docker volume inspect postgres-data</code></pre>
 
         <!-- Good side -->
         <rect x="400" y="15" width="340" height="190" rx="12" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
-        <text x="570" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#15803d">BRIDGE PERSONNALISÉ — avec DNS</text>
+        <text x="570" y="40" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#15803d">BRIDGE PERSONNALISÉ - avec DNS</text>
 
         <rect x="420" y="55" width="130" height="36" rx="7" fill="#fff" stroke="#86efac" stroke-width="1"/>
         <text x="485" y="78" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="10" font-weight="600" fill="#374151">api</text>
@@ -520,7 +520,7 @@ docker run -d --name api      --network app-network my-api:1.0.0
 
         <!-- Network wrapper -->
         <rect x="20" y="20" width="720" height="185" rx="12" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
-        <text x="380" y="45" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#15803d" letter-spacing="1">BRIDGE PERSONNALISÉ — app-network</text>
+        <text x="380" y="45" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="11" font-weight="700" fill="#15803d" letter-spacing="1">BRIDGE PERSONNALISÉ - app-network</text>
 
         <!-- api box -->
         <rect x="50" y="60" width="150" height="100" rx="8" fill="#fff" stroke="#86efac" stroke-width="1.5"/>
@@ -549,7 +549,7 @@ docker run -d --name api      --network app-network my-api:1.0.0
         <line x1="200" y1="120" x2="550" y2="120" stroke="#16a34a" stroke-width="1.5" marker-end="url(#l2cdnsarrow)"/>
         <text x="380" y="135" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#16a34a">✓ "redis"</text>
 
-        <text x="380" y="195" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#15803d">Docker DNS résout les noms — stables même après redémarrage</text>
+        <text x="380" y="195" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#15803d">Docker DNS résout les noms - stables même après redémarrage</text>
       </svg>
     </div>
 
@@ -773,7 +773,7 @@ docker run -d --name api      --network app-network \
         <!-- Redis client: api → redis routed below the containers to avoid overlap -->
         <path d="M 160 265 L 160 285 L 607 285 L 607 265" fill="none" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#l2msarrowPurple)"/>
         <text x="385" y="299" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="8.5" fill="#7c3aed">Redis client</text>
-        <text x="380" y="350" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Seul le port de l'api est publié vers l'extérieur — postgres et redis sont isolés</text>
+        <text x="380" y="350" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-size="9" fill="#64748b">Seul le port de l'api est publié vers l'extérieur - postgres et redis sont isolés</text>
       </svg>
     </div>
 
@@ -789,7 +789,7 @@ docker run -d --name api      --network app-network \
   </section>
 
   <section class="lab-section">
-    <h2>Travaux Pratiques — Volumes & Réseau Docker</h2>
+    <h2>Travaux Pratiques - Volumes & Réseau Docker</h2>
 
     <div class="lab-intro">
       <p>
@@ -812,7 +812,7 @@ docker run -d --name api      --network app-network \
           <li>Redémarrer le conteneur et vérifier que les données persistent</li>
         </ul>
 
-        <h4>Étape 1 — Lancer PostgreSQL avec un volume</h4>
+        <h4>Étape 1 - Lancer PostgreSQL avec un volume</h4>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
           <pre><code class="language-bash"># Créer le volume nommé (géré par Docker)
@@ -831,7 +831,7 @@ docker run -d \
 docker ps  # vérifier qu'il tourne</code></pre>
         </div>
 
-        <h4>Étape 2 — Créer des données</h4>
+        <h4>Étape 2 - Créer des données</h4>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
           <pre><code class="language-bash"># Se connecter à psql dans le conteneur
@@ -847,7 +847,7 @@ SELECT * FROM users;
 \q</code></pre>
         </div>
 
-        <h4>Étape 3 — Redémarrer et vérifier la persistance</h4>
+        <h4>Étape 3 - Redémarrer et vérifier la persistance</h4>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
           <pre><code class="language-bash"># Supprimer le conteneur (PAS le volume)

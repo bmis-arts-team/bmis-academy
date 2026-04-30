@@ -1,276 +1,269 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Les 3 piliers de l'observabilité</h2>
-    <table>
-      <thead><tr><th>Pilier</th><th>Outil</th><th>Question</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Métriques</strong></td><td>Prometheus + Grafana</td><td>Combien ? À quelle fréquence ? Quelle tendance ?</td></tr>
-        <tr><td><strong>Logs</strong></td><td>ELK Stack (Elasticsearch, Logstash, Kibana)</td><td>Que s'est-il passé ? Pourquoi cette erreur ?</td></tr>
-        <tr><td><strong>Traces</strong></td><td>Jaeger, Zipkin, OpenTelemetry</td><td>Quel chemin a suivi cette requête ?</td></tr>
-      </tbody>
-    </table>
-    <p>Cette leçon se concentre sur le premier pilier : les <strong>métriques</strong> avec Prometheus et Grafana.</p>
-  </section>
-
-  <section>
-    <h2>Prometheus - Architecture</h2>
+    <h2>Pourquoi CI/CD ?</h2>
+    <p>Le <strong>CI/CD</strong> (Continuous Integration / Continuous Deployment) automatise le cycle de vie du logiciel : build, test, packaging et déploiement. Sans CI/CD, chaque mise en production est manuelle, lente et risquée.</p>
     <div class="arch-diagram">
       <pre>
-  ┌──────────────────────────────────────────────┐
-  │              Prometheus Server                │
-  │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
-  │  │ Retrieval │ │  TSDB    │ │  HTTP Server │  │
-  │  │ (scrape)  │ │ (stockage│ │  (PromQL)    │  │
-  │  └─────┬─────┘ └──────────┘ └──────┬───────┘  │
-  └────────┼─────────────────────────────┼─────────┘
-           │                             │
-    ┌──────▼──────┐               ┌──────▼──────┐
-    │  Targets    │               │   Grafana   │
-    │ Spring Boot │               │ (dashboards)│
-    │ /actuator/  │               └─────────────┘
-    │ prometheus  │
-    └─────────────┘</pre>
-    </div>
-    <p>Prometheus fonctionne en <strong>pull</strong> : il interroge (scrape) les endpoints des applications à intervalle régulier.</p>
-  </section>
-
-  <section>
-    <h2>Instrumenter Spring Boot avec Micrometer</h2>
-    <div class="code-block">
-      <div class="code-header"><span>pom.xml - dépendances</span></div>
-      <pre><code class="language-xml">&lt;dependency&gt;
-    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
-    &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
-&lt;/dependency&gt;
-&lt;dependency&gt;
-    &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
-    &lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;
-&lt;/dependency&gt;</code></pre>
-    </div>
-
-    <div class="code-block">
-      <div class="code-header"><span>application.yml</span></div>
-      <pre><code class="language-yaml">management:
-  endpoints:
-    web:
-      exposure:
-        include: health, info, prometheus, metrics
-  metrics:
-    tags:
-      application: my-api</code></pre>
-    </div>
-
-    <h3>Métriques custom</h3>
-    <div class="code-block">
-      <div class="code-header"><span>OrderService.java</span></div>
-      <pre><code class="language-java">&#64;Service
-public class OrderService {{ '{' }}
-
-    private final Counter ordersCounter;
-    private final Timer orderProcessingTimer;
-
-    public OrderService(MeterRegistry registry) {{ '{' }}
-        this.ordersCounter = Counter.builder("app_orders_total")
-            .description("Total des commandes traitées")
-            .tag("service", "order-service")
-            .register(registry);
-
-        this.orderProcessingTimer = Timer.builder("app_order_duration_seconds")
-            .description("Durée de traitement d'une commande")
-            .register(registry);
-    {{ '}' }}
-
-    public OrderResponse processOrder(OrderRequest request) {{ '{' }}
-        return orderProcessingTimer.record(() -> {{ '{' }}
-            ordersCounter.increment();
-            // Logique métier...
-            return new OrderResponse(/* ... */);
-        {{ '}' }});
-    {{ '}' }}
-{{ '}' }}</code></pre>
+  git push ──▶ CI Pipeline ──▶ Build ──▶ Test ──▶ Push Image ──▶ Deploy to K8s
+                                                                      │
+                                                         ┌────────────┼──────────┐
+                                                         ▼            ▼          ▼
+                                                      Staging    Production   Rollback</pre>
     </div>
   </section>
 
   <section>
-    <h2>Déployer Prometheus sur K8s</h2>
-    <div class="code-block">
-      <div class="code-header"><span>bash - via Helm</span></div>
-      <pre><code class="language-bash"># Ajouter le repo Helm
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
+    <h2>GitHub Actions - Concepts</h2>
+    <table>
+      <thead><tr><th>Concept</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Workflow</strong></td><td>Fichier YAML dans <code>.github/workflows/</code></td></tr>
+        <tr><td><strong>Trigger</strong></td><td>Événement déclencheur (<code>push</code>, <code>pull_request</code>, <code>schedule</code>)</td></tr>
+        <tr><td><strong>Job</strong></td><td>Groupe d'étapes exécutées sur un runner</td></tr>
+        <tr><td><strong>Step</strong></td><td>Commande ou action individuelle</td></tr>
+        <tr><td><strong>Action</strong></td><td>Bloc réutilisable (ex: <code>actions/checkout</code>)</td></tr>
+        <tr><td><strong>Secret</strong></td><td>Variable chiffrée (tokens, mots de passe)</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-# Installer le stack complet (Prometheus + Grafana + Alertmanager)
-helm install monitoring prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --create-namespace \
-  --set grafana.adminPassword='ChangeMe123!'</code></pre>
-    </div>
-
+  <section>
+    <h2>Pipeline complet - Build, Test, Deploy</h2>
     <div class="code-block">
-      <div class="code-header"><span>servicemonitor.yaml - Scraper Spring Boot</span></div>
-      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: api-backend-monitor
-  namespace: monitoring
-spec:
-  selector:
-    matchLabels:
-      app: api-backend
-  namespaceSelector:
-    matchNames:
-      - production
-  endpoints:
-    - port: http
-      path: /actuator/prometheus
-      interval: 15s</code></pre>
+      <div class="code-header"><span>.github/workflows/ci-cd.yml</span></div>
+      <pre ngNonBindable><code class="language-yaml">name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: $&#123;&#123; github.repository &#125;&#125;
+
+jobs:
+  # ── Build & Test ─────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build & Test
+        run: mvn verify -B
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+  # ── Build & Push Docker Image ────────────
+  docker:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: $&#123;&#123; env.REGISTRY &#125;&#125;
+          username: $&#123;&#123; github.actor &#125;&#125;
+          password: $&#123;&#123; secrets.GITHUB_TOKEN &#125;&#125;
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            $&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; github.sha &#125;&#125;
+            $&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:latest
+
+  # ── Deploy to Staging ────────────────────
+  deploy-staging:
+    needs: docker
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: echo "$&#123;&#123; secrets.KUBE_CONFIG &#125;&#125;" | base64 -d > kubeconfig
+        env:
+          KUBECONFIG: kubeconfig
+
+      - name: Deploy to staging
+        run: |
+          kubectl set image deployment/api-backend \
+            api=$&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; github.sha &#125;&#125; \
+            -n staging
+          kubectl rollout status deployment/api-backend -n staging --timeout=120s
+
+  # ── Deploy to Production (manual) ───────
+  deploy-prod:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production   # Requires manual approval
+    steps:
+      - name: Deploy to production
+        run: |
+          kubectl set image deployment/api-backend \
+            api=$&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; github.sha &#125;&#125; \
+            -n production
+          kubectl rollout status deployment/api-backend -n production --timeout=180s</code></pre>
     </div>
   </section>
 
   <section>
-    <h2>PromQL - Requêtes essentielles</h2>
-    <div class="code-block">
-      <div class="code-header"><span>PromQL</span></div>
-      <pre><code class="language-bash"># Taux de requêtes HTTP par seconde (5 dernières minutes)
-rate(http_server_requests_seconds_count[5m])
-
-# Latence P99
-histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m]))
-
-# Taux d'erreurs 5xx
-sum(rate(http_server_requests_seconds_count{{ '{' }}status=~"5.."{{ '}' }}[5m]))
-  / sum(rate(http_server_requests_seconds_count[5m]))
-
-# Utilisation mémoire JVM
-jvm_memory_used_bytes{{ '{' }}area="heap"{{ '}' }}
-  / jvm_memory_max_bytes{{ '{' }}area="heap"{{ '}' }}</code></pre>
-    </div>
-  </section>
-
-  <section>
-    <h2>Grafana - Dashboards</h2>
-    <p>Grafana se connecte à Prometheus comme source de données et permet de créer des dashboards visuels.</p>
+    <h2>Bonnes pratiques CI/CD</h2>
     <div class="callout tip">
-      <strong>Dashboards recommandés</strong>
+      <strong>Règles essentielles</strong>
       <ul>
-        <li><strong>JVM (Micrometer)</strong> - ID: 4701 - Mémoire, GC, threads</li>
-        <li><strong>Spring Boot</strong> - ID: 12900 - HTTP, cache, DB pool</li>
-        <li><strong>K8s Cluster</strong> - ID: 6417 - Nodes, pods, namespaces</li>
-        <li><strong>NGINX Ingress</strong> - ID: 9614 - Trafic, latence, erreurs</li>
+        <li>Utilisez des <strong>environnements GitHub</strong> avec approbation manuelle pour la production</li>
+        <li>Taggez les images avec le <strong>SHA du commit</strong>, pas <code>:latest</code></li>
+        <li>Gardez les secrets dans <strong>GitHub Secrets</strong>, jamais dans le code</li>
+        <li>Exécutez les tests <strong>avant</strong> le build Docker pour un feedback rapide</li>
+        <li>Utilisez le <strong>cache Maven/Gradle</strong> pour accélérer les builds</li>
+        <li>Ajoutez un <strong>rollback automatique</strong> si le health check échoue après déploiement</li>
       </ul>
-      <p>Importez-les via le menu <em>Dashboards → Import</em> avec l'ID correspondant.</p>
     </div>
   </section>
 
   <section class="lab-section">
-    <h2>Travaux Pratiques — Prometheus & Grafana sur Kind</h2>
+    <h2>Travaux Pratiques - Pipeline CI/CD avec GitHub Actions</h2>
 
     <div class="lab-intro">
       <p>
-        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> et <strong>Helm</strong> installé.
-        Ce lab installe une stack de monitoring complète en quelques commandes grâce au chart
-        <code>kube-prometheus-stack</code>.
+        <strong>Prérequis :</strong> Un dépôt GitHub, Docker Hub (ou GitHub Container Registry).
+        Ce lab crée un vrai pipeline qui build, teste et pousse l'image Docker à chaque push sur <code>main</code>.
       </p>
     </div>
 
     <div class="lab">
       <div class="lab-header">
         <span class="lab-badge">Lab</span>
-        <span class="lab-title">Stack Prometheus + Grafana avec Helm</span>
-        <span class="lab-time">~25 min</span>
+        <span class="lab-title">Pipeline Build → Test → Push → Déploiement</span>
+        <span class="lab-time">~30 min</span>
       </div>
       <div class="lab-body">
         <h4>Objectifs</h4>
         <ul class="objective-list">
-          <li>Installer Helm et ajouter le repo Prometheus</li>
-          <li>Déployer la stack de monitoring sur le cluster</li>
-          <li>Accéder à Grafana et explorer les dashboards pré-configurés</li>
-          <li>Visualiser les métriques CPU/mémoire de vos pods en temps réel</li>
+          <li>Configurer les secrets GitHub (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN)</li>
+          <li>Créer un workflow qui build et pousse l'image à chaque push</li>
+          <li>Ajouter une étape de tests automatisés</li>
+          <li>Ajouter une étape de déploiement sur le cluster Kind</li>
         </ul>
 
-        <h4>Étape 1 — Installer Helm</h4>
-        <app-os-tabs>
-          <div linux>
-            <div class="code-block">
-              <div class="code-header"><span>bash — Linux</span></div>
-              <pre><code class="language-bash">curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-helm version</code></pre>
-            </div>
-          </div>
-          <div mac>
-            <div class="code-block">
-              <div class="code-header"><span>bash — macOS</span></div>
-              <pre><code class="language-bash">brew install helm
-helm version</code></pre>
-            </div>
-          </div>
-          <div win>
-            <div class="code-block">
-              <div class="code-header"><span>PowerShell — Windows</span></div>
-              <pre><code class="language-powershell">choco install kubernetes-helm
-helm version</code></pre>
-            </div>
-          </div>
-        </app-os-tabs>
-
-        <h4>Étape 2 — Installer kube-prometheus-stack</h4>
+        <h4>Étape 1 - Configurer les secrets GitHub</h4>
+        <p>Dans votre dépôt : <strong>Settings → Secrets and variables → Actions → New repository secret</strong></p>
         <div class="code-block">
-          <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># Ajouter le repo Helm
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-
-# Créer le namespace monitoring
-kubectl create namespace monitoring
-
-# Installer la stack complète (Prometheus + Grafana + AlertManager + node-exporter)
-helm install prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --set grafana.adminPassword=admin \
-  --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false
-
-# Attendre que tout soit prêt (peut prendre 2-3 minutes)
-kubectl get pods -n monitoring -w</code></pre>
+          <div class="code-header"><span>Secrets à créer</span></div>
+          <pre><code class="language-bash">DOCKERHUB_USERNAME   # votre username Docker Hub
+DOCKERHUB_TOKEN      # Access Token Docker Hub (pas votre mot de passe)
+                     # → hub.docker.com → Account Settings → Security → New Access Token</code></pre>
         </div>
 
-        <h4>Étape 3 — Accéder à Grafana</h4>
+        <h4>Étape 2 - Créer le workflow</h4>
+        <p>Créez le fichier <code>.github/workflows/ci-cd.yml</code> dans votre dépôt :</p>
         <div class="code-block">
-          <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># Port-forward vers Grafana
-kubectl port-forward -n monitoring service/prometheus-stack-grafana 3000:80
+          <div class="code-header"><span>.github/workflows/ci-cd.yml</span></div>
+          <pre><code class="language-yaml">name: CI/CD Pipeline
 
-# Ouvrir http://localhost:3000
-# Login : admin / admin
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
-# Dashboards pré-installés utiles :
-# - "Kubernetes / Compute Resources / Cluster"  (CPU/mémoire globale)
-# - "Kubernetes / Compute Resources / Pod"      (par pod)
-# - "Kubernetes / Nodes"                        (métriques des nodes)</code></pre>
+env:
+  IMAGE_NAME: $&#123;&#123; secrets.DOCKERHUB_USERNAME &#125;&#125;/mon-api
+  IMAGE_TAG: $&#123;&#123; github.sha &#125;&#125;   # SHA du commit = tag unique et traçable
+
+jobs:
+  # ── Job 1 : Tests ────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw test
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: target/surefire-reports/
+
+  # ── Job 2 : Build & Push (seulement sur main) ───
+  build-push:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: $&#123;&#123; secrets.DOCKERHUB_USERNAME &#125;&#125;
+          password: $&#123;&#123; secrets.DOCKERHUB_TOKEN &#125;&#125;
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            $&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; env.IMAGE_TAG &#125;&#125;
+            $&#123;&#123; env.IMAGE_NAME &#125;&#125;:latest</code></pre>
         </div>
 
-        <h4>Étape 4 — Accéder à Prometheus</h4>
+        <h4>Étape 3 - Observer le pipeline</h4>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># Port-forward vers Prometheus
-kubectl port-forward -n monitoring service/prometheus-stack-kube-prom-prometheus 9090:9090
+          <pre><code class="language-bash"># Pousser le workflow et observer son exécution
+git add .github/workflows/ci-cd.yml
+git commit -m "feat: add CI/CD pipeline"
+git push origin main
 
-# Ouvrir http://localhost:9090
-# Essayer ces requêtes PromQL :
+# GitHub Actions lançe automatiquement le pipeline
+# Suivre dans : github.com/&lt;user&gt;/&lt;repo&gt; → onglet Actions
 
-# CPU utilisé par tous les pods
-sum(rate(container_cpu_usage_seconds_total[5m])) by (pod)
-
-# Mémoire utilisée par namespace
-sum(container_memory_usage_bytes) by (namespace)
-
-# Nombre de pods en Running
-kube_pod_status_phase&#123;phase="Running"&#125;</code></pre>
+# Simuler un échec : introduire un test qui échoue
+# Modifier un test, pousser et observer que le job 'build-push' ne s'exécute PAS
+# Le pipeline bloque à l'étape 'test' grâce à needs: test</code></pre>
         </div>
       </div>
       <div class="lab-result">
         <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Grafana s'ouvre sur <code>localhost:3000</code> avec des dashboards Kubernetes pré-configurés. Vous visualisez en temps réel le CPU, la mémoire et l'état de vos pods. Prometheus exécute vos premières requêtes PromQL.</p>
+        <p>Chaque push sur <code>main</code> exécute les tests, puis (si OK) build et pousse l'image tagée avec le SHA du commit sur Docker Hub. Un test échoué bloque le push de l'image.</p>
       </div>
     </div>
 

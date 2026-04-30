@@ -1,238 +1,265 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Le problème : configuration hardcodée</h2>
-    <div class="comparison-grid">
-      <div class="comparison-card bad">
-        <h4>❌ Hardcodé dans le code</h4>
-        <div class="code-block">
-          <div class="code-header"><span>application.yml</span></div>
-          <pre><code class="language-yaml">spring:
-  datasource:
-    url: jdbc:postgresql://prod-db:5432/mydb
-    username: admin
-    password: SuperSecret123!</code></pre>
-        </div>
-      </div>
-      <div class="comparison-card good">
-        <h4>✅ Externalisé via K8s</h4>
-        <div class="code-block">
-          <div class="code-header"><span>application.yml</span></div>
-          <pre><code class="language-yaml">spring:
-  datasource:
-    url: ${{ '{' }}SPRING_DATASOURCE_URL{{ '}' }}
-    username: ${{ '{' }}DB_USERNAME{{ '}' }}
-    password: ${{ '{' }}DB_PASSWORD{{ '}' }}</code></pre>
-        </div>
-      </div>
+    <h2>Pourquoi les Services ?</h2>
+    <p>Les pods sont éphémères : leurs adresses IP changent à chaque redémarrage. Un <strong>Service</strong> fournit une adresse stable pour accéder à un groupe de pods, sélectionnés par labels.</p>
+
+    <div class="arch-diagram">
+      <pre>
+  Service "api-service" (ClusterIP: 10.96.42.15)
+         │
+         ├──▶ Pod api-backend-abc12  (10.244.1.5)
+         ├──▶ Pod api-backend-def34  (10.244.2.8)
+         └──▶ Pod api-backend-ghi56  (10.244.1.12)</pre>
     </div>
-    <p>Kubernetes résout ce problème avec deux ressources : <strong>ConfigMap</strong> pour les données non-sensibles et <strong>Secret</strong> pour les données sensibles.</p>
   </section>
 
   <section>
-    <h2>ConfigMap - Configuration non-sensible</h2>
-
-    <h3>Créer un ConfigMap</h3>
+    <h2>ClusterIP - Communication interne</h2>
+    <p>Le type par défaut. Le service est accessible uniquement <strong>depuis l'intérieur du cluster</strong>.</p>
     <div class="code-block">
-      <div class="code-header"><span>configmap.yaml</span></div>
+      <div class="code-header"><span>clusterip-service.yaml</span></div>
       <pre><code class="language-yaml">apiVersion: v1
-kind: ConfigMap
+kind: Service
 metadata:
-  name: api-config
-data:
-  APP_NAME: "my-application"
-  LOG_LEVEL: "INFO"
-  SPRING_PROFILES_ACTIVE: "production"
-  SERVER_PORT: "8080"
-  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres-headless:5432/app_db"
-  SPRING_DATA_REDIS_HOST: "redis-service"</code></pre>
+  name: api-service
+spec:
+  type: ClusterIP
+  selector:
+    app: api-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP</code></pre>
     </div>
-
-    <h3>Utiliser en variables d'environnement</h3>
-    <div class="code-block">
-      <div class="code-header"><span>deployment.yaml - extrait</span></div>
-      <pre><code class="language-yaml">spec:
-  containers:
-    - name: api
-      image: myregistry/api-backend:1.0.0
-      envFrom:
-        - configMapRef:
-            name: api-config</code></pre>
-    </div>
-
-    <h3>Monter comme fichier</h3>
-    <div class="code-block">
-      <div class="code-header"><span>deployment.yaml - volume mount</span></div>
-      <pre><code class="language-yaml">spec:
-  containers:
-    - name: api
-      volumeMounts:
-        - name: config-volume
-          mountPath: /app/config
-          readOnly: true
-  volumes:
-    - name: config-volume
-      configMap:
-        name: api-config</code></pre>
-    </div>
+    <p>Accessible via : <code>api-service.default.svc.cluster.local:80</code></p>
   </section>
 
   <section>
-    <h2>Secret - Données sensibles</h2>
+    <h2>NodePort &amp; LoadBalancer</h2>
 
-    <div class="callout warning">
-      <strong>Les Secrets ne sont pas chiffrés par défaut</strong>
-      <p>Les Secrets Kubernetes sont encodés en base64, pas chiffrés. Activez le chiffrement au repos (<code>EncryptionConfiguration</code>) ou utilisez un gestionnaire externe (HashiCorp Vault, AWS Secrets Manager, Sealed Secrets).</p>
+    <h3>NodePort - Accès depuis l'extérieur (dev)</h3>
+    <p>Expose le service sur un port statique (30000-32767) de chaque node.</p>
+    <div class="code-block">
+      <div class="code-header"><span>nodeport-service.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-nodeport
+spec:
+  type: NodePort
+  selector:
+    app: api-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 30080</code></pre>
     </div>
 
+    <h3>LoadBalancer - Production</h3>
+    <p>Provisionne automatiquement un load balancer cloud (AWS ALB/NLB, GCP LB, Azure LB).</p>
     <div class="code-block">
-      <div class="code-header"><span>bash - Créer un Secret</span></div>
-      <pre><code class="language-bash"># Depuis des valeurs littérales
-kubectl create secret generic db-credentials \
-  --from-literal=username=app_user \
-  --from-literal=password='P@ssw0rd!'
-
-# Depuis un fichier
-kubectl create secret generic tls-cert \
-  --from-file=tls.crt=./cert.pem \
-  --from-file=tls.key=./key.pem</code></pre>
+      <div class="code-header"><span>loadbalancer-service.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-backend
+  ports:
+    - port: 443
+      targetPort: 8080</code></pre>
     </div>
 
-    <h3>Utiliser dans un Deployment</h3>
+    <table>
+      <thead><tr><th>Type</th><th>Accès</th><th>Usage</th></tr></thead>
+      <tbody>
+        <tr><td><code>ClusterIP</code></td><td>Interne cluster</td><td>Communication inter-services</td></tr>
+        <tr><td><code>NodePort</code></td><td>IP-du-node:30000+</td><td>Dev, tests</td></tr>
+        <tr><td><code>LoadBalancer</code></td><td>IP publique</td><td>Production (cloud)</td></tr>
+        <tr><td><code>ExternalName</code></td><td>DNS CNAME</td><td>Services externes (RDS, etc.)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Headless Service</h2>
+    <p>Un service avec <code>clusterIP: None</code>. Utilisé pour les StatefulSets car il permet d'accéder directement à chaque pod individuel via DNS.</p>
     <div class="code-block">
-      <div class="code-header"><span>deployment.yaml - extrait</span></div>
-      <pre><code class="language-yaml">spec:
-  containers:
-    - name: api
-      env:
-        - name: DB_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: username
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: password</code></pre>
+      <div class="code-header"><span>headless-service.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432</code></pre>
+    </div>
+    <p>Chaque pod est accessible individuellement : <code>postgres-0.postgres-headless.default.svc.cluster.local</code></p>
+  </section>
+
+  <section>
+    <h2>Ingress Controller</h2>
+    <p>L'<strong>Ingress</strong> gère le routage HTTP/HTTPS depuis l'extérieur vers les services internes. Il remplace plusieurs LoadBalancers par un seul point d'entrée.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>ingress.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.example.com
+      secretName: api-tls-secret
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80</code></pre>
     </div>
 
     <div class="callout tip">
-      <strong>Bonnes pratiques</strong>
-      <ul>
-        <li>Ne committez jamais de Secrets en clair dans Git</li>
-        <li>Utilisez <strong>Sealed Secrets</strong> (Bitnami) pour stocker des secrets chiffrés dans Git</li>
-        <li>Séparez les ConfigMaps et Secrets par environnement (dev, staging, prod)</li>
-        <li>Limitez l'accès aux Secrets via RBAC</li>
-      </ul>
+      <strong>Ingress Controller requis</strong>
+      <p>L'objet Ingress seul ne fait rien. Vous devez installer un Ingress Controller (NGINX, Traefik, HAProxy, etc.) dans le cluster. NGINX est le plus courant :</p>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span>bash</span></div>
+      <pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml</code></pre>
     </div>
   </section>
 
+  <section>
+    <h2>TLS/HTTPS avec cert-manager</h2>
+    <p><strong>cert-manager</strong> automatise l'obtention et le renouvellement des certificats TLS via Let's Encrypt.</p>
+    <div class="code-block">
+      <div class="code-header"><span>cluster-issuer.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops&#64;example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx</code></pre>
+    </div>
+    <p>Ajoutez l'annotation <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code> à votre Ingress pour activer le TLS automatique.</p>
+  </section>
+
   <section class="lab-section">
-    <h2>Travaux Pratiques — ConfigMaps & Secrets</h2>
+    <h2>Travaux Pratiques - Services & Ingress</h2>
 
     <div class="lab-intro">
       <p>
-        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code>. Ces labs montrent comment
-        externaliser la configuration d'une app et modifier sa config à chaud, sans rebuilder l'image.
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> avec le Deployment <code>httpbin</code>
+        du Lab précédent (Leçon 4). Nous allons exposer cette application de trois manières différentes.
       </p>
     </div>
 
     <div class="lab">
       <div class="lab-header">
         <span class="lab-badge">Lab 1</span>
-        <span class="lab-title">Injecter ConfigMap & Secret dans un pod</span>
+        <span class="lab-title">Exposer une application via ClusterIP, NodePort et port-forward</span>
         <span class="lab-time">~20 min</span>
       </div>
       <div class="lab-body">
         <h4>Objectifs</h4>
         <ul class="objective-list">
-          <li>Créer un ConfigMap avec des paramètres applicatifs</li>
-          <li>Créer un Secret avec des données sensibles</li>
-          <li>Les injecter dans un pod et vérifier qu'ils sont disponibles</li>
-          <li>Modifier la config à chaud sans rebuilder l'image</li>
+          <li>Créer un Service ClusterIP et tester la communication interne</li>
+          <li>Créer un Service NodePort et accéder depuis l'extérieur</li>
+          <li>Utiliser le port-forward comme alternative rapide</li>
+          <li>Observer le load balancing entre les pods</li>
         </ul>
 
-        <h4>Étape 1 — Créer le ConfigMap</h4>
+        <h4>Étape 1 - Service ClusterIP (communication interne)</h4>
         <div class="code-block">
-          <div class="code-header"><span>app-config.yaml</span></div>
+          <div class="code-header"><span>httpbin-svc.yaml</span></div>
           <pre><code class="language-yaml">apiVersion: v1
-kind: ConfigMap
+kind: Service
 metadata:
-  name: app-config
-data:
-  APP_ENV: "staging"
-  LOG_LEVEL: "DEBUG"
-  MAX_CONNECTIONS: "25"
-  API_ENDPOINT: "http://backend-service:8080"</code></pre>
-        </div>
-
-        <h4>Étape 2 — Créer le Secret</h4>
-        <div class="code-block">
-          <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># K8s encode automatiquement en Base64
-kubectl create secret generic app-secret \
-  --from-literal=DB_PASSWORD=MonMotDePasse123 \
-  --from-literal=JWT_SECRET=ma-cle-jwt-secrete
-
-# Vérifier (valeurs masquées)
-kubectl get secret app-secret -o yaml</code></pre>
-        </div>
-
-        <h4>Étape 3 — Pod consommant ConfigMap + Secret</h4>
-        <div class="code-block">
-          <div class="code-header"><span>config-demo.yaml</span></div>
-          <pre><code class="language-yaml">apiVersion: v1
-kind: Pod
-metadata:
-  name: config-demo
+  name: httpbin-svc
+  namespace: default
 spec:
-  containers:
-    - name: app
-      image: busybox:1.36
-      command: ["sh", "-c", "env | sort && sleep 3600"]
-      envFrom:
-        - configMapRef:
-            name: app-config
-        - secretRef:
-            name: app-secret</code></pre>
+  selector:
+    app: httpbin
+  ports:
+    - port: 80
+      targetPort: 80</code></pre>
         </div>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash">kubectl apply -f app-config.yaml
-kubectl apply -f config-demo.yaml
+          <pre><code class="language-bash">kubectl apply -f httpbin-svc.yaml
 
-# Vérifier les variables injectées dans le conteneur
-kubectl logs config-demo | grep -E "APP_ENV|LOG_LEVEL|DB_PASSWORD"
-# APP_ENV=staging
-# DB_PASSWORD=MonMotDePasse123
-# LOG_LEVEL=DEBUG
+# Vérifier le service et son ClusterIP
+kubectl get service httpbin-svc
+# NAME          TYPE        CLUSTER-IP    PORT(S)
+# httpbin-svc   ClusterIP   10.96.x.x     80/TCP
 
-# Entrer dans le conteneur
-kubectl exec -it config-demo -- sh
-# / # echo $JWT_SECRET
-# ma-cle-jwt-secrete</code></pre>
+# Tester depuis un pod éphémère dans le cluster
+kubectl run test-curl --image=curlimages/curl:8.5.0 --restart=Never --rm -it -- \
+  curl http://httpbin-svc/ip
+# &#123;"origin": "10.244.x.x"&#125;   ← IP du pod test, pas la nôtre
+
+# Observer l'Endpoints : liste des IPs de pods derrière le Service
+kubectl get endpoints httpbin-svc</code></pre>
         </div>
 
-        <h4>Étape 4 — Modifier la config sans rebuilder</h4>
+        <h4>Étape 2 - Port-forward (accès local rapide)</h4>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># Modifier le ConfigMap en live
-kubectl edit configmap app-config
-# Changer LOG_LEVEL: DEBUG → INFO, sauvegarder
+          <pre><code class="language-bash"># Forward le port 8080 local vers le service
+kubectl port-forward service/httpbin-svc 8080:80
 
-# Redémarrer le pod pour prendre la nouvelle config
-kubectl delete pod config-demo
-kubectl apply -f config-demo.yaml
+# Dans un autre terminal :
+curl http://localhost:8080/ip
+curl http://localhost:8080/headers
+# Ouvrir http://localhost:8080 dans le navigateur</code></pre>
+        </div>
 
-# Vérifier
-kubectl logs config-demo | grep LOG_LEVEL
-# LOG_LEVEL=INFO</code></pre>
+        <h4>Étape 3 - Observer le load balancing</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Lancer 10 requêtes successives via le Service
+for i in $(seq 1 10); do
+  kubectl run test-$i --image=curlimages/curl:8.5.0 --restart=Never --rm -it -- \
+    curl -s http://httpbin-svc/ip | grep origin
+done
+
+# Vous verrez des IPs différentes → chaque requête atterrit sur un pod différent</code></pre>
         </div>
       </div>
       <div class="lab-result">
         <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Le pod affiche toutes les variables de config et de secret sans qu'elles soient dans l'image Docker. Changer le ConfigMap et redémarrer suffit pour modifier la configuration en production.</p>
+        <p>Le Service ClusterIP expose un DNS stable (<code>httpbin-svc.default.svc.cluster.local</code>). Les 10 requêtes retournent des IPs de pods différentes : c'est le load balancing natif de Kubernetes.</p>
       </div>
     </div>
 

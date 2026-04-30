@@ -1,265 +1,422 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Pourquoi les Services ?</h2>
-    <p>Les pods sont éphémères : leurs adresses IP changent à chaque redémarrage. Un <strong>Service</strong> fournit une adresse stable pour accéder à un groupe de pods, sélectionnés par labels.</p>
+    <h2>ReplicaSet - La base</h2>
+    <p>Un <strong>ReplicaSet</strong> garantit qu'un nombre exact de réplicas d'un pod sont en cours d'exécution à tout moment. Si un pod crash, le ReplicaSet en crée un nouveau automatiquement.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>replicaset.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+        - name: api
+          image: myregistry/api-backend:1.0.0
+          ports:
+            - containerPort: 8080</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>En pratique</strong>
+      <p>Vous ne créez presque jamais un ReplicaSet directement. Le <strong>Deployment</strong> en crée un pour vous et ajoute la gestion des mises à jour.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Deployment - Le workload standard</h2>
+    <p>Le <strong>Deployment</strong> est la ressource la plus utilisée. Il gère un ReplicaSet et permet les rolling updates, les rollbacks et le scaling.</p>
+
+    <div class="code-block">
+      <div class="code-header"><span>deployment.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: api-backend
+        version: "1.0.0"
+    spec:
+      containers:
+        - name: api
+          image: myregistry/api-backend:1.0.0
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rolling Update &amp; Rollback</h2>
+    <p>Le rolling update remplace les pods un par un. À chaque instant, l'application reste disponible :</p>
 
     <div class="arch-diagram">
       <pre>
-  Service "api-service" (ClusterIP: 10.96.42.15)
-         │
-         ├──▶ Pod api-backend-abc12  (10.244.1.5)
-         ├──▶ Pod api-backend-def34  (10.244.2.8)
-         └──▶ Pod api-backend-ghi56  (10.244.1.12)</pre>
+  Étape 1:  [v1] [v1] [v1]           ← 3 pods v1
+  Étape 2:  [v1] [v1] [v1] [v2]     ← maxSurge=1, nouveau pod v2
+  Étape 3:  [v1] [v1] [v2]          ← ancien pod supprimé
+  Étape 4:  [v1] [v2] [v2]          ← continue...
+  Étape 5:  [v2] [v2] [v2]          ← migration terminée</pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>bash - Mise à jour et rollback</span></div>
+      <pre><code class="language-bash"># Mettre à jour l'image
+kubectl set image deployment/api-backend api=myregistry/api-backend:1.1.0
+
+# Suivre le déploiement
+kubectl rollout status deployment/api-backend
+
+# Historique des versions
+kubectl rollout history deployment/api-backend
+
+# Rollback à la version précédente
+kubectl rollout undo deployment/api-backend
+
+# Rollback à une révision spécifique
+kubectl rollout undo deployment/api-backend --to-revision=2
+
+# Scaling manuel
+kubectl scale deployment/api-backend --replicas=5</code></pre>
     </div>
   </section>
 
   <section>
-    <h2>ClusterIP - Communication interne</h2>
-    <p>Le type par défaut. Le service est accessible uniquement <strong>depuis l'intérieur du cluster</strong>.</p>
+    <h2>StatefulSet - Pour les workloads avec état</h2>
+    <p>Le <strong>StatefulSet</strong> est conçu pour les applications avec état : bases de données, caches, systèmes de messaging. Contrairement au Deployment, il garantit :</p>
+    <ul>
+      <li><strong>Identité stable</strong> - Noms de pod prédictibles : <code>postgres-0</code>, <code>postgres-1</code>, <code>postgres-2</code></li>
+      <li><strong>Déploiement ordonné</strong> - Les pods sont créés séquentiellement (0 → 1 → 2)</li>
+      <li><strong>Stockage persistant</strong> - Chaque pod a son propre PVC qui survit aux redémarrages</li>
+    </ul>
+
     <div class="code-block">
-      <div class="code-header"><span>clusterip-service.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Service
+      <div class="code-header"><span>statefulset-postgres.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: api-service
+  name: postgres
 spec:
-  type: ClusterIP
+  serviceName: postgres-headless
+  replicas: 1
   selector:
-    app: api-backend
-  ports:
-    - port: 80
-      targetPort: 8080
-      protocol: TCP</code></pre>
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "app_db"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi</code></pre>
     </div>
-    <p>Accessible via : <code>api-service.default.svc.cluster.local:80</code></p>
   </section>
 
   <section>
-    <h2>NodePort &amp; LoadBalancer</h2>
+    <h2>DaemonSet, Job &amp; CronJob</h2>
 
-    <h3>NodePort - Accès depuis l'extérieur (dev)</h3>
-    <p>Expose le service sur un port statique (30000-32767) de chaque node.</p>
+    <h3>DaemonSet</h3>
+    <p>Exécute exactement <strong>un pod par node</strong>. Utilisé pour les agents de monitoring, collecteurs de logs, ou plugins réseau.</p>
+
+    <h3>Job</h3>
+    <p>Exécute un pod <strong>jusqu'à complétion</strong>. Idéal pour les migrations de base de données, les tâches batch, etc.</p>
+
     <div class="code-block">
-      <div class="code-header"><span>nodeport-service.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Service
+      <div class="code-header"><span>migration-job.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: batch/v1
+kind: Job
 metadata:
-  name: api-nodeport
+  name: db-migration
 spec:
-  type: NodePort
-  selector:
-    app: api-backend
-  ports:
-    - port: 80
-      targetPort: 8080
-      nodePort: 30080</code></pre>
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: myregistry/api-backend:1.1.0
+          command: ["java", "-jar", "app.jar", "--spring.flyway.enabled=true"]
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres-headless:5432/app_db"</code></pre>
     </div>
 
-    <h3>LoadBalancer - Production</h3>
-    <p>Provisionne automatiquement un load balancer cloud (AWS ALB/NLB, GCP LB, Azure LB).</p>
+    <h3>CronJob</h3>
+    <p>Exécute un Job selon un planning cron. Exemple : sauvegarde quotidienne de la base de données.</p>
     <div class="code-block">
-      <div class="code-header"><span>loadbalancer-service.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Service
+      <div class="code-header"><span>backup-cronjob.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: batch/v1
+kind: CronJob
 metadata:
-  name: api-lb
+  name: db-backup
 spec:
-  type: LoadBalancer
-  selector:
-    app: api-backend
-  ports:
-    - port: 443
-      targetPort: 8080</code></pre>
+  schedule: "0 2 * * *"    # Tous les jours à 2h du matin
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -c
+                - pg_dump -h postgres-headless -U app_user app_db > /backup/dump_$(date +%Y%m%d).sql
+              volumeMounts:
+                - name: backup-volume
+                  mountPath: /backup
+          volumes:
+            - name: backup-volume
+              persistentVolumeClaim:
+                claimName: backup-pvc</code></pre>
     </div>
 
     <table>
-      <thead><tr><th>Type</th><th>Accès</th><th>Usage</th></tr></thead>
+      <thead>
+        <tr><th>Workload</th><th>Réplicas</th><th>Identité</th><th>Usage principal</th></tr>
+      </thead>
       <tbody>
-        <tr><td><code>ClusterIP</code></td><td>Interne cluster</td><td>Communication inter-services</td></tr>
-        <tr><td><code>NodePort</code></td><td>IP-du-node:30000+</td><td>Dev, tests</td></tr>
-        <tr><td><code>LoadBalancer</code></td><td>IP publique</td><td>Production (cloud)</td></tr>
-        <tr><td><code>ExternalName</code></td><td>DNS CNAME</td><td>Services externes (RDS, etc.)</td></tr>
+        <tr><td><strong>Deployment</strong></td><td>N (scalable)</td><td>Aléatoire</td><td>APIs, services stateless</td></tr>
+        <tr><td><strong>StatefulSet</strong></td><td>N (ordonné)</td><td>Stable (pod-0, pod-1)</td><td>Bases de données, caches</td></tr>
+        <tr><td><strong>DaemonSet</strong></td><td>1 par node</td><td>Par node</td><td>Monitoring, logs</td></tr>
+        <tr><td><strong>Job</strong></td><td>1 (run-to-completion)</td><td>-</td><td>Migrations, batch</td></tr>
+        <tr><td><strong>CronJob</strong></td><td>Planifié</td><td>-</td><td>Backups, rapports</td></tr>
       </tbody>
     </table>
   </section>
 
-  <section>
-    <h2>Headless Service</h2>
-    <p>Un service avec <code>clusterIP: None</code>. Utilisé pour les StatefulSets car il permet d'accéder directement à chaque pod individuel via DNS.</p>
-    <div class="code-block">
-      <div class="code-header"><span>headless-service.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Service
-metadata:
-  name: postgres-headless
-spec:
-  clusterIP: None
-  selector:
-    app: postgres
-  ports:
-    - port: 5432</code></pre>
-    </div>
-    <p>Chaque pod est accessible individuellement : <code>postgres-0.postgres-headless.default.svc.cluster.local</code></p>
-  </section>
-
-  <section>
-    <h2>Ingress Controller</h2>
-    <p>L'<strong>Ingress</strong> gère le routage HTTP/HTTPS depuis l'extérieur vers les services internes. Il remplace plusieurs LoadBalancers par un seul point d'entrée.</p>
-
-    <div class="code-block">
-      <div class="code-header"><span>ingress.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: app-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-spec:
-  ingressClassName: nginx
-  tls:
-    - hosts:
-        - api.example.com
-      secretName: api-tls-secret
-  rules:
-    - host: api.example.com
-      http:
-        paths:
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: api-service
-                port:
-                  number: 80
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: frontend-service
-                port:
-                  number: 80</code></pre>
-    </div>
-
-    <div class="callout tip">
-      <strong>Ingress Controller requis</strong>
-      <p>L'objet Ingress seul ne fait rien. Vous devez installer un Ingress Controller (NGINX, Traefik, HAProxy, etc.) dans le cluster. NGINX est le plus courant :</p>
-    </div>
-    <div class="code-block">
-      <div class="code-header"><span>bash</span></div>
-      <pre><code class="language-bash">kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml</code></pre>
-    </div>
-  </section>
-
-  <section>
-    <h2>TLS/HTTPS avec cert-manager</h2>
-    <p><strong>cert-manager</strong> automatise l'obtention et le renouvellement des certificats TLS via Let's Encrypt.</p>
-    <div class="code-block">
-      <div class="code-header"><span>cluster-issuer.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-prod
-spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: devops&#64;example.com
-    privateKeySecretRef:
-      name: letsencrypt-prod-key
-    solvers:
-      - http01:
-          ingress:
-            class: nginx</code></pre>
-    </div>
-    <p>Ajoutez l'annotation <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code> à votre Ingress pour activer le TLS automatique.</p>
-  </section>
-
   <section class="lab-section">
-    <h2>Travaux Pratiques — Services & Ingress</h2>
+    <h2>Travaux Pratiques - Workloads Kubernetes</h2>
 
     <div class="lab-intro">
       <p>
-        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> avec le Deployment <code>httpbin</code>
-        du Lab précédent (Leçon 4). Nous allons exposer cette application de trois manières différentes.
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> en cours d'exécution (voir Leçon 3 - Lab 1).
+        Ces exercices couvrent les workloads essentiels : Deployment, self-healing et rolling update.
       </p>
     </div>
 
     <div class="lab">
       <div class="lab-header">
         <span class="lab-badge">Lab 1</span>
-        <span class="lab-title">Exposer une application via ClusterIP, NodePort et port-forward</span>
-        <span class="lab-time">~20 min</span>
+        <span class="lab-title">Déployer une application avec 3 réplicas</span>
+        <span class="lab-time">~15 min</span>
       </div>
       <div class="lab-body">
         <h4>Objectifs</h4>
         <ul class="objective-list">
-          <li>Créer un Service ClusterIP et tester la communication interne</li>
-          <li>Créer un Service NodePort et accéder depuis l'extérieur</li>
-          <li>Utiliser le port-forward comme alternative rapide</li>
-          <li>Observer le load balancing entre les pods</li>
+          <li>Créer un Deployment multi-réplicas</li>
+          <li>Vérifier la distribution des pods sur les worker nodes</li>
+          <li>Observer le ReplicaSet créé automatiquement</li>
         </ul>
 
-        <h4>Étape 1 — Service ClusterIP (communication interne)</h4>
         <div class="code-block">
-          <div class="code-header"><span>httpbin-svc.yaml</span></div>
-          <pre><code class="language-yaml">apiVersion: v1
-kind: Service
+          <div class="code-header"><span>httpbin-deployment.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: httpbin-svc
+  name: httpbin
   namespace: default
 spec:
+  replicas: 3
   selector:
-    app: httpbin
-  ports:
-    - port: 80
-      targetPort: 80</code></pre>
+    matchLabels:
+      app: httpbin
+  template:
+    metadata:
+      labels:
+        app: httpbin
+    spec:
+      containers:
+        - name: httpbin
+          image: kennethreitz/httpbin:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"</code></pre>
         </div>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash">kubectl apply -f httpbin-svc.yaml
+          <pre><code class="language-bash">kubectl apply -f httpbin-deployment.yaml
 
-# Vérifier le service et son ClusterIP
-kubectl get service httpbin-svc
-# NAME          TYPE        CLUSTER-IP    PORT(S)
-# httpbin-svc   ClusterIP   10.96.x.x     80/TCP
+# Voir les 3 pods et sur quel node ils tournent
+kubectl get pods -o wide
 
-# Tester depuis un pod éphémère dans le cluster
-kubectl run test-curl --image=curlimages/curl:8.5.0 --restart=Never --rm -it -- \
-  curl http://httpbin-svc/ip
-# &#123;"origin": "10.244.x.x"&#125;   ← IP du pod test, pas la nôtre
+# Voir le ReplicaSet créé automatiquement
+kubectl get replicaset
 
-# Observer l'Endpoints : liste des IPs de pods derrière le Service
-kubectl get endpoints httpbin-svc</code></pre>
-        </div>
-
-        <h4>Étape 2 — Port-forward (accès local rapide)</h4>
-        <div class="code-block">
-          <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># Forward le port 8080 local vers le service
-kubectl port-forward service/httpbin-svc 8080:80
-
-# Dans un autre terminal :
-curl http://localhost:8080/ip
-curl http://localhost:8080/headers
-# Ouvrir http://localhost:8080 dans le navigateur</code></pre>
-        </div>
-
-        <h4>Étape 3 — Observer le load balancing</h4>
-        <div class="code-block">
-          <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># Lancer 10 requêtes successives via le Service
-for i in $(seq 1 10); do
-  kubectl run test-$i --image=curlimages/curl:8.5.0 --restart=Never --rm -it -- \
-    curl -s http://httpbin-svc/ip | grep origin
-done
-
-# Vous verrez des IPs différentes → chaque requête atterrit sur un pod différent</code></pre>
+# Accéder à l'app
+kubectl port-forward deployment/httpbin 8080:80
+# → http://localhost:8080</code></pre>
         </div>
       </div>
       <div class="lab-result">
         <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Le Service ClusterIP expose un DNS stable (<code>httpbin-svc.default.svc.cluster.local</code>). Les 10 requêtes retournent des IPs de pods différentes : c'est le load balancing natif de Kubernetes.</p>
+        <p>3 pods <code>Running</code>, répartis entre les 2 workers. Un ReplicaSet <code>httpbin-xxxxxxx</code> apparaît avec <code>DESIRED=3 CURRENT=3 READY=3</code>.</p>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 2</span>
+        <span class="lab-title">Observer le Self-Healing en action</span>
+        <span class="lab-time">~10 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Confirmer que Kubernetes ne laisse jamais un pod mort</li>
+          <li>Tuer un pod manuellement et observer sa recréation immédiate</li>
+          <li>Simuler la panne d'un node entier</li>
+        </ul>
+
+        <div class="code-block">
+          <div class="code-header"><span>bash - Terminal 1 : observer en temps réel</span></div>
+          <pre><code class="language-bash">kubectl get pods -w</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash - Terminal 2 : tuer un pod</span></div>
+          <pre><code class="language-bash"># Récupérer le nom d'un pod
+kubectl get pods
+
+# Le supprimer (simule un crash)
+kubectl delete pod &lt;nom-du-pod&gt;
+
+# Dans le Terminal 1 vous verrez :
+# httpbin-xxx   Terminating
+# httpbin-yyy   Pending → ContainerCreating → Running   ← recréé automatiquement</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash - Simuler la panne d'un node</span></div>
+          <pre><code class="language-bash"># Stopper le conteneur Docker d'un worker (simule une panne machine)
+docker stop k8s-lab-worker
+
+# Attendre ~1 min
+kubectl get nodes
+# k8s-lab-worker   NotReady
+
+kubectl get pods -o wide
+# Les pods du worker tombé sont re-schedulés sur worker2
+
+# Redémarrer le node
+docker start k8s-lab-worker</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Le cluster maintient toujours 3 pods <code>Running</code>. Même avec un node en panne, K8s replace les pods sur les nodes disponibles. C'est la boucle de réconciliation en action.</p>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 3</span>
+        <span class="lab-title">Rolling Update & Rollback sans downtime</span>
+        <span class="lab-time">~15 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Mettre à jour une application sans interruption de service</li>
+          <li>Observer le remplacement progressif des pods</li>
+          <li>Faire un rollback instantané en cas de problème</li>
+        </ul>
+
+        <div class="code-block">
+          <div class="code-header"><span>bash - Terminal 1 : watcher</span></div>
+          <pre><code class="language-bash">kubectl get pods -l app=httpbin -w</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash - Terminal 2 : mise à jour et rollback</span></div>
+          <pre><code class="language-bash"># Changer l'image (simule une nouvelle version)
+kubectl set image deployment/httpbin httpbin=nginx:1.25
+
+# Suivre le déploiement
+kubectl rollout status deployment/httpbin
+
+# Consulter l'historique
+kubectl rollout history deployment/httpbin
+
+# Rollback immédiat vers la version précédente
+kubectl rollout undo deployment/httpbin
+
+# Vérifier
+kubectl describe deployment/httpbin | grep Image</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Les pods sont remplacés un à un. L'application reste disponible pendant toute la durée du déploiement. Le rollback remet l'image précédente en quelques secondes.</p>
       </div>
     </div>
 

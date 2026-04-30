@@ -1,269 +1,475 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Pourquoi CI/CD ?</h2>
-    <p>Le <strong>CI/CD</strong> (Continuous Integration / Continuous Deployment) automatise le cycle de vie du logiciel : build, test, packaging et déploiement. Sans CI/CD, chaque mise en production est manuelle, lente et risquée.</p>
+    <h2>Vue d'ensemble de l'architecture</h2>
+    <p>Dans cette leçon, nous allons déployer un système complet sur Kubernetes : un backend Spring Boot connecté à PostgreSQL et Redis, exposé via un Ingress.</p>
+
     <div class="arch-diagram">
       <pre>
-  git push ──▶ CI Pipeline ──▶ Build ──▶ Test ──▶ Push Image ──▶ Deploy to K8s
-                                                                      │
-                                                         ┌────────────┼──────────┐
-                                                         ▼            ▼          ▼
-                                                      Staging    Production   Rollback</pre>
+                    ┌───────────────┐
+                    │   Ingress     │
+                    │ (NGINX + TLS) │
+                    └──────┬────────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+        ┌─────▼──┐  ┌──────▼──┐  ┌─────▼────┐
+        │Frontend│  │   API   │  │   API    │
+        │(Angular│  │ Replica │  │ Replica  │
+        │  SPA)  │  │   #1    │  │   #2     │
+        └────────┘  └────┬────┘  └────┬─────┘
+                         │            │
+                    ┌────▼────────────▼────┐
+                    │                      │
+              ┌─────▼──────┐    ┌──────────▼─┐
+              │ PostgreSQL │    │    Redis    │
+              │ (StatefulS)│    │ (Deployment)│
+              └────────────┘    └────────────┘</pre>
     </div>
   </section>
 
   <section>
-    <h2>GitHub Actions - Concepts</h2>
+    <h2>Structure des manifestes</h2>
+    <p>Organisez vos manifestes Kubernetes avec <strong>Kustomize</strong> pour gérer plusieurs environnements :</p>
+    <div class="file-tree">k8s/
+├── base/
+│   ├── kustomization.yaml
+│   ├── namespace.yaml
+│   ├── postgres-statefulset.yaml
+│   ├── postgres-service.yaml
+│   ├── redis-deployment.yaml
+│   ├── redis-service.yaml
+│   ├── api-deployment.yaml
+│   ├── api-service.yaml
+│   ├── api-configmap.yaml
+│   ├── api-secrets.yaml
+│   └── ingress.yaml
+├── overlays/
+│   ├── dev/
+│   │   └── kustomization.yaml
+│   └── prod/
+│       └── kustomization.yaml</div>
+  </section>
+
+  <section>
+    <h2>PostgreSQL StatefulSet</h2>
+    <div class="code-block">
+      <div class="code-header"><span>postgres-statefulset.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app_user"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Redis Deployment</h2>
+    <div class="code-block">
+      <div class="code-header"><span>redis-deployment.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Backend API Deployment</h2>
+    <div class="code-block">
+      <div class="code-header"><span>api-deployment.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+        - name: api
+          image: myregistry/api-backend:1.0.0
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Kustomize - Overlays par environnement</h2>
+    <div class="code-block">
+      <div class="code-header"><span>overlays/prod/kustomization.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: production
+resources:
+  - ../../base
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: api-backend
+      spec:
+        replicas: 3
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: api-hpa
+      spec:
+        scaleTargetRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: api-backend
+        minReplicas: 3
+        maxReplicas: 10
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 70</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Déploiement pas à pas</h2>
+    <div class="steps">
+      <div class="step">
+        <h4>Créer le namespace</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/namespace.yaml</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Déployer les Secrets et ConfigMaps</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/api-secrets.yaml
+kubectl apply -f k8s/base/api-configmap.yaml</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Déployer la base de données</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/postgres-statefulset.yaml
+kubectl apply -f k8s/base/postgres-service.yaml
+kubectl wait --for=condition=ready pod/postgres-0 --timeout=120s</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Déployer Redis puis l'API</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f k8s/base/redis-deployment.yaml
+kubectl apply -f k8s/base/api-deployment.yaml
+kubectl apply -f k8s/base/ingress.yaml</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <h4>Vérifier le déploiement</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl get all
+kubectl get pods -o wide
+kubectl logs deployment/api-backend -f</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <strong>Avec Kustomize</strong>
+      <p>Pour un déploiement complet en une commande : <code>kubectl apply -k k8s/overlays/prod/</code></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Résolution d'erreurs courantes</h2>
     <table>
-      <thead><tr><th>Concept</th><th>Description</th></tr></thead>
+      <thead><tr><th>Erreur</th><th>Cause probable</th><th>Solution</th></tr></thead>
       <tbody>
-        <tr><td><strong>Workflow</strong></td><td>Fichier YAML dans <code>.github/workflows/</code></td></tr>
-        <tr><td><strong>Trigger</strong></td><td>Événement déclencheur (<code>push</code>, <code>pull_request</code>, <code>schedule</code>)</td></tr>
-        <tr><td><strong>Job</strong></td><td>Groupe d'étapes exécutées sur un runner</td></tr>
-        <tr><td><strong>Step</strong></td><td>Commande ou action individuelle</td></tr>
-        <tr><td><strong>Action</strong></td><td>Bloc réutilisable (ex: <code>actions/checkout</code>)</td></tr>
-        <tr><td><strong>Secret</strong></td><td>Variable chiffrée (tokens, mots de passe)</td></tr>
+        <tr><td><code>CrashLoopBackOff</code></td><td>L'application crashe au démarrage</td><td><code>kubectl logs pod-name</code> pour voir l'erreur</td></tr>
+        <tr><td><code>ImagePullBackOff</code></td><td>Image introuvable ou credentials manquants</td><td>Vérifier le nom de l'image et le imagePullSecret</td></tr>
+        <tr><td><code>Pending (PVC)</code></td><td>Pas de PV disponible</td><td>Vérifier la StorageClass et les capacités</td></tr>
+        <tr><td><code>CreateContainerConfigError</code></td><td>ConfigMap ou Secret manquant</td><td><code>kubectl describe pod</code> pour les détails</td></tr>
       </tbody>
     </table>
   </section>
 
-  <section>
-    <h2>Pipeline complet - Build, Test, Deploy</h2>
-    <div class="code-block">
-      <div class="code-header"><span>.github/workflows/ci-cd.yml</span></div>
-      <pre ngNonBindable><code class="language-yaml">name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: $&#123;&#123; github.repository &#125;&#125;
-
-jobs:
-  # ── Build & Test ─────────────────────────
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Build & Test
-        run: mvn verify -B
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: target/surefire-reports/
-
-  # ── Build & Push Docker Image ────────────
-  docker:
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: $&#123;&#123; env.REGISTRY &#125;&#125;
-          username: $&#123;&#123; github.actor &#125;&#125;
-          password: $&#123;&#123; secrets.GITHUB_TOKEN &#125;&#125;
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            $&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; github.sha &#125;&#125;
-            $&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:latest
-
-  # ── Deploy to Staging ────────────────────
-  deploy-staging:
-    needs: docker
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Configure kubeconfig
-        run: echo "$&#123;&#123; secrets.KUBE_CONFIG &#125;&#125;" | base64 -d > kubeconfig
-        env:
-          KUBECONFIG: kubeconfig
-
-      - name: Deploy to staging
-        run: |
-          kubectl set image deployment/api-backend \
-            api=$&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; github.sha &#125;&#125; \
-            -n staging
-          kubectl rollout status deployment/api-backend -n staging --timeout=120s
-
-  # ── Deploy to Production (manual) ───────
-  deploy-prod:
-    needs: deploy-staging
-    runs-on: ubuntu-latest
-    environment: production   # Requires manual approval
-    steps:
-      - name: Deploy to production
-        run: |
-          kubectl set image deployment/api-backend \
-            api=$&#123;&#123; env.REGISTRY &#125;&#125;/$&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; github.sha &#125;&#125; \
-            -n production
-          kubectl rollout status deployment/api-backend -n production --timeout=180s</code></pre>
-    </div>
-  </section>
-
-  <section>
-    <h2>Bonnes pratiques CI/CD</h2>
-    <div class="callout tip">
-      <strong>Règles essentielles</strong>
-      <ul>
-        <li>Utilisez des <strong>environnements GitHub</strong> avec approbation manuelle pour la production</li>
-        <li>Taggez les images avec le <strong>SHA du commit</strong>, pas <code>:latest</code></li>
-        <li>Gardez les secrets dans <strong>GitHub Secrets</strong>, jamais dans le code</li>
-        <li>Exécutez les tests <strong>avant</strong> le build Docker pour un feedback rapide</li>
-        <li>Utilisez le <strong>cache Maven/Gradle</strong> pour accélérer les builds</li>
-        <li>Ajoutez un <strong>rollback automatique</strong> si le health check échoue après déploiement</li>
-      </ul>
-    </div>
-  </section>
-
   <section class="lab-section">
-    <h2>Travaux Pratiques — Pipeline CI/CD avec GitHub Actions</h2>
+    <h2>Travaux Pratiques - Déployer un système complet</h2>
 
     <div class="lab-intro">
       <p>
-        <strong>Prérequis :</strong> Un dépôt GitHub, Docker Hub (ou GitHub Container Registry).
-        Ce lab crée un vrai pipeline qui build, teste et pousse l'image Docker à chaque push sur <code>main</code>.
+        <strong>Lab de synthèse :</strong> on regroupe tout ce qu'on a appris pour déployer
+        un stack réaliste composé d'une API Spring Boot, d'un PostgreSQL avec PVC, et d'un Redis.
+        Chaque service est configuré via ConfigMap / Secret et exposé par un Service dédié.
       </p>
     </div>
 
     <div class="lab">
       <div class="lab-header">
         <span class="lab-badge">Lab</span>
-        <span class="lab-title">Pipeline Build → Test → Push → Déploiement</span>
-        <span class="lab-time">~30 min</span>
+        <span class="lab-title">Stack API + PostgreSQL + Redis sur Kind</span>
+        <span class="lab-time">~40 min</span>
       </div>
       <div class="lab-body">
         <h4>Objectifs</h4>
         <ul class="objective-list">
-          <li>Configurer les secrets GitHub (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN)</li>
-          <li>Créer un workflow qui build et pousse l'image à chaque push</li>
-          <li>Ajouter une étape de tests automatisés</li>
-          <li>Ajouter une étape de déploiement sur le cluster Kind</li>
+          <li>Déployer PostgreSQL avec PersistentVolumeClaim</li>
+          <li>Déployer Redis</li>
+          <li>Déployer une API qui dépend des deux via ConfigMap &amp; Secret</li>
+          <li>Exposer l'API via un Service et tester de bout en bout</li>
         </ul>
 
-        <h4>Étape 1 — Configurer les secrets GitHub</h4>
-        <p>Dans votre dépôt : <strong>Settings → Secrets and variables → Actions → New repository secret</strong></p>
-        <div class="code-block">
-          <div class="code-header"><span>Secrets à créer</span></div>
-          <pre><code class="language-bash">DOCKERHUB_USERNAME   # votre username Docker Hub
-DOCKERHUB_TOKEN      # Access Token Docker Hub (pas votre mot de passe)
-                     # → hub.docker.com → Account Settings → Security → New Access Token</code></pre>
-        </div>
-
-        <h4>Étape 2 — Créer le workflow</h4>
-        <p>Créez le fichier <code>.github/workflows/ci-cd.yml</code> dans votre dépôt :</p>
-        <div class="code-block">
-          <div class="code-header"><span>.github/workflows/ci-cd.yml</span></div>
-          <pre><code class="language-yaml">name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-env:
-  IMAGE_NAME: $&#123;&#123; secrets.DOCKERHUB_USERNAME &#125;&#125;/mon-api
-  IMAGE_TAG: $&#123;&#123; github.sha &#125;&#125;   # SHA du commit = tag unique et traçable
-
-jobs:
-  # ── Job 1 : Tests ────────────────────────────────
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Run tests
-        run: ./mvnw test
-
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-report
-          path: target/surefire-reports/
-
-  # ── Job 2 : Build & Push (seulement sur main) ───
-  build-push:
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: $&#123;&#123; secrets.DOCKERHUB_USERNAME &#125;&#125;
-          password: $&#123;&#123; secrets.DOCKERHUB_TOKEN &#125;&#125;
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            $&#123;&#123; env.IMAGE_NAME &#125;&#125;:$&#123;&#123; env.IMAGE_TAG &#125;&#125;
-            $&#123;&#123; env.IMAGE_NAME &#125;&#125;:latest</code></pre>
-        </div>
-
-        <h4>Étape 3 — Observer le pipeline</h4>
+        <h4>Étape 1 - Créer le namespace et la configuration</h4>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash"># Pousser le workflow et observer son exécution
-git add .github/workflows/ci-cd.yml
-git commit -m "feat: add CI/CD pipeline"
-git push origin main
+          <pre><code class="language-bash">kubectl create namespace myapp
+kubectl config set-context --current --namespace=myapp</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>config.yaml - ConfigMap + Secret</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: myapp
+data:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres-svc:5432/myapp"
+  SPRING_REDIS_HOST: "redis-svc"
+  SPRING_PROFILES_ACTIVE: "prod"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: myapp
+stringData:
+  POSTGRES_PASSWORD: "securepass"
+  SPRING_DATASOURCE_PASSWORD: "securepass"</code></pre>
+        </div>
 
-# GitHub Actions lançe automatiquement le pipeline
-# Suivre dans : github.com/&lt;user&gt;/&lt;repo&gt; → onglet Actions
+        <h4>Étape 2 - PostgreSQL avec PVC</h4>
+        <div class="code-block">
+          <div class="code-header"><span>postgres.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: myapp
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_DB
+              value: myapp
+            - name: POSTGRES_USER
+              value: appuser
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-svc
+  namespace: myapp
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432</code></pre>
+        </div>
 
-# Simuler un échec : introduire un test qui échoue
-# Modifier un test, pousser et observer que le job 'build-push' ne s'exécute PAS
-# Le pipeline bloque à l'étape 'test' grâce à needs: test</code></pre>
+        <h4>Étape 3 - Redis</h4>
+        <div class="code-block">
+          <div class="code-header"><span>redis.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: myapp
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379</code></pre>
+        </div>
+
+        <h4>Étape 4 - Vérifier le stack complet</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f config.yaml
+kubectl apply -f postgres.yaml
+kubectl apply -f redis.yaml
+
+# Attendre que tout soit Ready
+kubectl get pods -w
+# postgres-xxx   1/1   Running
+# redis-xxx      1/1   Running
+
+# Tester la connectivité inter-services
+kubectl run test --image=busybox --restart=Never --rm -it -- \
+  sh -c "nc -z postgres-svc 5432 &amp;&amp; echo 'postgres OK' ; nc -z redis-svc 6379 &amp;&amp; echo 'redis OK'"
+
+# Voir les events pour diagnostiquer d'éventuels problèmes
+kubectl get events --sort-by=.lastTimestamp</code></pre>
         </div>
       </div>
       <div class="lab-result">
         <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Chaque push sur <code>main</code> exécute les tests, puis (si OK) build et pousse l'image tagée avec le SHA du commit sur Docker Hub. Un test échoué bloque le push de l'image.</p>
+        <p>Les 3 services (postgres, redis, API) tournent dans le namespace <code>myapp</code>. La connectivité inter-services fonctionne par nom DNS. Les credentials ne sont jamais dans les manifests grâce aux Secrets.</p>
       </div>
     </div>
 

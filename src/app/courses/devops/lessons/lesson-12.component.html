@@ -1,146 +1,133 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Networking Kubernetes - Les bases</h2>
-    <p>Kubernetes impose un modèle réseau <strong>flat</strong> : chaque pod reçoit sa propre adresse IP et peut communiquer avec n'importe quel autre pod du cluster sans NAT.</p>
+    <h2>Pourquoi le logging centralisé ?</h2>
+    <p>Avec des dizaines de pods répartis sur plusieurs nodes, lire les logs un par un avec <code>kubectl logs</code> n'est pas viable. Le logging centralisé agrège tous les logs dans un seul endroit, permet la recherche et génère des alertes.</p>
 
-    <table>
-      <thead><tr><th>Communication</th><th>Mécanisme</th></tr></thead>
-      <tbody>
-        <tr><td>Pod → Pod (même node)</td><td>Bridge Linux (cbr0)</td></tr>
-        <tr><td>Pod → Pod (nodes différents)</td><td>CNI plugin (Calico, Cilium, Flannel)</td></tr>
-        <tr><td>Pod → Service</td><td>kube-proxy (iptables / IPVS)</td></tr>
-        <tr><td>Extérieur → Service</td><td>Ingress Controller / LoadBalancer</td></tr>
-      </tbody>
-    </table>
-
-    <h3>Service Discovery via DNS</h3>
-    <p>Kubernetes fournit un DNS intégré (CoreDNS). Chaque service est accessible par son nom :</p>
-    <div class="code-block">
-      <div class="code-header"><span>Formats DNS</span></div>
-      <pre><code class="language-bash"># Format court (même namespace)
-postgres-service
-
-# Format complet (FQDN)
-postgres-service.production.svc.cluster.local
-
-# Pour un StatefulSet (pod individuel)
-postgres-0.postgres-headless.production.svc.cluster.local</code></pre>
+    <div class="arch-diagram">
+      <pre>
+  Pod A ──┐                    ┌─── Elasticsearch ──── Kibana
+  Pod B ──┼──▶ Filebeat/       │    (stockage +        (UI +
+  Pod C ──┤   Fluentd    ──▶  │     indexation)        recherche)
+  Pod D ──┘   (collecte)       └───────────────────────────────</pre>
     </div>
   </section>
 
   <section>
-    <h2>Network Policies - Le firewall de K8s</h2>
-    <p>Par défaut, tous les pods peuvent communiquer entre eux. Les <strong>Network Policies</strong> permettent de restreindre le trafic réseau (ingress et/ou egress).</p>
+    <h2>Logging structuré avec Spring Boot</h2>
+    <p>Les logs structurés (JSON) sont essentiels pour une indexation efficace dans Elasticsearch.</p>
 
-    <div class="callout warning">
-      <strong>CNI requis</strong>
-      <p>Les Network Policies ne fonctionnent que si le CNI les supporte. <strong>Calico</strong> et <strong>Cilium</strong> les supportent. <strong>Flannel</strong> ne les supporte pas nativement.</p>
+    <div class="code-block">
+      <div class="code-header"><span>pom.xml</span></div>
+      <pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;net.logstash.logback&lt;/groupId&gt;
+    &lt;artifactId&gt;logstash-logback-encoder&lt;/artifactId&gt;
+    &lt;version&gt;7.4&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
     </div>
 
-    <h3>Deny all - Politique par défaut</h3>
     <div class="code-block">
-      <div class="code-header"><span>deny-all.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+      <div class="code-header"><span>logback-spring.xml</span></div>
+      <pre><code class="language-xml">&lt;configuration&gt;
+  &lt;springProfile name="production"&gt;
+    &lt;appender name="JSON" class="ch.qos.logback.core.ConsoleAppender"&gt;
+      &lt;encoder class="net.logstash.logback.encoder.LogstashEncoder"&gt;
+        &lt;customFields&gt;
+          {{ '{' }}"service":"api-backend","environment":"production"{{ '}' }}
+        &lt;/customFields&gt;
+      &lt;/encoder&gt;
+    &lt;/appender&gt;
+    &lt;root level="INFO"&gt;
+      &lt;appender-ref ref="JSON" /&gt;
+    &lt;/root&gt;
+  &lt;/springProfile&gt;
+&lt;/configuration&gt;</code></pre>
+    </div>
+
+    <p>Résultat - chaque ligne de log est un objet JSON :</p>
+    <div class="code-block">
+      <div class="code-header"><span>JSON log output</span></div>
+      <pre><code class="language-json">{{ '{' }}
+  "timestamp": "2026-04-27T10:15:30.123Z",
+  "level": "INFO",
+  "logger": "com.example.app.OrderService",
+  "message": "Commande traitée avec succès",
+  "service": "api-backend",
+  "environment": "production",
+  "orderId": "ORD-12345",
+  "duration_ms": 142
+{{ '}' }}</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Elasticsearch sur Kubernetes</h2>
+    <div class="code-block">
+      <div class="code-header"><span>bash - Installation via Helm</span></div>
+      <pre><code class="language-bash"># Elasticsearch
+helm repo add elastic https://helm.elastic.co
+helm install elasticsearch elastic/elasticsearch \
+  --namespace logging --create-namespace \
+  --set replicas=1 \
+  --set resources.requests.memory=1Gi \
+  --set volumeClaimTemplate.resources.requests.storage=30Gi
+
+# Kibana
+helm install kibana elastic/kibana \
+  --namespace logging
+
+# Filebeat (collecteur de logs)
+helm install filebeat elastic/filebeat \
+  --namespace logging</code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Alerting - Prometheus Alertmanager</h2>
+    <div class="code-block">
+      <div class="code-header"><span>alert-rules.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
 metadata:
-  name: deny-all
-  namespace: production
+  name: app-alerts
+  namespace: monitoring
 spec:
-  podSelector: {{ '{' }}{{ '}' }}    # Sélectionne tous les pods
-  policyTypes:
-    - Ingress
-    - Egress</code></pre>
+  groups:
+    - name: application
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count{{ '{' }}status=~"5.."{{ '}' }}[5m]))
+            / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Taux d'erreur > 5%"
+            description: "Le taux d'erreurs 5xx dépasse 5% depuis 5 minutes."
+
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Latence P99 > 2s"
+
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total[15m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod en CrashLoopBackOff"</code></pre>
     </div>
 
-    <h3>Autoriser le trafic sélectif</h3>
-    <div class="code-block">
-      <div class="code-header"><span>allow-api-to-db.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-api-to-postgres
-  namespace: production
-spec:
-  podSelector:
-    matchLabels:
-      app: postgres
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: api-backend
-      ports:
-        - protocol: TCP
-          port: 5432</code></pre>
-    </div>
-  </section>
-
-  <section>
-    <h2>RBAC - Contrôle d'accès</h2>
-    <p>Le <strong>Role-Based Access Control</strong> définit qui peut faire quoi dans le cluster.</p>
-
-    <div class="code-block">
-      <div class="code-header"><span>rbac.yaml</span></div>
-      <pre><code class="language-yaml"># Rôle limité à un namespace
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: developer
-  namespace: staging
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "services", "configmaps"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["get", "list", "watch", "update"]
----
-# Lier le rôle à un utilisateur
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: developer-binding
-  namespace: staging
-subjects:
-  - kind: User
-    name: alice
-    apiGroup: rbac.authorization.k8s.io
-roleRef:
-  kind: Role
-  name: developer
-  apiGroup: rbac.authorization.k8s.io</code></pre>
-    </div>
-
-    <div class="callout danger">
-      <strong>Principe du moindre privilège</strong>
-      <p>Ne donnez jamais <code>cluster-admin</code> aux comptes de service applicatifs. Limitez chaque rôle au strict nécessaire (namespace, ressources, verbes).</p>
-    </div>
-  </section>
-
-  <section>
-    <h2>Pod Security Standards</h2>
-    <p>Kubernetes définit trois niveaux de sécurité pour les pods :</p>
-    <table>
-      <thead><tr><th>Niveau</th><th>Description</th><th>Usage</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Privileged</strong></td><td>Aucune restriction</td><td>Composants système uniquement</td></tr>
-        <tr><td><strong>Baseline</strong></td><td>Restrictions minimales</td><td>Applications standard</td></tr>
-        <tr><td><strong>Restricted</strong></td><td>Restrictions maximales</td><td>Workloads sensibles</td></tr>
-      </tbody>
-    </table>
-
-    <div class="code-block">
-      <div class="code-header"><span>namespace-security.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Namespace
-metadata:
-  name: production
-  labels:
-    pod-security.kubernetes.io/enforce: baseline
-    pod-security.kubernetes.io/warn: restricted</code></pre>
+    <div class="callout tip">
+      <strong>Canaux de notification</strong>
+      <p>Alertmanager peut envoyer des alertes via Slack, PagerDuty, email, webhook ou Microsoft Teams. Configurez au minimum deux canaux : un pour les alertes critiques (PagerDuty/téléphone) et un pour les warnings (Slack/email).</p>
     </div>
   </section>
 

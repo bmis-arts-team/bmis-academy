@@ -1,0 +1,781 @@
+<app-lesson-page [data]="data">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SECTION 1 - POURQUOI LE CHAOS ENGINEERING ?
+  ════════════════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Pourquoi le Chaos Engineering ?</h2>
+    <p>
+      En 2010, Netflix migre vers AWS et se retrouve face à une question existentielle :
+      <em>comment savoir si notre système tiendra si un datacenter tombe en panne ?</em>
+      La réponse de leur équipe : le provoquer intentionnellement. <strong>Chaos Monkey</strong> est né -
+      un outil qui tue des instances en production de façon aléatoire pour forcer les ingénieurs
+      à construire des systèmes réellement résilients.
+    </p>
+    <p>
+      L'idée centrale est brutalement honnête : <strong>les pannes sont inévitables</strong>.
+      La question n'est pas <em>si</em> un composant va tomber, mais <em>quand</em> et
+      <em>comment votre système survit</em>. Espérer que tout ira bien n'est pas une stratégie.
+      Le Chaos Engineering consiste à prouver la résilience avant que vos utilisateurs ne la
+      testent à votre place.
+    </p>
+
+    <div class="comparison-grid">
+      <div class="comparison-item">
+        <div class="comparison-title bad">Sans Chaos Engineering</div>
+        <ul>
+          <li>Découvrir les pannes en production</li>
+          <li>Hypothèses jamais vérifiées</li>
+          <li>Résilience théorique seulement</li>
+          <li>Panique lors d'un incident réel</li>
+          <li>Runbooks jamais testés</li>
+        </ul>
+      </div>
+      <div class="comparison-item">
+        <div class="comparison-title good">Avec Chaos Engineering</div>
+        <ul>
+          <li>Pannes provoquées, contrôlées, apprises</li>
+          <li>Hypothèses validées par l'expérimentation</li>
+          <li>Résilience prouvée par des données</li>
+          <li>Équipes entraînées aux incidents</li>
+          <li>Runbooks maintenus et testés</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <strong>Le Chaos Engineering dans la CNCF</strong>
+      <p>
+        Chaos Mesh et Litmus Chaos sont tous deux des projets <strong>CNCF</strong> (Cloud Native Computing Foundation),
+        ce qui témoigne de la maturité de la discipline. Le chaos engineering est aujourd'hui une pratique
+        standard dans les équipes SRE (Site Reliability Engineering) des grandes organisations.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SECTION 2 - LA STEADY STATE HYPOTHESIS
+  ════════════════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>La Steady State Hypothesis</h2>
+    <p>
+      Avant d'injecter le moindre chaos, vous devez définir l'<strong>état stable</strong> (Steady State)
+      de votre système : un ensemble de métriques mesurables qui caractérisent un comportement normal.
+      C'est la base scientifique du chaos engineering.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <strong>Définir l'état stable</strong>
+          <p>
+            Identifiez vos métriques clés : taux de succès HTTP (&gt; 99%), latence p99 (&lt; 200ms),
+            nombre de pods Ready, throughput (req/s). Ces métriques doivent être <em>mesurables</em>
+            dans Prometheus/Grafana (cf. Leçon 10).
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <strong>Formuler l'hypothèse</strong>
+          <p>
+            "Si je tue 1 pod sur 3, le système maintient son état stable grâce au self-healing
+            et au load balancing." C'est une hypothèse précise et falsifiable.
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <strong>Injecter le chaos - dans un périmètre contrôlé</strong>
+          <p>
+            Commencez par un seul pod, dans un namespace de staging. Augmentez
+            le <em>blast radius</em> progressivement au fil des itérations.
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <strong>Vérifier - l'état stable tient-il ?</strong>
+          <p>
+            Observer les métriques pendant et après l'expérience.
+            Si l'état stable est maintenu : ✓ l'hypothèse est confirmée.
+            Si non : ✗ vous venez de trouver une vraie faiblesse avant vos utilisateurs.
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <strong>Analyser, corriger, recommencer</strong>
+          <p>
+            Documentez les résultats. Si une faiblesse est trouvée, corrigez-la
+            (retry logic, circuit breaker, réplication) puis recommencez l'expérience.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SECTION 3 - BLAST RADIUS & SÉCURITÉ
+  ════════════════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Blast Radius - Contrôler l'impact</h2>
+    <p>
+      Le <strong>blast radius</strong> est le périmètre d'impact d'une expérience chaos.
+      La règle d'or : commencer le plus petit possible et augmenter progressivement.
+      Ne jamais commencer en production.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Niveau</th>
+          <th>Cible</th>
+          <th>Impact potentiel</th>
+          <th>Quand ?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1 - Pod</strong></td>
+          <td>Un seul pod dans un namespace isolé</td>
+          <td>Aucun sur le trafic réel</td>
+          <td>Premiers tests, tout le temps</td>
+        </tr>
+        <tr>
+          <td><strong>2 - Deployment</strong></td>
+          <td>N% des pods d'un deployment</td>
+          <td>Dégradation partielle possible</td>
+          <td>Staging validé, équipe prête</td>
+        </tr>
+        <tr>
+          <td><strong>3 - Service</strong></td>
+          <td>Latence réseau sur un service entier</td>
+          <td>Ralentissement global</td>
+          <td>Staging seulement</td>
+        </tr>
+        <tr>
+          <td><strong>4 - Node</strong></td>
+          <td>Un worker node complet</td>
+          <td>Rescheduling de tous les pods</td>
+          <td>Après validation complète staging</td>
+        </tr>
+        <tr>
+          <td><strong>5 - Production</strong></td>
+          <td>Expériences en production réelle</td>
+          <td>Impact utilisateurs possible</td>
+          <td>Seulement avec kill switch + on-call</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warning">
+      <strong>Toujours avoir un kill switch</strong>
+      <p>
+        Toute expérience chaos doit pouvoir être <strong>annulée immédiatement</strong>.
+        Chaos Mesh propose une pause/suppression d'expérience en un clic.
+        En production, un chaos engineer doit être disponible pendant toute la durée de l'expérience,
+        avec un runbook de rollback prêt.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SECTION 4 - CHAOS MESH
+  ════════════════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Chaos Mesh - Architecture & Types d'expériences</h2>
+    <p>
+      <strong>Chaos Mesh</strong> est un framework CNCF de chaos engineering natif Kubernetes.
+      Il s'appuie sur des CRDs (Custom Resource Definitions) pour décrire les expériences
+      en YAML, exactement comme n'importe quelle ressource Kubernetes.
+    </p>
+
+    <h3>Architecture</h3>
+    <div class="arch-diagram">
+      <pre>
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                     Chaos Mesh                                  │
+  │                                                                 │
+  │  ┌──────────────────┐     ┌─────────────────────────────────┐  │
+  │  │  Chaos Dashboard  │────▶│    Chaos Controller Manager     │  │
+  │  │   (Web UI)        │     │  (watches CRDs, orchestrates)  │  │
+  │  └──────────────────┘     └────────────────┬────────────────┘  │
+  │                                            │                   │
+  │                           ┌───────────────▼──────────────┐    │
+  │                           │        Chaos Daemon           │    │
+  │                           │ (DaemonSet - 1 pod/node)      │    │
+  │                           │  injecte le chaos sur le node │    │
+  │                           └───────────────────────────────┘    │
+  │                                                                 │
+  │  CRDs: PodChaos  NetworkChaos  StressChaos  IOChaos  TimeChaos │
+  └─────────────────────────────────────────────────────────────────┘</pre>
+    </div>
+
+    <h3>Types d'expériences</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>CRD</th>
+          <th>Ce que ça teste</th>
+          <th>Exemples de scénarios</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>PodChaos</code></td>
+          <td>Self-healing, haute disponibilité</td>
+          <td>Kill aléatoire, crash loop, container kill</td>
+        </tr>
+        <tr>
+          <td><code>NetworkChaos</code></td>
+          <td>Résilience réseau, retry, timeouts</td>
+          <td>Latence, perte de paquets, partition réseau, corruption</td>
+        </tr>
+        <tr>
+          <td><code>StressChaos</code></td>
+          <td>Comportement sous charge, OOM handling</td>
+          <td>CPU spike à 80%, memory pressure, combiné</td>
+        </tr>
+        <tr>
+          <td><code>IOChaos</code></td>
+          <td>Résilience I/O, persistence</td>
+          <td>Latence disque, erreurs de lecture, corruption fichiers</td>
+        </tr>
+        <tr>
+          <td><code>TimeChaos</code></td>
+          <td>Gestion du temps, caches, JWT expiration</td>
+          <td>Décalage horloge, skew de temps entre pods</td>
+        </tr>
+        <tr>
+          <td><code>KernelChaos</code></td>
+          <td>Appels système, bas niveau</td>
+          <td>Erreurs malloc, erreurs open() fichiers</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Une expérience Chaos Mesh en YAML</h3>
+    <p>Chaque expérience est une ressource Kubernetes standard. Exemple : tuer un pod toutes les 30 secondes.</p>
+    <div class="code-block">
+      <div class="code-header"><span>pod-chaos.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: kill-api-pods
+  namespace: chaos-testing
+spec:
+  action: pod-kill          # pod-kill | pod-failure | container-kill
+  mode: one                 # one | all | fixed | fixed-percent | random-max-percent
+  selector:
+    namespaces:
+      - default
+    labelSelectors:
+      app: api-backend
+  scheduler:
+    cron: "@every 30s"      # Répétition toutes les 30 secondes
+  duration: "10s"           # Durée de l'expérience</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>network-chaos.yaml - Latence 500ms</span></div>
+      <pre><code class="language-yaml">apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: api-network-delay
+  namespace: chaos-testing
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - default
+    labelSelectors:
+      app: api-backend
+  delay:
+    latency: "500ms"        # Latence injectée
+    correlation: "25"       # 25% de corrélation entre paquets
+    jitter: "50ms"          # ± variation
+  direction: to             # to | from | both
+  duration: "60s"</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span>stress-chaos.yaml - CPU spike</span></div>
+      <pre><code class="language-yaml">apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: cpu-stress-api
+  namespace: chaos-testing
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - default
+    labelSelectors:
+      app: api-backend
+  stressors:
+    cpu:
+      workers: 2            # Nombre de goroutines stressant le CPU
+      load: 80              # % de charge CPU cible
+    memory:
+      workers: 1
+      size: "256MB"         # Pression mémoire
+  duration: "120s"</code></pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SECTION 5 - CHAOS + OBSERVABILITÉ
+  ════════════════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>L'observabilité est un prérequis</h2>
+    <p>
+      Le chaos engineering sans monitoring, c'est comme piloter à l'aveugle.
+      Vous devez pouvoir <strong>mesurer l'état stable avant, pendant et après</strong>
+      chaque expérience. C'est pour ça que cette leçon vient après Prometheus &amp; Grafana (Leçon 10)
+      et le logging (Leçon 11).
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Ce que vous injectez</th>
+          <th>Ce que vous mesurez dans Grafana</th>
+          <th>Métrique PromQL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Pod kill</td>
+          <td>Pods Ready, taux d'erreurs HTTP</td>
+          <td><code>kube_deployment_status_replicas_ready</code></td>
+        </tr>
+        <tr>
+          <td>Latence réseau 500ms</td>
+          <td>Latence p99 des requêtes</td>
+          <td><code>histogram_quantile(0.99, http_request_duration)</code></td>
+        </tr>
+        <tr>
+          <td>CPU stress 80%</td>
+          <td>CPU throttling, latence applicative</td>
+          <td><code>rate(container_cpu_cfs_throttled_seconds_total[5m])</code></td>
+        </tr>
+        <tr>
+          <td>Memory pressure</td>
+          <td>OOM kills, restarts des pods</td>
+          <td><code>kube_pod_container_status_restarts_total</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <strong>Créez un dashboard Grafana dédié au chaos</strong>
+      <p>
+        Avant chaque expérience, ouvrez un dashboard avec : taux de succès HTTP, latence p50/p99,
+        pods Ready/Total, et restarts. Annotez le début et la fin de l'expérience dans Grafana
+        (feature "Annotations") pour visualiser exactement l'impact sur les métriques.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SECTION 6 - GAME DAYS
+  ════════════════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Game Days - Entraîner les équipes</h2>
+    <p>
+      Un <strong>Game Day</strong> est un exercice planifié où toute l'équipe (dev, ops, on-call)
+      participe à une session de chaos engineering. L'objectif est autant de tester les systèmes
+      que de tester les <em>humains</em> et les <em>processus</em>.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <strong>Planification (J-7)</strong>
+          <p>Définir le scénario, le blast radius, les métriques d'état stable, l'équipe impliquée, le kill switch.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <strong>Briefing (J0 matin)</strong>
+          <p>Présenter le scénario à l'équipe. Désigner un "chaos engineer" (injecte) et un "observateur" (surveille les dashboards).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <strong>Exécution</strong>
+          <p>Injecter le chaos. L'équipe réagit comme pour un vrai incident : détection, investigation, mitigation.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <strong>Post-mortem (J0 après-midi)</strong>
+          <p>
+            Rédiger un post-mortem blameless : timeline, impact, causes profondes, actions correctives.
+            C'est le livrable le plus important du Game Day.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       LABS
+  ════════════════════════════════════════════════════════════════════ -->
+  <section class="lab-section">
+    <h2>Travaux Pratiques - Chaos Engineering sur Kind</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Cluster Kind opérationnel (Leçon 3), Helm installé (Leçon 10).
+        Lab 1 ne nécessite aucun outil supplémentaire. Lab 2 installe Chaos Mesh sur votre cluster Kind.
+      </p>
+    </div>
+
+    <!-- ─── LAB 1 : CHAOS MANUEL ───────────────────────────────── -->
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 1</span>
+        <span class="lab-title">Chaos manuel - kubectl comme outil de chaos</span>
+        <span class="lab-time">~20 min</span>
+      </div>
+      <div class="lab-body">
+
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Observer le self-healing de Kubernetes sous stress</li>
+          <li>Simuler la perte d'un node et la migration des pods</li>
+          <li>Mesurer le temps de récupération (MTTR)</li>
+        </ul>
+
+        <h4>Étape 1 - Déployer une application cible</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Déployer l'app cible avec 3 réplicas
+kubectl create deployment chaos-target \
+  --image=nginx:alpine \
+  --replicas=3
+
+kubectl expose deployment chaos-target --port=80 --type=ClusterIP
+
+# Vérifier l'état stable (steady state)
+kubectl get pods -l app=chaos-target -w
+# NAME                            READY   STATUS    RESTARTS
+# chaos-target-5d8f9b9c6d-abc12   1/1     Running   0
+# chaos-target-5d8f9b9c6d-def34   1/1     Running   0
+# chaos-target-5d8f9b9c6d-ghi56   1/1     Running   0</code></pre>
+        </div>
+
+        <h4>Étape 2 - Expérience 1 : Kill d'un pod</h4>
+        <p><strong>Hypothèse :</strong> Si je supprime 1 pod, Kubernetes le recrée en moins de 15 secondes.</p>
+        <div class="code-block">
+          <div class="code-header"><span>bash - terminal 1 : observer en continu</span></div>
+          <pre><code class="language-bash">kubectl get pods -l app=chaos-target -w</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash - terminal 2 : injecter le chaos</span></div>
+          <pre><code class="language-bash"># Récupérer un pod et le supprimer
+POD=$(kubectl get pods -l app=chaos-target -o name | head -1)
+echo "Killing: $POD"
+kubectl delete $POD
+
+# Observer dans terminal 1 :
+# Le pod passe Terminating → nouveau pod Running en ~5-10s
+# Le ReplicaSet maintient toujours 3 réplicas</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash - mesurer le MTTR</span></div>
+          <pre><code class="language-bash">START=$(date +%s)
+kubectl delete $(kubectl get pods -l app=chaos-target -o name | head -1)
+kubectl wait --for=condition=ready pods -l app=chaos-target --timeout=60s
+END=$(date +%s)
+echo "MTTR: $((END - START)) secondes"</code></pre>
+        </div>
+
+        <h4>Étape 3 - Expérience 2 : Kill de tous les pods simultanément</h4>
+        <p><strong>Hypothèse :</strong> Si je supprime les 3 pods en même temps, le service reste disponible le temps du restart.</p>
+        <div class="code-block">
+          <div class="code-header"><span>bash - terminal 1 : tester la disponibilité en continu</span></div>
+          <pre><code class="language-bash"># Lancer un pod de test qui curl en boucle
+kubectl run load-test --image=busybox --restart=Never -it --rm -- \
+  sh -c 'while true; do wget -q -O- http://chaos-target || echo "FAIL"; sleep 0.5; done'</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash - terminal 2 : chaos total</span></div>
+          <pre><code class="language-bash"># Supprimer tous les pods d'un coup
+kubectl delete pods -l app=chaos-target
+
+# Observer dans terminal 1 : combien de FAILs avant que tout revienne ?
+# Conclusion : sans PodDisruptionBudget, la dispo n'est pas garantie</code></pre>
+        </div>
+
+        <h4>Étape 4 - Corriger avec un PodDisruptionBudget</h4>
+        <div class="code-block">
+          <div class="code-header"><span>pdb.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chaos-target-pdb
+spec:
+  minAvailable: 2           # Au moins 2 pods toujours disponibles
+  selector:
+    matchLabels:
+      app: chaos-target</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f pdb.yaml
+
+# Re-tester : kubectl delete pods -l app=chaos-target
+# Cette fois, au moins 2 pods restent opérationnels pendant l'éviction</code></pre>
+        </div>
+
+        <h4>Étape 5 - Expérience 3 : Drain d'un node</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Lister les nodes
+kubectl get nodes
+# NAME                     STATUS   ROLES
+# k8s-lab-control-plane    Ready    control-plane
+# k8s-lab-worker           Ready    &lt;none&gt;
+# k8s-lab-worker2          Ready    &lt;none&gt;
+
+# Drainer un worker (simule une maintenance)
+kubectl drain k8s-lab-worker --ignore-daemonsets --delete-emptydir-data
+
+# Tous les pods du node sont évincés et reschedulés sur l'autre worker
+kubectl get pods -l app=chaos-target -o wide
+
+# Remettre le node en service
+kubectl uncordon k8s-lab-worker</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultats attendus</div>
+        <p>
+          MTTR pod kill &lt; 15s. Avec PDB, au minimum 2 pods restent disponibles en toutes circonstances.
+          Après drain, tous les pods migrent sur le node restant - aucune intervention manuelle.
+        </p>
+      </div>
+    </div>
+
+    <!-- ─── LAB 2 : CHAOS MESH ─────────────────────────────────── -->
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab 2</span>
+        <span class="lab-title">Chaos Mesh - Expériences réseau et pod sur Kind</span>
+        <span class="lab-time">~40 min</span>
+      </div>
+      <div class="lab-body">
+
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Installer Chaos Mesh via Helm sur votre cluster Kind</li>
+          <li>Créer une expérience PodChaos (kill aléatoire)</li>
+          <li>Créer une expérience NetworkChaos (latence 500ms)</li>
+          <li>Observer l'impact via le Chaos Dashboard</li>
+        </ul>
+
+        <h4>Étape 1 - Installer Chaos Mesh</h4>
+        <p>Chaos Mesh s'installe en un seul chart Helm dans un namespace dédié.</p>
+        <app-os-tabs>
+          <div linux>
+            <div class="code-block">
+              <div class="code-header"><span>bash - Linux / macOS</span></div>
+              <pre><code class="language-bash">helm repo add chaos-mesh https://charts.chaos-mesh.org
+helm repo update
+
+# Créer le namespace
+kubectl create namespace chaos-mesh
+
+# Installer - runtime=containerd pour Kind
+helm install chaos-mesh chaos-mesh/chaos-mesh \
+  --namespace chaos-mesh \
+  --set chaosDaemon.runtime=containerd \
+  --set chaosDaemon.socketPath=/run/containerd/containerd.sock \
+  --version 2.6.3
+
+# Attendre que tous les pods soient Ready
+kubectl get pods -n chaos-mesh -w</code></pre>
+            </div>
+          </div>
+          <div mac>
+            <div class="code-block">
+              <div class="code-header"><span>bash - macOS</span></div>
+              <pre><code class="language-bash">helm repo add chaos-mesh https://charts.chaos-mesh.org
+helm repo update
+
+kubectl create namespace chaos-mesh
+
+helm install chaos-mesh chaos-mesh/chaos-mesh \
+  --namespace chaos-mesh \
+  --set chaosDaemon.runtime=containerd \
+  --set chaosDaemon.socketPath=/run/containerd/containerd.sock \
+  --version 2.6.3
+
+kubectl get pods -n chaos-mesh -w</code></pre>
+            </div>
+          </div>
+          <div win>
+            <div class="code-block">
+              <div class="code-header"><span>PowerShell - Windows</span></div>
+              <pre><code class="language-powershell">helm repo add chaos-mesh https://charts.chaos-mesh.org
+helm repo update
+
+kubectl create namespace chaos-mesh
+
+helm install chaos-mesh chaos-mesh/chaos-mesh `
+  --namespace chaos-mesh `
+  --set chaosDaemon.runtime=containerd `
+  --set chaosDaemon.socketPath=/run/containerd/containerd.sock `
+  --version 2.6.3
+
+kubectl get pods -n chaos-mesh -w</code></pre>
+            </div>
+          </div>
+        </app-os-tabs>
+
+        <div class="code-block">
+          <div class="code-header"><span>bash - vérification</span></div>
+          <pre><code class="language-bash">kubectl get pods -n chaos-mesh
+# NAME                                   READY   STATUS
+# chaos-controller-manager-xxx           1/1     Running
+# chaos-daemon-abc                       1/1     Running   ← 1 par node
+# chaos-daemon-def                       1/1     Running
+# chaos-dashboard-xxx                    1/1     Running</code></pre>
+        </div>
+
+        <h4>Étape 2 - Ouvrir le Dashboard Chaos Mesh</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Exposer le dashboard localement
+kubectl port-forward -n chaos-mesh svc/chaos-dashboard 2333:2333
+
+# Ouvrir : http://localhost:2333
+# Dashboard sans auth pour Kind (ne pas utiliser en prod)</code></pre>
+        </div>
+
+        <h4>Étape 3 - Déployer l'application cible</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Réutiliser l'app du Lab 1 ou redéployer
+kubectl create namespace chaos-testing
+kubectl create deployment api-backend \
+  --image=nginx:alpine \
+  --replicas=3 \
+  -n chaos-testing
+
+# Lancer un générateur de trafic continu
+kubectl run traffic-gen -n chaos-testing \
+  --image=busybox --restart=Never -- \
+  sh -c 'while true; do wget -q -O- http://api-backend 2>&1; sleep 1; done'</code></pre>
+        </div>
+
+        <h4>Étape 4 - Expérience PodChaos : kill aléatoire toutes les 30s</h4>
+        <div class="code-block">
+          <div class="code-header"><span>pod-chaos-experiment.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: kill-backend-pods
+  namespace: chaos-testing
+spec:
+  action: pod-kill
+  mode: one               # Tuer 1 pod à la fois
+  selector:
+    namespaces:
+      - chaos-testing
+    labelSelectors:
+      app: api-backend
+  scheduler:
+    cron: "@every 30s"
+  duration: "5m"          # Arrête automatiquement après 5 minutes</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f pod-chaos-experiment.yaml
+
+# Observer dans le Dashboard → Experiments → kill-backend-pods
+# Observer les pods qui se recréent
+kubectl get pods -n chaos-testing -w
+
+# Vérifier que le trafic reste disponible malgré les kills
+kubectl logs traffic-gen -n chaos-testing | tail -20
+
+# Arrêter l'expérience
+kubectl delete podchaos kill-backend-pods -n chaos-testing</code></pre>
+        </div>
+
+        <h4>Étape 5 - Expérience NetworkChaos : latence 500ms</h4>
+        <div class="code-block">
+          <div class="code-header"><span>network-chaos-experiment.yaml</span></div>
+          <pre><code class="language-yaml">apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: api-latency
+  namespace: chaos-testing
+spec:
+  action: delay
+  mode: all               # Appliquer à tous les pods matchés
+  selector:
+    namespaces:
+      - chaos-testing
+    labelSelectors:
+      app: api-backend
+  delay:
+    latency: "500ms"
+    jitter: "100ms"
+  direction: to           # Latence sur les requêtes ENTRANTES
+  duration: "2m"</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f network-chaos-experiment.yaml
+
+# Tester la latence depuis un pod client
+kubectl run latency-test -n chaos-testing --image=curlimages/curl --restart=Never --rm -it -- \
+  sh -c 'for i in $(seq 1 10); do time curl -s http://api-backend > /dev/null; done'
+
+# Vous devriez voir ~500ms de latence sur chaque requête
+# Si Grafana est configuré (Leçon 10), observer le p99 augmenter
+
+# Nettoyer
+kubectl delete networkchaos api-latency -n chaos-testing</code></pre>
+        </div>
+
+        <h4>Étape 6 - Nettoyer</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Supprimer le namespace de test
+kubectl delete namespace chaos-testing
+
+# Désinstaller Chaos Mesh
+helm uninstall chaos-mesh -n chaos-mesh
+kubectl delete namespace chaos-mesh</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultats attendus</div>
+        <p>
+          Expérience PodChaos : les pods sont tués toutes les 30s et recréés automatiquement,
+          le trafic continue sans interruption visible grâce au self-healing.
+          Expérience NetworkChaos : latence de ~500ms mesurable sur chaque requête.
+          Le Dashboard Chaos Mesh montre la timeline des expériences et leur statut.
+        </p>
+      </div>
+    </div>
+
+  </section>
+
+</app-lesson-page>

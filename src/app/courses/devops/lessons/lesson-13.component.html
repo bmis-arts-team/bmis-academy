@@ -1,127 +1,146 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Pourquoi le CDN est crucial</h2>
-    <p>Un <strong>CDN</strong> (Content Delivery Network) distribue votre contenu statique (JS, CSS, images, fonts) depuis des serveurs edge proches de l'utilisateur final. Avantages :</p>
-    <ul>
-      <li><strong>Latence réduite</strong> - Le contenu est servi depuis le point de présence le plus proche</li>
-      <li><strong>Charge réduite</strong> - Le backend n'a plus à servir les fichiers statiques</li>
-      <li><strong>Résilience</strong> - Les assets restent disponibles même si le backend est surchargé</li>
-      <li><strong>Performance</strong> - Compression (Brotli, gzip), HTTP/2, optimisation automatique</li>
-    </ul>
-  </section>
+    <h2>Networking Kubernetes - Les bases</h2>
+    <p>Kubernetes impose un modèle réseau <strong>flat</strong> : chaque pod reçoit sa propre adresse IP et peut communiquer avec n'importe quel autre pod du cluster sans NAT.</p>
 
-  <section>
-    <h2>Comment fonctionne un CDN</h2>
-    <div class="arch-diagram">
-      <pre>
-  Utilisateur (Paris)                    Utilisateur (Tokyo)
-       │                                       │
-       ▼                                       ▼
-  ┌─── Edge Paris ───┐                  ┌─── Edge Tokyo ──┐
-  │ Cache local      │                  │ Cache local      │
-  │ (JS, CSS, img)   │                  │ (JS, CSS, img)   │
-  └────────┬─────────┘                  └────────┬─────────┘
-           │ cache miss                          │ cache miss
-           ▼                                     ▼
-      ┌─────────────────────────────────────────────┐
-      │          Origin Server (votre backend)       │
-      └─────────────────────────────────────────────┘</pre>
-    </div>
-
-    <h3>Headers de cache</h3>
-    <div class="code-block">
-      <div class="code-header"><span>Cache-Control headers</span></div>
-      <pre><code class="language-bash"># Assets buildés (hash dans le nom) - cache long
-Cache-Control: public, max-age=31536000, immutable
-# Exemple: main.a1b2c3d4.js
-
-# index.html - toujours revalider
-Cache-Control: no-cache, must-revalidate
-# Le navigateur vérifie toujours avec le serveur
-
-# API responses - pas de cache CDN
-Cache-Control: private, no-store</code></pre>
-    </div>
-  </section>
-
-  <section>
-    <h2>CDN Providers - Comparaison</h2>
     <table>
-      <thead><tr><th>Provider</th><th>Points forts</th><th>Tarification</th></tr></thead>
+      <thead><tr><th>Communication</th><th>Mécanisme</th></tr></thead>
       <tbody>
-        <tr><td><strong>Cloudflare</strong></td><td>Gratuit (plan de base), DDoS protection, Workers</td><td>Gratuit → Enterprise</td></tr>
-        <tr><td><strong>AWS CloudFront</strong></td><td>Intégré à S3/ECS, Lambda&#64;Edge</td><td>Pay-per-use</td></tr>
-        <tr><td><strong>Google Cloud CDN</strong></td><td>Intégré à GKE/GCS, global LB</td><td>Pay-per-use</td></tr>
-        <tr><td><strong>Azure CDN</strong></td><td>Intégré à Azure, règles de cache avancées</td><td>Pay-per-use</td></tr>
+        <tr><td>Pod → Pod (même node)</td><td>Bridge Linux (cbr0)</td></tr>
+        <tr><td>Pod → Pod (nodes différents)</td><td>CNI plugin (Calico, Cilium, Flannel)</td></tr>
+        <tr><td>Pod → Service</td><td>kube-proxy (iptables / IPVS)</td></tr>
+        <tr><td>Extérieur → Service</td><td>Ingress Controller / LoadBalancer</td></tr>
       </tbody>
     </table>
+
+    <h3>Service Discovery via DNS</h3>
+    <p>Kubernetes fournit un DNS intégré (CoreDNS). Chaque service est accessible par son nom :</p>
+    <div class="code-block">
+      <div class="code-header"><span>Formats DNS</span></div>
+      <pre><code class="language-bash"># Format court (même namespace)
+postgres-service
+
+# Format complet (FQDN)
+postgres-service.production.svc.cluster.local
+
+# Pour un StatefulSet (pod individuel)
+postgres-0.postgres-headless.production.svc.cluster.local</code></pre>
+    </div>
   </section>
 
   <section>
-    <h2>Servir une SPA Angular via CDN</h2>
+    <h2>Network Policies - Le firewall de K8s</h2>
+    <p>Par défaut, tous les pods peuvent communiquer entre eux. Les <strong>Network Policies</strong> permettent de restreindre le trafic réseau (ingress et/ou egress).</p>
 
-    <div class="steps">
-      <div class="step">
-        <h4>Build de production</h4>
-        <div class="code-block">
-          <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash">ng build --configuration production
-# Résultat dans dist/my-app/browser/
-# Les fichiers JS/CSS ont un hash : main.a1b2c3d4.js</code></pre>
-        </div>
-      </div>
-
-      <div class="step">
-        <h4>Upload vers un bucket cloud</h4>
-        <div class="code-block">
-          <div class="code-header"><span>bash - AWS S3</span></div>
-          <pre><code class="language-bash"># Sync des fichiers buildés vers S3
-aws s3 sync dist/my-app/browser/ s3://my-app-frontend/ \
-  --cache-control "public, max-age=31536000, immutable"
-
-# index.html sans cache (pour les mises à jour)
-aws s3 cp dist/my-app/browser/index.html s3://my-app-frontend/index.html \
-  --cache-control "no-cache, must-revalidate"</code></pre>
-        </div>
-      </div>
-
-      <div class="step">
-        <h4>Configurer CloudFront</h4>
-        <p>Créez une distribution CloudFront pointant vers le bucket S3 avec le fallback <code>index.html</code> pour le routing Angular (SPA).</p>
-      </div>
+    <div class="callout warning">
+      <strong>CNI requis</strong>
+      <p>Les Network Policies ne fonctionnent que si le CNI les supporte. <strong>Calico</strong> et <strong>Cilium</strong> les supportent. <strong>Flannel</strong> ne les supporte pas nativement.</p>
     </div>
 
-    <h3>Alternative : NGINX + CDN</h3>
+    <h3>Deny all - Politique par défaut</h3>
     <div class="code-block">
-      <div class="code-header"><span>nginx.conf</span></div>
-      <pre><code class="language-nginx">server {{ '{' }}
-    listen 80;
-    server_name app.example.com;
-    root /usr/share/nginx/html;
-    index index.html;
+      <div class="code-header"><span>deny-all.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: production
+spec:
+  podSelector: {{ '{' }}{{ '}' }}    # Sélectionne tous les pods
+  policyTypes:
+    - Ingress
+    - Egress</code></pre>
+    </div>
 
-    # SPA fallback
-    location / {{ '{' }}
-        try_files $uri $uri/ /index.html;
-    {{ '}' }}
+    <h3>Autoriser le trafic sélectif</h3>
+    <div class="code-block">
+      <div class="code-header"><span>allow-api-to-db.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-postgres
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-backend
+      ports:
+        - protocol: TCP
+          port: 5432</code></pre>
+    </div>
+  </section>
 
-    # Cache long pour les assets hashés
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {{ '{' }}
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    {{ '}' }}
+  <section>
+    <h2>RBAC - Contrôle d'accès</h2>
+    <p>Le <strong>Role-Based Access Control</strong> définit qui peut faire quoi dans le cluster.</p>
 
-    # Pas de cache pour index.html
-    location = /index.html {{ '{' }}
-        add_header Cache-Control "no-cache, must-revalidate";
-    {{ '}' }}
+    <div class="code-block">
+      <div class="code-header"><span>rbac.yaml</span></div>
+      <pre><code class="language-yaml"># Rôle limité à un namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: staging
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "update"]
+---
+# Lier le rôle à un utilisateur
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: staging
+subjects:
+  - kind: User
+    name: alice
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io</code></pre>
+    </div>
 
-    # Compression
-    gzip on;
-    gzip_types text/css application/javascript application/json image/svg+xml;
-    gzip_min_length 1000;
-{{ '}' }}</code></pre>
+    <div class="callout danger">
+      <strong>Principe du moindre privilège</strong>
+      <p>Ne donnez jamais <code>cluster-admin</code> aux comptes de service applicatifs. Limitez chaque rôle au strict nécessaire (namespace, ressources, verbes).</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Pod Security Standards</h2>
+    <p>Kubernetes définit trois niveaux de sécurité pour les pods :</p>
+    <table>
+      <thead><tr><th>Niveau</th><th>Description</th><th>Usage</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Privileged</strong></td><td>Aucune restriction</td><td>Composants système uniquement</td></tr>
+        <tr><td><strong>Baseline</strong></td><td>Restrictions minimales</td><td>Applications standard</td></tr>
+        <tr><td><strong>Restricted</strong></td><td>Restrictions maximales</td><td>Workloads sensibles</td></tr>
+      </tbody>
+    </table>
+
+    <div class="code-block">
+      <div class="code-header"><span>namespace-security.yaml</span></div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted</code></pre>
     </div>
   </section>
 

@@ -1,134 +1,278 @@
 <app-lesson-page [data]="data">
 
   <section>
-    <h2>Pourquoi le logging centralisé ?</h2>
-    <p>Avec des dizaines de pods répartis sur plusieurs nodes, lire les logs un par un avec <code>kubectl logs</code> n'est pas viable. Le logging centralisé agrège tous les logs dans un seul endroit, permet la recherche et génère des alertes.</p>
-
-    <div class="arch-diagram">
-      <pre>
-  Pod A ──┐                    ┌─── Elasticsearch ──── Kibana
-  Pod B ──┼──▶ Filebeat/       │    (stockage +        (UI +
-  Pod C ──┤   Fluentd    ──▶  │     indexation)        recherche)
-  Pod D ──┘   (collecte)       └───────────────────────────────</pre>
-    </div>
+    <h2>Les 3 piliers de l'observabilité</h2>
+    <table>
+      <thead><tr><th>Pilier</th><th>Outil</th><th>Question</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Métriques</strong></td><td>Prometheus + Grafana</td><td>Combien ? À quelle fréquence ? Quelle tendance ?</td></tr>
+        <tr><td><strong>Logs</strong></td><td>ELK Stack (Elasticsearch, Logstash, Kibana)</td><td>Que s'est-il passé ? Pourquoi cette erreur ?</td></tr>
+        <tr><td><strong>Traces</strong></td><td>Jaeger, Zipkin, OpenTelemetry</td><td>Quel chemin a suivi cette requête ?</td></tr>
+      </tbody>
+    </table>
+    <p>Cette leçon se concentre sur le premier pilier : les <strong>métriques</strong> avec Prometheus et Grafana.</p>
   </section>
 
   <section>
-    <h2>Logging structuré avec Spring Boot</h2>
-    <p>Les logs structurés (JSON) sont essentiels pour une indexation efficace dans Elasticsearch.</p>
+    <h2>Prometheus - Architecture</h2>
+    <div class="arch-diagram">
+      <pre>
+  ┌──────────────────────────────────────────────┐
+  │              Prometheus Server                │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
+  │  │ Retrieval │ │  TSDB    │ │  HTTP Server │  │
+  │  │ (scrape)  │ │ (stockage│ │  (PromQL)    │  │
+  │  └─────┬─────┘ └──────────┘ └──────┬───────┘  │
+  └────────┼─────────────────────────────┼─────────┘
+           │                             │
+    ┌──────▼──────┐               ┌──────▼──────┐
+    │  Targets    │               │   Grafana   │
+    │ Spring Boot │               │ (dashboards)│
+    │ /actuator/  │               └─────────────┘
+    │ prometheus  │
+    └─────────────┘</pre>
+    </div>
+    <p>Prometheus fonctionne en <strong>pull</strong> : il interroge (scrape) les endpoints des applications à intervalle régulier.</p>
+  </section>
 
+  <section>
+    <h2>Instrumenter Spring Boot avec Micrometer</h2>
     <div class="code-block">
-      <div class="code-header"><span>pom.xml</span></div>
+      <div class="code-header"><span>pom.xml - dépendances</span></div>
       <pre><code class="language-xml">&lt;dependency&gt;
-    &lt;groupId&gt;net.logstash.logback&lt;/groupId&gt;
-    &lt;artifactId&gt;logstash-logback-encoder&lt;/artifactId&gt;
-    &lt;version&gt;7.4&lt;/version&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
+    &lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;
 &lt;/dependency&gt;</code></pre>
     </div>
 
     <div class="code-block">
-      <div class="code-header"><span>logback-spring.xml</span></div>
-      <pre><code class="language-xml">&lt;configuration&gt;
-  &lt;springProfile name="production"&gt;
-    &lt;appender name="JSON" class="ch.qos.logback.core.ConsoleAppender"&gt;
-      &lt;encoder class="net.logstash.logback.encoder.LogstashEncoder"&gt;
-        &lt;customFields&gt;
-          {{ '{' }}"service":"api-backend","environment":"production"{{ '}' }}
-        &lt;/customFields&gt;
-      &lt;/encoder&gt;
-    &lt;/appender&gt;
-    &lt;root level="INFO"&gt;
-      &lt;appender-ref ref="JSON" /&gt;
-    &lt;/root&gt;
-  &lt;/springProfile&gt;
-&lt;/configuration&gt;</code></pre>
+      <div class="code-header"><span>application.yml</span></div>
+      <pre><code class="language-yaml">management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  metrics:
+    tags:
+      application: my-api</code></pre>
     </div>
 
-    <p>Résultat - chaque ligne de log est un objet JSON :</p>
+    <h3>Métriques custom</h3>
     <div class="code-block">
-      <div class="code-header"><span>JSON log output</span></div>
-      <pre><code class="language-json">{{ '{' }}
-  "timestamp": "2026-04-27T10:15:30.123Z",
-  "level": "INFO",
-  "logger": "com.example.app.OrderService",
-  "message": "Commande traitée avec succès",
-  "service": "api-backend",
-  "environment": "production",
-  "orderId": "ORD-12345",
-  "duration_ms": 142
+      <div class="code-header"><span>OrderService.java</span></div>
+      <pre><code class="language-java">&#64;Service
+public class OrderService {{ '{' }}
+
+    private final Counter ordersCounter;
+    private final Timer orderProcessingTimer;
+
+    public OrderService(MeterRegistry registry) {{ '{' }}
+        this.ordersCounter = Counter.builder("app_orders_total")
+            .description("Total des commandes traitées")
+            .tag("service", "order-service")
+            .register(registry);
+
+        this.orderProcessingTimer = Timer.builder("app_order_duration_seconds")
+            .description("Durée de traitement d'une commande")
+            .register(registry);
+    {{ '}' }}
+
+    public OrderResponse processOrder(OrderRequest request) {{ '{' }}
+        return orderProcessingTimer.record(() -> {{ '{' }}
+            ordersCounter.increment();
+            // Logique métier...
+            return new OrderResponse(/* ... */);
+        {{ '}' }});
+    {{ '}' }}
 {{ '}' }}</code></pre>
     </div>
   </section>
 
   <section>
-    <h2>Elasticsearch sur Kubernetes</h2>
+    <h2>Déployer Prometheus sur K8s</h2>
     <div class="code-block">
-      <div class="code-header"><span>bash - Installation via Helm</span></div>
-      <pre><code class="language-bash"># Elasticsearch
-helm repo add elastic https://helm.elastic.co
-helm install elasticsearch elastic/elasticsearch \
-  --namespace logging --create-namespace \
-  --set replicas=1 \
-  --set resources.requests.memory=1Gi \
-  --set volumeClaimTemplate.resources.requests.storage=30Gi
+      <div class="code-header"><span>bash - via Helm</span></div>
+      <pre><code class="language-bash"># Ajouter le repo Helm
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
 
-# Kibana
-helm install kibana elastic/kibana \
-  --namespace logging
+# Installer le stack complet (Prometheus + Grafana + Alertmanager)
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --set grafana.adminPassword='ChangeMe123!'</code></pre>
+    </div>
 
-# Filebeat (collecteur de logs)
-helm install filebeat elastic/filebeat \
-  --namespace logging</code></pre>
+    <div class="code-block">
+      <div class="code-header"><span>servicemonitor.yaml - Scraper Spring Boot</span></div>
+      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api-backend-monitor
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: api-backend
+  namespaceSelector:
+    matchNames:
+      - production
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s</code></pre>
     </div>
   </section>
 
   <section>
-    <h2>Alerting - Prometheus Alertmanager</h2>
+    <h2>PromQL - Requêtes essentielles</h2>
     <div class="code-block">
-      <div class="code-header"><span>alert-rules.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: app-alerts
-  namespace: monitoring
-spec:
-  groups:
-    - name: application
-      rules:
-        - alert: HighErrorRate
-          expr: |
-            sum(rate(http_server_requests_seconds_count{{ '{' }}status=~"5.."{{ '}' }}[5m]))
-            / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
-          for: 5m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Taux d'erreur > 5%"
-            description: "Le taux d'erreurs 5xx dépasse 5% depuis 5 minutes."
+      <div class="code-header"><span>PromQL</span></div>
+      <pre><code class="language-bash"># Taux de requêtes HTTP par seconde (5 dernières minutes)
+rate(http_server_requests_seconds_count[5m])
 
-        - alert: HighLatency
-          expr: |
-            histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m])) > 2
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Latence P99 > 2s"
+# Latence P99
+histogram_quantile(0.99, rate(http_server_requests_seconds_bucket[5m]))
 
-        - alert: PodCrashLooping
-          expr: |
-            rate(kube_pod_container_status_restarts_total[15m]) > 0
-          for: 5m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Pod en CrashLoopBackOff"</code></pre>
-    </div>
+# Taux d'erreurs 5xx
+sum(rate(http_server_requests_seconds_count{{ '{' }}status=~"5.."{{ '}' }}[5m]))
+  / sum(rate(http_server_requests_seconds_count[5m]))
 
-    <div class="callout tip">
-      <strong>Canaux de notification</strong>
-      <p>Alertmanager peut envoyer des alertes via Slack, PagerDuty, email, webhook ou Microsoft Teams. Configurez au minimum deux canaux : un pour les alertes critiques (PagerDuty/téléphone) et un pour les warnings (Slack/email).</p>
+# Utilisation mémoire JVM
+jvm_memory_used_bytes{{ '{' }}area="heap"{{ '}' }}
+  / jvm_memory_max_bytes{{ '{' }}area="heap"{{ '}' }}</code></pre>
     </div>
   </section>
 
-</app-lesson-page>
+  <section>
+    <h2>Grafana - Dashboards</h2>
+    <p>Grafana se connecte à Prometheus comme source de données et permet de créer des dashboards visuels.</p>
+    <div class="callout tip">
+      <strong>Dashboards recommandés</strong>
+      <ul>
+        <li><strong>JVM (Micrometer)</strong> - ID: 4701 - Mémoire, GC, threads</li>
+        <li><strong>Spring Boot</strong> - ID: 12900 - HTTP, cache, DB pool</li>
+        <li><strong>K8s Cluster</strong> - ID: 6417 - Nodes, pods, namespaces</li>
+        <li><strong>NGINX Ingress</strong> - ID: 9614 - Trafic, latence, erreurs</li>
+      </ul>
+      <p>Importez-les via le menu <em>Dashboards → Import</em> avec l'ID correspondant.</p>
+    </div>
+  </section>
+
+  <section class="lab-section">
+    <h2>Travaux Pratiques - Prometheus & Grafana sur Kind</h2>
+
+    <div class="lab-intro">
+      <p>
+        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> et <strong>Helm</strong> installé.
+        Ce lab installe une stack de monitoring complète en quelques commandes grâce au chart
+        <code>kube-prometheus-stack</code>.
+      </p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-header">
+        <span class="lab-badge">Lab</span>
+        <span class="lab-title">Stack Prometheus + Grafana avec Helm</span>
+        <span class="lab-time">~25 min</span>
+      </div>
+      <div class="lab-body">
+        <h4>Objectifs</h4>
+        <ul class="objective-list">
+          <li>Installer Helm et ajouter le repo Prometheus</li>
+          <li>Déployer la stack de monitoring sur le cluster</li>
+          <li>Accéder à Grafana et explorer les dashboards pré-configurés</li>
+          <li>Visualiser les métriques CPU/mémoire de vos pods en temps réel</li>
+        </ul>
+
+        <h4>Étape 1 - Installer Helm</h4>
+        <app-os-tabs>
+          <div linux>
+            <div class="code-block">
+              <div class="code-header"><span>bash - Linux</span></div>
+              <pre><code class="language-bash">curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+helm version</code></pre>
+            </div>
+          </div>
+          <div mac>
+            <div class="code-block">
+              <div class="code-header"><span>bash - macOS</span></div>
+              <pre><code class="language-bash">brew install helm
+helm version</code></pre>
+            </div>
+          </div>
+          <div win>
+            <div class="code-block">
+              <div class="code-header"><span>PowerShell - Windows</span></div>
+              <pre><code class="language-powershell">choco install kubernetes-helm
+helm version</code></pre>
+            </div>
+          </div>
+        </app-os-tabs>
+
+        <h4>Étape 2 - Installer kube-prometheus-stack</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Ajouter le repo Helm
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Créer le namespace monitoring
+kubectl create namespace monitoring
+
+# Installer la stack complète (Prometheus + Grafana + AlertManager + node-exporter)
+helm install prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --set grafana.adminPassword=admin \
+  --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false
+
+# Attendre que tout soit prêt (peut prendre 2-3 minutes)
+kubectl get pods -n monitoring -w</code></pre>
+        </div>
+
+        <h4>Étape 3 - Accéder à Grafana</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Port-forward vers Grafana
+kubectl port-forward -n monitoring service/prometheus-stack-grafana 3000:80
+
+# Ouvrir http://localhost:3000
+# Login : admin / admin
+
+# Dashboards pré-installés utiles :
+# - "Kubernetes / Compute Resources / Cluster"  (CPU/mémoire globale)
+# - "Kubernetes / Compute Resources / Pod"      (par pod)
+# - "Kubernetes / Nodes"                        (métriques des nodes)</code></pre>
+        </div>
+
+        <h4>Étape 4 - Accéder à Prometheus</h4>
+        <div class="code-block">
+          <div class="code-header"><span>bash</span></div>
+          <pre><code class="language-bash"># Port-forward vers Prometheus
+kubectl port-forward -n monitoring service/prometheus-stack-kube-prom-prometheus 9090:9090
+
+# Ouvrir http://localhost:9090
+# Essayer ces requêtes PromQL :
+
+# CPU utilisé par tous les pods
+sum(rate(container_cpu_usage_seconds_total[5m])) by (pod)
+
+# Mémoire utilisée par namespace
+sum(container_memory_usage_bytes) by (namespace)
+
+# Nombre de pods en Running
+kube_pod_status_phase&#123;phase="Running"&#125;</code></pre>
+        </div>
+      </div>
+      <div class="lab-result">
+        <div class="lab-result-title">✓ Résultat attendu</div>
+        <p>Grafana s'ouvre sur <code>localhost:3000</code> avec des dashboards Kubernetes pré-configurés. Vous visualisez en temps réel le CPU, la mémoire et l'état de vos pods. Prometheus exécute vos premières requêtes PromQL.</p>
+      </div>
+    </div>
+
+  </section>
+

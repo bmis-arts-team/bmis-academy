@@ -1,424 +1,1541 @@
-<app-lesson-page [data]="data">
+﻿<app-lesson-page [data]="data">
+
+
 
   <section>
-    <h2>ReplicaSet - La base</h2>
-    <p>Un <strong>ReplicaSet</strong> garantit qu'un nombre exact de réplicas d'un pod sont en cours d'exécution à tout moment. Si un pod crash, le ReplicaSet en crée un nouveau automatiquement.</p>
 
-    <div class="code-block">
-      <div class="code-header"><span>replicaset.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: apps/v1
-kind: ReplicaSet
-metadata:
-  name: api-backend
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: api-backend
-  template:
-    metadata:
-      labels:
-        app: api-backend
-    spec:
-      containers:
-        - name: api
-          image: myregistry/api-backend:1.0.0
-          ports:
-            - containerPort: 8080</code></pre>
-    </div>
+    <h2>Pourquoi Kubernetes ?</h2>
+
+    <p>
+
+      Docker résout le problème de <em>l'empaquetage</em> : une application + ses dépendances dans un conteneur portable.
+
+      Mais en production réelle, vous ne gérez pas un seul conteneur - vous en gérez des dizaines, des centaines, sur
+
+      plusieurs machines. C'est là que Docker seul atteint ses limites.
+
+    </p>
+
+
 
     <div class="callout info">
-      <strong>En pratique</strong>
-      <p>Vous ne créez presque jamais un ReplicaSet directement. Le <strong>Deployment</strong> en crée un pour vous et ajoute la gestion des mises à jour.</p>
+
+      <strong>Scénario concret sans Kubernetes</strong>
+
+      <p>
+
+        Votre API reçoit un pic de trafic à 14h. Il faut lancer 5 instances supplémentaires manuellement sur différents serveurs,
+
+        configurer le load balancer, surveiller si les conteneurs tournent, redémarrer ceux qui crashent, puis réduire les instances
+
+        à 17h. En production, c'est insoutenable à la main.
+
+      </p>
+
     </div>
+
+
+
+    <p>Kubernetes (souvent abrégé <strong>K8s</strong>, car il y a 8 lettres entre K et s) automatise tout cela :</p>
+
+
+
+    <div class="comparison-grid">
+
+      <div class="comparison-card">
+
+        <h4>Sans Kubernetes</h4>
+
+        <ul>
+
+          <li>Lancement manuel des conteneurs par SSH</li>
+
+          <li>Redémarrage manuel en cas de crash</li>
+
+          <li>IP statiques codées en dur dans la config</li>
+
+          <li>Mise à jour = coupure de service</li>
+
+          <li>Scaling = intervention humaine nocturne</li>
+
+          <li>Aucune isolation entre les équipes</li>
+
+        </ul>
+
+      </div>
+
+      <div class="comparison-card">
+
+        <h4>Avec Kubernetes</h4>
+
+        <ul>
+
+          <li><strong>Scaling automatique</strong> (HPA) basé sur CPU/mémoire/métriques custom</li>
+
+          <li><strong>Self-healing</strong> : pod crashé → recréé en quelques secondes</li>
+
+          <li><strong>Service discovery</strong> DNS natif : <code>mon-service.mon-namespace.svc.cluster.local</code></li>
+
+          <li><strong>Rolling updates</strong> : déploiement progressif sans downtime</li>
+
+          <li><strong>Load balancing</strong> intégré entre tous les réplicas d'un pod</li>
+
+          <li><strong>Namespaces</strong> pour isoler équipes, environnements, ressources</li>
+
+        </ul>
+
+      </div>
+
+    </div>
+
+
+
+    <p>
+
+      Kubernetes est devenu le standard de l'industrie pour l'orchestration de conteneurs. Google, qui a créé K8s en interne
+
+      sous le nom « Borg », l'a ouvert en open-source en 2014. Aujourd'hui, il est géré par la
+
+      <strong>Cloud Native Computing Foundation (CNCF)</strong> et supporté par tous les cloud providers (GKE, EKS, AKS).
+
+    </p>
+
   </section>
 
+
+
+
+
   <section>
-    <h2>Deployment - Le workload standard</h2>
-    <p>Le <strong>Deployment</strong> est la ressource la plus utilisée. Il gère un ReplicaSet et permet les rolling updates, les rollbacks et le scaling.</p>
+
+    <h2>Vue d'ensemble de l'architecture</h2>
+
+    <div class="k8s-diagram-wrapper">
+
+
+
+      <svg viewBox="0 0 900 540" xmlns="http://www.w3.org/2000/svg" class="k8s-diagram" role="img" aria-label="Kubernetes Architecture Diagram">
+
+        <defs>
+
+          <linearGradient id="clusterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+            <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1" />
+
+            <stop offset="100%" style="stop-color:#f1f5f9;stop-opacity:1" />
+
+          </linearGradient>
+
+          <linearGradient id="cpGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+            <stop offset="0%" style="stop-color:#eff6ff;stop-opacity:1" />
+
+            <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:1" />
+
+          </linearGradient>
+
+          <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+            <stop offset="0%" style="stop-color:#f0fdf4;stop-opacity:1" />
+
+            <stop offset="100%" style="stop-color:#dcfce7;stop-opacity:1" />
+
+          </linearGradient>
+
+          <linearGradient id="compGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+
+            <stop offset="100%" style="stop-color:#f8fafc;stop-opacity:1" />
+
+          </linearGradient>
+
+          <linearGradient id="podGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+            <stop offset="0%" style="stop-color:#f0fdf4;stop-opacity:1" />
+
+            <stop offset="100%" style="stop-color:#dcfce7;stop-opacity:1" />
+
+          </linearGradient>
+
+          <linearGradient id="etcdGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+            <stop offset="0%" style="stop-color:#fff7ed;stop-opacity:1" />
+
+            <stop offset="100%" style="stop-color:#ffedd5;stop-opacity:1" />
+
+          </linearGradient>
+
+          <linearGradient id="kubectlGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+
+            <stop offset="0%" style="stop-color:#faf5ff;stop-opacity:1" />
+
+            <stop offset="100%" style="stop-color:#ede9fe;stop-opacity:1" />
+
+          </linearGradient>
+
+          <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%">
+
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#94a3b8" flood-opacity="0.15"/>
+
+          </filter>
+
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+
+            <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.7"/>
+
+          </marker>
+
+          <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+
+            <polygon points="0 0, 8 3, 0 6" fill="#16a34a" opacity="0.7"/>
+
+          </marker>
+
+
+
+          <!-- -- Icon Symbols -- -->
+
+          <symbol id="ic-server" viewBox="0 0 16 16">
+
+            <rect x="1.5" y="2" width="13" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+            <rect x="1.5" y="9" width="13" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+            <circle cx="4" cy="4.25" r="1" fill="currentColor"/>
+
+            <circle cx="4" cy="11.25" r="1" fill="currentColor"/>
+
+            <line x1="7" y1="4.25" x2="12" y2="4.25" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+
+            <line x1="7" y1="11.25" x2="12" y2="11.25" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+
+          </symbol>
+
+
+
+          <symbol id="ic-database" viewBox="0 0 16 16">
+
+            <ellipse cx="8" cy="4" rx="5.5" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+            <path d="M2.5 4v3.5c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2V4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+            <path d="M2.5 7.5v3.5c0 1.1 2.46 2 5.5 2s5.5-.9 5.5-2V7.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+          </symbol>
+
+
+
+          <symbol id="ic-clock" viewBox="0 0 16 16">
+
+            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+            <polyline points="8,4.5 8,8 10.5,10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+          </symbol>
+
+
+
+          <symbol id="ic-refresh" viewBox="0 0 16 16">
+
+            <path d="M13.5 4A6.5 6.5 0 1 0 14.5 8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <polyline points="13.5,1 13.5,5 9.5,5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+          </symbol>
+
+
+
+          <symbol id="ic-cloud" viewBox="0 0 16 16">
+
+            <path d="M13 12H4.5a3.5 3.5 0 1 1 .8-6.9A4.5 4.5 0 1 1 13 12z" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+          </symbol>
+
+
+
+          <symbol id="ic-cpu" viewBox="0 0 16 16">
+
+            <rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+            <rect x="5.5" y="5.5" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.1"/>
+
+            <line x1="6" y1="1.5" x2="6" y2="3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <line x1="10" y1="1.5" x2="10" y2="3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <line x1="6" y1="12.5" x2="6" y2="14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <line x1="10" y1="12.5" x2="10" y2="14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <line x1="1.5" y1="6" x2="3.5" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <line x1="1.5" y1="10" x2="3.5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <line x1="12.5" y1="6" x2="14.5" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+            <line x1="12.5" y1="10" x2="14.5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+
+          </symbol>
+
+
+
+          <symbol id="ic-layers" viewBox="0 0 16 16">
+
+            <polygon points="8,2 14.5,5.5 8,9 1.5,5.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+
+            <polyline points="1.5,9.5 8,13 14.5,9.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+          </symbol>
+
+
+
+          <symbol id="ic-package" viewBox="0 0 16 16">
+
+            <polyline points="8,1.5 14.5,5 14.5,11 8,14.5 1.5,11 1.5,5 8,1.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+
+            <polyline points="1.5,5 8,8.5 14.5,5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+            <line x1="8" y1="8.5" x2="8" y2="14.5" stroke="currentColor" stroke-width="1.4"/>
+
+            <polyline points="5,3.25 8,5 11,3.25" fill="none" stroke="currentColor" stroke-width="1.4"/>
+
+          </symbol>
+
+        </defs>
+
+
+
+        <!-- --- CLUSTER BORDER --- -->
+
+        <rect x="10" y="10" width="880" height="520" rx="16" ry="16"
+
+              fill="url(#clusterGrad)" stroke="#cbd5e1" stroke-width="1.5"/>
+
+        <text x="450" y="38" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="13"
+
+              font-weight="700" fill="#334155" letter-spacing="2">KUBERNETES CLUSTER</text>
+
+
+
+        <!-- kubectl external -->
+
+        <rect x="30" y="55" width="130" height="52" rx="10"
+
+              fill="url(#kubectlGrad)" stroke="#c4b5fd" stroke-width="1.5"/>
+
+        <text x="95" y="76" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="12"
+
+              font-weight="700" fill="#6d28d9">kubectl</text>
+
+        <text x="95" y="93" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="10"
+
+              fill="#7c3aed">CLI Client</text>
+
+
+
+        <!-- Arrow kubectl -> API Server -->
+
+        <line x1="160" y1="81" x2="245" y2="115" stroke="#3b82f6" stroke-width="1.5"
+
+              stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+
+
+
+        <!-- --- CONTROL PLANE --- -->
+
+        <rect x="200" y="60" width="670" height="210" rx="12"
+
+              fill="url(#cpGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+
+        <text x="220" y="82" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#1d4ed8" letter-spacing="1">CONTROL PLANE</text>
+
+
+
+        <!-- API Server -->
+
+        <rect x="220" y="92" width="140" height="78" rx="8"
+
+              fill="url(#compGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+
+        <use href="#ic-server" x="229" y="101" width="13" height="13" color="#2563eb"/>
+
+        <text x="248" y="113" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#1e293b">API Server</text>
+
+        <text x="230" y="130" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Point d'entrée REST</text>
+
+        <text x="230" y="144" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Authentification</text>
+
+        <text x="230" y="158" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Validation</text>
+
+
+
+        <!-- etcd -->
+
+        <rect x="380" y="92" width="140" height="78" rx="8"
+
+              fill="url(#etcdGrad)" stroke="#fdba74" stroke-width="1.5"/>
+
+        <use href="#ic-database" x="389" y="101" width="13" height="13" color="#ea580c"/>
+
+        <text x="408" y="113" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#1e293b">etcd</text>
+
+        <text x="390" y="130" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Key-Value Store</text>
+
+        <text x="390" y="144" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">État du cluster</text>
+
+        <text x="390" y="158" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Source de vérité</text>
+
+
+
+        <!-- Scheduler -->
+
+        <rect x="220" y="185" width="140" height="73" rx="8"
+
+              fill="url(#compGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+
+        <use href="#ic-clock" x="229" y="195" width="13" height="13" color="#2563eb"/>
+
+        <text x="248" y="206" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#1e293b">Scheduler</text>
+
+        <text x="230" y="223" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Placement des pods</text>
+
+        <text x="230" y="237" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Ressources &amp; affinités</text>
+
+
+
+        <!-- Controller Manager -->
+
+        <rect x="380" y="185" width="140" height="73" rx="8"
+
+              fill="url(#compGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+
+        <use href="#ic-refresh" x="389" y="195" width="13" height="13" color="#2563eb"/>
+
+        <text x="408" y="206" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#1e293b">Controller Mgr</text>
+
+        <text x="390" y="223" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">ReplicaSet ctrl</text>
+
+        <text x="390" y="237" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Node ctrl</text>
+
+
+
+        <!-- Cloud Controller Manager -->
+
+        <rect x="585" y="92" width="270" height="166" rx="8"
+
+              fill="url(#compGrad)" stroke="#93c5fd" stroke-width="1.5" opacity="0.9"/>
+
+        <use href="#ic-cloud" x="594" y="101" width="13" height="13" color="#2563eb"/>
+
+        <text x="612" y="113" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#1e293b">Cloud Controller Manager</text>
+
+        <text x="594" y="133" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Gère les ressources cloud</text>
+
+        <text x="594" y="150" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">Load Balancers, Volumes</text>
+
+        <text x="594" y="167" font-family="'Segoe UI', sans-serif" font-size="9" fill="#64748b">DNS externe, Node lifecycle</text>
+
+        <text x="594" y="184" font-family="'Segoe UI', sans-serif" font-size="9" fill="#94a3b8">Optionnel (cloud providers)</text>
+
+
+
+        <!-- Internal arrows in Control Plane -->
+
+        <line x1="360" y1="131" x2="380" y2="131" stroke="#3b82f6" stroke-width="1.2"
+
+              stroke-dasharray="3,2" marker-end="url(#arrow)"/>
+
+        <line x1="290" y1="170" x2="290" y2="185" stroke="#3b82f6" stroke-width="1.2"
+
+              stroke-dasharray="3,2" marker-end="url(#arrow)"/>
+
+        <line x1="450" y1="170" x2="450" y2="185" stroke="#3b82f6" stroke-width="1.2"
+
+              stroke-dasharray="3,2" marker-end="url(#arrow)"/>
+
+        <line x1="520" y1="135" x2="585" y2="135" stroke="#3b82f6" stroke-width="1.2"
+
+              stroke-dasharray="3,2" marker-end="url(#arrow)"/>
+
+
+
+        <!-- --- WORKER NODE 1 --- -->
+
+        <rect x="25" y="295" width="390" height="220" rx="12"
+
+              fill="url(#nodeGrad)" stroke="#86efac" stroke-width="1.5"/>
+
+        <text x="45" y="318" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#15803d" letter-spacing="1">WORKER NODE 1</text>
+
+
+
+        <!-- kubelet node 1 -->
+
+        <rect x="40" y="325" width="115" height="60" rx="7"
+
+              fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+
+        <use href="#ic-cpu" x="50" y="333" width="12" height="12" color="#16a34a"/>
+
+        <text x="65" y="344" font-family="'Segoe UI', sans-serif" font-size="10"
+
+              font-weight="700" fill="#1e293b">kubelet</text>
+
+        <text x="50" y="360" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Agent du node</text>
+
+        <text x="50" y="374" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Gère les pods</text>
+
+
+
+        <!-- kube-proxy node 1 -->
+
+        <rect x="165" y="325" width="115" height="60" rx="7"
+
+              fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+
+        <use href="#ic-layers" x="175" y="333" width="12" height="12" color="#16a34a"/>
+
+        <text x="190" y="344" font-family="'Segoe UI', sans-serif" font-size="10"
+
+              font-weight="700" fill="#1e293b">kube-proxy</text>
+
+        <text x="175" y="360" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Règles réseau</text>
+
+        <text x="175" y="374" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">iptables / IPVS</text>
+
+
+
+        <!-- container runtime node 1 -->
+
+        <rect x="290" y="325" width="115" height="60" rx="7"
+
+              fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+
+        <use href="#ic-package" x="300" y="333" width="12" height="12" color="#16a34a"/>
+
+        <text x="315" y="344" font-family="'Segoe UI', sans-serif" font-size="10"
+
+              font-weight="700" fill="#1e293b">containerd</text>
+
+        <text x="300" y="360" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Container Runtime</text>
+
+        <text x="300" y="374" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">CRI compatible</text>
+
+
+
+        <!-- Pods Node 1 -->
+
+        <text x="45" y="408" font-family="'Segoe UI', sans-serif" font-size="10" fill="#15803d" font-weight="600">PODS</text>
+
+
+
+        <!-- Pod 1 -->
+
+        <rect x="40" y="415" width="115" height="70" rx="6"
+
+              fill="url(#podGrad)" stroke="#86efac" stroke-width="1.2"/>
+
+        <circle cx="55" cy="429" r="3.5" fill="none" stroke="#16a34a" stroke-width="1.2"/>
+
+        <circle cx="55" cy="429" r="1.5" fill="#16a34a"/>
+
+        <text x="63" y="432" font-family="'Segoe UI', sans-serif" font-size="9" fill="#16a34a">Pod</text>
+
+        <text x="52" y="448" font-family="'Segoe UI', sans-serif" font-size="9" font-weight="700" fill="#1e293b">api-backend</text>
+
+        <rect x="50" y="453" width="95" height="20" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.8"/>
+
+        <text x="97" y="467" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8" fill="#374151">Container: api:1.0</text>
+
+        <text x="52" y="490" font-family="'Segoe UI', sans-serif" font-size="8" fill="#94a3b8">:8080</text>
+
+
+
+        <!-- Pod 2 -->
+
+        <rect x="165" y="415" width="115" height="70" rx="6"
+
+              fill="url(#podGrad)" stroke="#86efac" stroke-width="1.2"/>
+
+        <circle cx="180" cy="429" r="3.5" fill="none" stroke="#16a34a" stroke-width="1.2"/>
+
+        <circle cx="180" cy="429" r="1.5" fill="#16a34a"/>
+
+        <text x="188" y="432" font-family="'Segoe UI', sans-serif" font-size="9" fill="#16a34a">Pod</text>
+
+        <text x="177" y="448" font-family="'Segoe UI', sans-serif" font-size="9" font-weight="700" fill="#1e293b">redis-cache</text>
+
+        <rect x="175" y="453" width="95" height="20" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.8"/>
+
+        <text x="222" y="467" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8" fill="#374151">Container: redis:7</text>
+
+        <text x="177" y="490" font-family="'Segoe UI', sans-serif" font-size="8" fill="#94a3b8">:6379</text>
+
+
+
+        <!-- Pod 3 -->
+
+        <rect x="290" y="415" width="115" height="70" rx="6"
+
+              fill="url(#podGrad)" stroke="#86efac" stroke-width="1.2"/>
+
+        <circle cx="305" cy="429" r="3.5" fill="none" stroke="#16a34a" stroke-width="1.2"/>
+
+        <circle cx="305" cy="429" r="1.5" fill="#16a34a"/>
+
+        <text x="313" y="432" font-family="'Segoe UI', sans-serif" font-size="9" fill="#16a34a">Pod</text>
+
+        <text x="302" y="448" font-family="'Segoe UI', sans-serif" font-size="9" font-weight="700" fill="#1e293b">nginx-ingress</text>
+
+        <rect x="300" y="453" width="95" height="20" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.8"/>
+
+        <text x="347" y="467" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8" fill="#374151">Container: nginx:1.25</text>
+
+        <text x="302" y="490" font-family="'Segoe UI', sans-serif" font-size="8" fill="#94a3b8">:80 / :443</text>
+
+
+
+        <!-- Node 1 IP -->
+
+        <text x="220" y="506" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="9"
+
+              fill="#94a3b8">192.168.1.11</text>
+
+
+
+        <!-- --- WORKER NODE 2 --- -->
+
+        <rect x="485" y="295" width="390" height="220" rx="12"
+
+              fill="url(#nodeGrad)" stroke="#86efac" stroke-width="1.5"/>
+
+        <text x="505" y="318" font-family="'Segoe UI', sans-serif" font-size="11"
+
+              font-weight="700" fill="#15803d" letter-spacing="1">WORKER NODE 2</text>
+
+
+
+        <!-- kubelet node 2 -->
+
+        <rect x="500" y="325" width="115" height="60" rx="7"
+
+              fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+
+        <use href="#ic-cpu" x="510" y="333" width="12" height="12" color="#16a34a"/>
+
+        <text x="525" y="344" font-family="'Segoe UI', sans-serif" font-size="10"
+
+              font-weight="700" fill="#1e293b">kubelet</text>
+
+        <text x="510" y="360" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Agent du node</text>
+
+        <text x="510" y="374" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Gère les pods</text>
+
+
+
+        <!-- kube-proxy node 2 -->
+
+        <rect x="625" y="325" width="115" height="60" rx="7"
+
+              fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+
+        <use href="#ic-layers" x="635" y="333" width="12" height="12" color="#16a34a"/>
+
+        <text x="650" y="344" font-family="'Segoe UI', sans-serif" font-size="10"
+
+              font-weight="700" fill="#1e293b">kube-proxy</text>
+
+        <text x="635" y="360" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Règles réseau</text>
+
+        <text x="635" y="374" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">iptables / IPVS</text>
+
+
+
+        <!-- container runtime node 2 -->
+
+        <rect x="750" y="325" width="115" height="60" rx="7"
+
+              fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+
+        <use href="#ic-package" x="760" y="333" width="12" height="12" color="#16a34a"/>
+
+        <text x="775" y="344" font-family="'Segoe UI', sans-serif" font-size="10"
+
+              font-weight="700" fill="#1e293b">containerd</text>
+
+        <text x="760" y="360" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">Container Runtime</text>
+
+        <text x="760" y="374" font-family="'Segoe UI', sans-serif" font-size="8.5" fill="#64748b">CRI compatible</text>
+
+
+
+        <!-- Pods Node 2 -->
+
+        <text x="505" y="408" font-family="'Segoe UI', sans-serif" font-size="10" fill="#15803d" font-weight="600">PODS</text>
+
+
+
+        <!-- Pod 4 -->
+
+        <rect x="500" y="415" width="115" height="70" rx="6"
+
+              fill="url(#podGrad)" stroke="#86efac" stroke-width="1.2"/>
+
+        <circle cx="515" cy="429" r="3.5" fill="none" stroke="#16a34a" stroke-width="1.2"/>
+
+        <circle cx="515" cy="429" r="1.5" fill="#16a34a"/>
+
+        <text x="523" y="432" font-family="'Segoe UI', sans-serif" font-size="9" fill="#16a34a">Pod</text>
+
+        <text x="512" y="448" font-family="'Segoe UI', sans-serif" font-size="9" font-weight="700" fill="#1e293b">api-backend</text>
+
+        <rect x="510" y="453" width="95" height="20" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.8"/>
+
+        <text x="557" y="467" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8" fill="#374151">Container: api:1.0</text>
+
+        <text x="512" y="490" font-family="'Segoe UI', sans-serif" font-size="8" fill="#94a3b8">:8080</text>
+
+
+
+        <!-- Pod 5 -->
+
+        <rect x="625" y="415" width="115" height="70" rx="6"
+
+              fill="url(#podGrad)" stroke="#86efac" stroke-width="1.2"/>
+
+        <circle cx="640" cy="429" r="3.5" fill="none" stroke="#16a34a" stroke-width="1.2"/>
+
+        <circle cx="640" cy="429" r="1.5" fill="#16a34a"/>
+
+        <text x="648" y="432" font-family="'Segoe UI', sans-serif" font-size="9" fill="#16a34a">Pod</text>
+
+        <text x="637" y="448" font-family="'Segoe UI', sans-serif" font-size="9" font-weight="700" fill="#1e293b">api-backend</text>
+
+        <rect x="635" y="453" width="95" height="20" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.8"/>
+
+        <text x="682" y="467" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8" fill="#374151">Container: api:1.0</text>
+
+        <text x="637" y="490" font-family="'Segoe UI', sans-serif" font-size="8" fill="#94a3b8">:8080</text>
+
+
+
+        <!-- Pod 6 -->
+
+        <rect x="750" y="415" width="115" height="70" rx="6"
+
+              fill="url(#podGrad)" stroke="#86efac" stroke-width="1.2"/>
+
+        <circle cx="765" cy="429" r="3.5" fill="none" stroke="#16a34a" stroke-width="1.2"/>
+
+        <circle cx="765" cy="429" r="1.5" fill="#16a34a"/>
+
+        <text x="773" y="432" font-family="'Segoe UI', sans-serif" font-size="9" fill="#16a34a">Pod</text>
+
+        <text x="762" y="448" font-family="'Segoe UI', sans-serif" font-size="9" font-weight="700" fill="#1e293b">prometheus</text>
+
+        <rect x="760" y="453" width="95" height="20" rx="4" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.8"/>
+
+        <text x="807" y="467" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8" fill="#374151">Container: prom:2.47</text>
+
+        <text x="762" y="490" font-family="'Segoe UI', sans-serif" font-size="8" fill="#94a3b8">:9090</text>
+
+
+
+        <!-- Node 2 IP -->
+
+        <text x="680" y="506" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="9"
+
+              fill="#94a3b8">192.168.1.12</text>
+
+
+
+        <!-- --- CONNECTIONS Control Plane → Nodes --- -->
+
+        <path d="M 290 270 Q 290 282 220 295" stroke="#3b82f6" stroke-width="1.5"
+
+              fill="none" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+
+        <path d="M 290 270 Q 400 282 557 295" stroke="#3b82f6" stroke-width="1.5"
+
+              fill="none" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+
+
+
+
+
+      </svg>
+
+
+
+    </div>
+
+    <p class="diagram-caption">Architecture d'un cluster Kubernetes avec Control Plane et deux Worker Nodes.</p>
+
+  </section>
+
+
+
+  <section>
+
+    <h2>Control Plane - Le cerveau du cluster</h2>
+
+    <p>
+
+      Le <strong>Control Plane</strong> est l'ensemble des composants qui prennent les décisions globales sur le cluster
+
+      (planification, détection de pannes, réponse aux événements). En production, il tourne sur des nœuds dédiés,
+
+      séparés des nœuds applicatifs, souvent répliqués en HA (3 instances) pour la tolérance aux pannes.
+
+    </p>
+
+
+
+    <h3>1. kube-apiserver - La porte d'entrée unique</h3>
+
+    <p>
+
+      Tous les échanges dans un cluster Kubernetes passent par l'<strong>API Server</strong> - sans exception.
+
+      Que vous lanciez <code>kubectl apply</code>, que le scheduler place un pod, ou qu'un kubelet remonte son statut,
+
+      tout transite par cet unique point d'entrée HTTP/REST.
+
+    </p>
+
+    <p>Lorsqu'une requête arrive, l'API Server l'évalue en trois phases :</p>
+
+    <ol>
+
+      <li>
+
+        <strong>Authentification</strong> - Qui êtes-vous ? (certificat TLS, token Bearer, OIDC, ServiceAccount…)
+
+      </li>
+
+      <li>
+
+        <strong>Autorisation (RBAC)</strong> - Avez-vous le droit de faire cette action sur cette ressource ?
+
+        Un développeur peut lire les pods de son namespace mais pas supprimer des nœuds.
+
+      </li>
+
+      <li>
+
+        <strong>Admission Controllers</strong> - Des plugins qui valident ou mutent la ressource avant persistance.
+
+        Par exemple, <code>LimitRanger</code> applique des limites CPU/mémoire par défaut si vous ne les avez pas définies.
+
+      </li>
+
+    </ol>
+
+    <p>
+
+      Une fois validée, la ressource est écrite dans <strong>etcd</strong>, et l'API Server notifie tous
+
+      les composants abonnés via un mécanisme de <em>watch</em> (longue requête HTTP/2).
+
+    </p>
+
+    <p class="prereq-note">
+      <strong>Cluster requis</strong> - Les commandes ci-dessous nécessitent un cluster opérationnel et kubectl configuré.
+      Si ce n'est pas encore le cas, reportez-vous à la leçon précédente (<strong>Environnement &amp; Outils</strong>) pour installer kubectl et créer un cluster Kind.
+    </p>
 
     <div class="code-block">
-      <div class="code-header"><span>deployment.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-backend
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: api-backend
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
-  template:
-    metadata:
-      labels:
-        app: api-backend
-        version: "1.0.0"
-    spec:
-      containers:
-        - name: api
-          image: myregistry/api-backend:1.0.0
-          ports:
-            - containerPort: 8080
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "250m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: 8080
-            initialDelaySeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
-              port: 8080
-            initialDelaySeconds: 30</code></pre>
-    </div>
-  </section>
 
-  <section>
-    <h2>Rolling Update &amp; Rollback</h2>
-    <p>Le rolling update remplace les pods un par un. À chaque instant, l'application reste disponible :</p>
+      <div class="code-header"><span>bash - Vérifier l'API Server</span></div>
 
-    <div class="arch-diagram">
-      <pre>
-  Étape 1:  [v1] [v1] [v1]           ← 3 pods v1
-  Étape 2:  [v1] [v1] [v1] [v2]     ← maxSurge=1, nouveau pod v2
-  Étape 3:  [v1] [v1] [v2]          ← ancien pod supprimé
-  Étape 4:  [v1] [v2] [v2]          ← continue...
-  Étape 5:  [v2] [v2] [v2]          ← migration terminée</pre>
+      <pre><code class="language-bash"># Lister toutes les ressources disponibles dans l'API
+
+kubectl api-resources
+
+
+
+# Vérifier la version de l'API
+
+kubectl version --short
+
+
+
+# Explorer l'API directement via proxy local
+
+kubectl proxy --port=8001 &
+
+curl http://localhost:8001/api/v1/namespaces/default/pods</code></pre>
+
     </div>
+
+
+
+    <h3>2. etcd - La mémoire du cluster</h3>
+
+    <p>
+
+      <strong>etcd</strong> est une base de données distribuée clé-valeur, basée sur le protocole de consensus
+
+      <strong>Raft</strong>. Elle stocke l'intégralité de l'état du cluster : quels pods existent, leurs specs,
+
+      les secrets, les configmaps, les rôles RBAC, etc.
+
+    </p>
+
+    <p>
+
+      etcd ne reçoit d'écriture que de l'API Server - aucun autre composant n'y accède directement.
+
+      En mode HA, un cluster etcd nécessite un nombre <strong>impair</strong> de membres (3 ou 5) pour que
+
+      le quorum fonctionne. Avec 3 membres, vous tolérez 1 panne. Avec 5, vous en tolérez 2.
+
+    </p>
+
+
+
+    <div class="callout warning">
+
+      <strong>Sauvegardez etcd régulièrement</strong>
+
+      <p>
+
+        Si etcd est perdu sans backup, <strong>tout l'état du cluster est définitivement perdu</strong> :
+
+        déploiements, secrets, configurations, tout. En production, automatisez des snapshots toutes les heures
+
+        et stockez-les hors cluster (S3, GCS…).
+
+      </p>
+
+      <pre><code class="language-bash"># Créer un snapshot
+
+ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-$(date +%Y%m%d-%H%M).db \
+
+  --endpoints=https://127.0.0.1:2379 \
+
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+
+  --key=/etc/kubernetes/pki/etcd/server.key
+
+
+
+# Vérifier le snapshot
+
+etcdctl snapshot status /backup/etcd-backup.db --write-out=table</code></pre>
+
+    </div>
+
+
+
+    <h3>3. kube-scheduler - L'algorithme de placement</h3>
+
+    <p>
+
+      Quand un pod est créé, il est d'abord dans l'état <code>Pending</code> - aucun node ne lui est assigné.
+
+      Le <strong>Scheduler</strong> surveille en permanence ces pods en attente et décide sur quel node les placer.
+
+    </p>
+
+    <p>L'algorithme se déroule en deux phases :</p>
+
+    <ol>
+
+      <li>
+
+        <strong>Filtering (filtrage)</strong> - Éliminer les nodes incompatibles : pas assez de CPU/mémoire disponible,
+
+        le node est tainté, les contraintes d'affinité ne sont pas satisfaites, le PersistentVolume requis
+
+        n'est pas accessible depuis ce node, etc. Résultat : une liste de nodes <em>éligibles</em>.
+
+      </li>
+
+      <li>
+
+        <strong>Scoring (notation)</strong> - Parmi les nodes éligibles, attribuer un score à chacun selon des critères :
+
+        balance la charge entre les nodes, favorise le node qui a déjà l'image Docker en cache,
+
+        respecte les règles de spread (répartir les réplicas sur différents nodes ou zones d'availability).
+
+        Le pod est assigné au node avec le score le plus élevé.
+
+      </li>
+
+    </ol>
+
+
 
     <div class="code-block">
-      <div class="code-header"><span>bash - Mise à jour et rollback</span></div>
-      <pre><code class="language-bash"># Mettre à jour l'image
-kubectl set image deployment/api-backend api=myregistry/api-backend:1.1.0
 
-# Suivre le déploiement
-kubectl rollout status deployment/api-backend
+      <div class="code-header"><span>pod-avec-affinite.yaml - Exemple de contrainte de scheduling</span></div>
 
-# Historique des versions
-kubectl rollout history deployment/api-backend
+      <pre><code class="language-yaml">spec:
 
-# Rollback à la version précédente
-kubectl rollout undo deployment/api-backend
+  affinity:
 
-# Rollback à une révision spécifique
-kubectl rollout undo deployment/api-backend --to-revision=2
+    # Forcer la répartition sur des nodes différents
 
-# Scaling manuel
-kubectl scale deployment/api-backend --replicas=5</code></pre>
+    podAntiAffinity:
+
+      requiredDuringSchedulingIgnoredDuringExecution:
+
+        - labelSelector:
+
+            matchLabels:
+
+              app: api-backend
+
+          topologyKey: kubernetes.io/hostname
+
+    # Préférer les nodes en zone eu-west-1a
+
+    nodeAffinity:
+
+      preferredDuringSchedulingIgnoredDuringExecution:
+
+        - weight: 1
+
+          preference:
+
+            matchExpressions:
+
+              - key: topology.kubernetes.io/zone
+
+                operator: In
+
+                values:
+
+                  - eu-west-1a</code></pre>
+
     </div>
-  </section>
 
-  <section>
-    <h2>StatefulSet - Pour les workloads avec état</h2>
-    <p>Le <strong>StatefulSet</strong> est conçu pour les applications avec état : bases de données, caches, systèmes de messaging. Contrairement au Deployment, il garantit :</p>
+
+
+    <h3>4. kube-controller-manager - Le moteur de réconciliation</h3>
+
+    <p>
+
+      Le <strong>Controller Manager</strong> exécute en permanence une série de <em>boucles de contrôle</em> (control loops).
+
+      Chaque contrôleur observe l'état actuel du cluster et agit pour le rapprocher de l'<strong>état désiré</strong>
+
+      défini dans les specs - c'est le principe fondamental de Kubernetes.
+
+    </p>
+
+
+
+    <div class="callout info">
+
+      <strong>Le principe de réconciliation</strong>
+
+      <p>
+
+        Vous ne dites pas à Kubernetes <em>quoi faire</em> étape par étape. Vous lui déclarez <em>ce que vous voulez</em>
+
+        (« 3 réplicas de ce pod ») et les contrôleurs font en sorte que la réalité corresponde à la déclaration,
+
+        en permanence, même si des nœuds tombent ou redémarrent.
+
+      </p>
+
+    </div>
+
+
+
+    <p>Parmi les contrôleurs importants :</p>
+
     <ul>
-      <li><strong>Identité stable</strong> - Noms de pod prédictibles : <code>postgres-0</code>, <code>postgres-1</code>, <code>postgres-2</code></li>
-      <li><strong>Déploiement ordonné</strong> - Les pods sont créés séquentiellement (0 → 1 → 2)</li>
-      <li><strong>Stockage persistant</strong> - Chaque pod a son propre PVC qui survit aux redémarrages</li>
+
+      <li>
+
+        <strong>ReplicaSet Controller</strong> - Surveille le nombre de pods en cours d'exécution. Si un pod est tué,
+
+        il en crée un nouveau. Si vous en avez trop, il en supprime.
+
+      </li>
+
+      <li>
+
+        <strong>Deployment Controller</strong> - Orchestre les mises à jour progressives (rolling update) :
+
+        crée un nouveau ReplicaSet, monte ses réplicas progressivement, descend l'ancien. Gère aussi les rollbacks.
+
+      </li>
+
+      <li>
+
+        <strong>Node Controller</strong> - Surveille la santé des nodes. Si un node ne répond plus pendant
+
+        <code>node-monitor-grace-period</code> (40s par défaut), il marque le node <code>NotReady</code>,
+
+        puis après un délai supplémentaire, évacue les pods (eviction) vers des nodes sains.
+
+      </li>
+
+      <li>
+
+        <strong>Endpoints Controller</strong> - Met à jour la liste d'IPs dans un Service à chaque fois
+
+        qu'un pod démarre ou s'arrête, assurant que le load balancing est toujours à jour.
+
+      </li>
+
     </ul>
 
-    <div class="code-block">
-      <div class="code-header"><span>statefulset-postgres.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgres
-spec:
-  serviceName: postgres-headless
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    metadata:
-      labels:
-        app: postgres
-    spec:
-      containers:
-        - name: postgres
-          image: postgres:16-alpine
-          ports:
-            - containerPort: 5432
-          env:
-            - name: POSTGRES_DB
-              value: "app_db"
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-credentials
-                  key: username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-credentials
-                  key: password
-          volumeMounts:
-            - name: postgres-storage
-              mountPath: /var/lib/postgresql/data
-  volumeClaimTemplates:
-    - metadata:
-        name: postgres-storage
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 10Gi</code></pre>
-    </div>
   </section>
+
+
 
   <section>
-    <h2>DaemonSet, Job &amp; CronJob</h2>
 
-    <h3>DaemonSet</h3>
-    <p>Exécute exactement <strong>un pod par node</strong>. Utilisé pour les agents de monitoring, collecteurs de logs, ou plugins réseau.</p>
+    <h2>Worker Nodes - L'exécution</h2>
 
-    <h3>Job</h3>
-    <p>Exécute un pod <strong>jusqu'à complétion</strong>. Idéal pour les migrations de base de données, les tâches batch, etc.</p>
+    <p>
+
+      Les <strong>Worker Nodes</strong> sont les machines (VMs ou physiques) qui font tourner vos applications.
+
+      Chaque node exécute trois composants système obligatoires : kubelet, kube-proxy, et un container runtime.
+
+      Un cluster de production possède généralement entre 3 et plusieurs centaines de nodes selon la charge.
+
+    </p>
+
+
+
+    <h3>kubelet - L'agent de terrain</h3>
+
+    <p>
+
+      Le <strong>kubelet</strong> est un agent qui tourne sur chaque node. C'est lui qui traduit les instructions
+
+      de l'API Server en appels concrets au container runtime.
+
+    </p>
+
+    <p>Son cycle de travail est le suivant :</p>
+
+    <ol>
+
+      <li>S'enregistre auprès de l'API Server au démarrage du node</li>
+
+      <li>Surveille en permanence les PodSpecs assignées à son node (via le mécanisme de watch)</li>
+
+      <li>Demande au container runtime de démarrer/arrêter les conteneurs correspondants</li>
+
+      <li>Exécute les <strong>liveness probes</strong> et <strong>readiness probes</strong> définies dans les specs</li>
+
+      <li>Si une probe échoue : redémarre le conteneur (liveness) ou le retire du Service (readiness)</li>
+
+      <li>Remonte régulièrement le statut des pods vers l'API Server</li>
+
+    </ol>
+
+    <p>
+
+      Le kubelet communique avec le container runtime via l'interface standardisée <strong>CRI</strong>
+
+      (Container Runtime Interface), ce qui lui permet de fonctionner avec n'importe quel runtime compatible.
+
+    </p>
+
+
 
     <div class="code-block">
-      <div class="code-header"><span>migration-job.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: batch/v1
-kind: Job
-metadata:
-  name: db-migration
-spec:
-  backoffLimit: 3
-  template:
-    spec:
-      restartPolicy: OnFailure
-      containers:
-        - name: migrate
-          image: myregistry/api-backend:1.1.0
-          command: ["java", "-jar", "app.jar", "--spring.flyway.enabled=true"]
-          env:
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:postgresql://postgres-headless:5432/app_db"</code></pre>
+
+      <div class="code-header"><span>bash - Voir les logs du kubelet sur un node</span></div>
+
+      <pre><code class="language-bash"># Sur le node directement
+
+sudo journalctl -u kubelet -f
+
+
+
+# Vérifier l'état des nodes depuis kubectl
+
+kubectl get nodes -o wide
+
+
+
+# Détails d'un node (ressources, conditions, events)
+
+kubectl describe node worker-node-1</code></pre>
+
     </div>
 
-    <h3>CronJob</h3>
-    <p>Exécute un Job selon un planning cron. Exemple : sauvegarde quotidienne de la base de données.</p>
-    <div class="code-block">
-      <div class="code-header"><span>backup-cronjob.yaml</span></div>
-      <pre><code class="language-yaml">apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: db-backup
-spec:
-  schedule: "0 2 * * *"    # Tous les jours à 2h du matin
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          restartPolicy: OnFailure
-          containers:
-            - name: backup
-              image: postgres:16-alpine
-              command:
-                - /bin/sh
-                - -c
-                - pg_dump -h postgres-headless -U app_user app_db > /backup/dump_$(date +%Y%m%d).sql
-              volumeMounts:
-                - name: backup-volume
-                  mountPath: /backup
-          volumes:
-            - name: backup-volume
-              persistentVolumeClaim:
-                claimName: backup-pvc</code></pre>
-    </div>
 
-    <table>
-      <thead>
-        <tr><th>Workload</th><th>Réplicas</th><th>Identité</th><th>Usage principal</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><strong>Deployment</strong></td><td>N (scalable)</td><td>Aléatoire</td><td>APIs, services stateless</td></tr>
-        <tr><td><strong>StatefulSet</strong></td><td>N (ordonné)</td><td>Stable (pod-0, pod-1)</td><td>Bases de données, caches</td></tr>
-        <tr><td><strong>DaemonSet</strong></td><td>1 par node</td><td>Par node</td><td>Monitoring, logs</td></tr>
-        <tr><td><strong>Job</strong></td><td>1 (run-to-completion)</td><td>-</td><td>Migrations, batch</td></tr>
-        <tr><td><strong>CronJob</strong></td><td>Planifié</td><td>-</td><td>Backups, rapports</td></tr>
-      </tbody>
-    </table>
+
+    <h3>kube-proxy - Le réseau virtuel</h3>
+
+    <p>
+
+      <strong>kube-proxy</strong> tourne sur chaque node et maintient les règles réseau qui permettent
+
+      aux Services Kubernetes de fonctionner. Quand vous créez un Service avec une IP virtuelle (ClusterIP),
+
+      c'est kube-proxy qui écrit les règles qui redirigent ce trafic vers les pods correspondants.
+
+    </p>
+
+    <p>Il fonctionne dans deux modes :</p>
+
+    <ul>
+
+      <li>
+
+        <strong>Mode iptables</strong> (par défaut) - Écrit des règles iptables sur le node. Sélection aléatoire
+
+        parmi les pods disponibles. Simple, éprouvé, mais peut devenir lent sur les très grands clusters
+
+        (milliers de services).
+
+      </li>
+
+      <li>
+
+        <strong>Mode IPVS</strong> (recommandé pour les grands clusters) - Utilise le module noyau IPVS
+
+        (IP Virtual Server). Plus performant, offre plusieurs algorithmes de load balancing (round-robin,
+
+        least connection, IP hash…), gère mieux les clusters avec des milliers de services.
+
+      </li>
+
+    </ul>
+
+
+
+    <h3>Container Runtime - Le moteur d'exécution</h3>
+
+    <p>
+
+      Le container runtime est le logiciel qui exécute réellement les conteneurs. Depuis Kubernetes 1.24,
+
+      Docker ne peut plus être utilisé directement - Kubernetes passe par l'interface CRI.
+
+    </p>
+
+    <ul>
+
+      <li>
+
+        <strong>containerd</strong> (standard actuel) - Runtime léger extrait de Docker. C'est ce qu'utilisent
+
+        GKE, EKS et AKS par défaut.
+
+      </li>
+
+      <li>
+
+        <strong>CRI-O</strong> - Runtime minimaliste développé par Red Hat, optimisé pour Kubernetes.
+
+        Utilisé par défaut sur OpenShift.
+
+      </li>
+
+    </ul>
+
   </section>
 
-  <section class="lab-section">
-    <h2>Travaux Pratiques — Workloads Kubernetes</h2>
 
-    <div class="lab-intro">
+
+  <section>
+
+    <h2>Pods - L'unité atomique de Kubernetes</h2>
+
+    <p>
+
+      Un <strong>Pod</strong> est la plus petite unité déployable dans Kubernetes. Il ne contient pas directement
+
+      une application - il contient un ou plusieurs <em>conteneurs</em> qui partagent :
+
+    </p>
+
+    <ul>
+
+      <li><strong>Le même réseau</strong> - tous les conteneurs du pod ont la même adresse IP et peuvent communiquer via <code>localhost</code></li>
+
+      <li><strong>Le même espace de stockage</strong> - ils peuvent monter les mêmes volumes</li>
+
+      <li><strong>Le même cycle de vie</strong> - ils démarrent et s'arrêtent ensemble</li>
+
+    </ul>
+
+
+
+    <div class="callout info">
+
+      <strong>Pattern Sidecar</strong>
+
       <p>
-        <strong>Prérequis :</strong> Cluster Kind <code>k8s-lab</code> en cours d'exécution (voir Leçon 3 — Lab 1).
-        Ces exercices couvrent les workloads essentiels : Deployment, self-healing et rolling update.
+
+        Un pod peut avoir un conteneur principal + un ou plusieurs conteneurs secondaires (sidecars).
+
+        Exemple classique : votre API dans le conteneur principal, et un agent de log collector (Fluentd) ou
+
+        un proxy Envoy (service mesh) en sidecar. Ils partagent les fichiers de logs via un volume commun.
+
       </p>
+
     </div>
 
-    <div class="lab">
-      <div class="lab-header">
-        <span class="lab-badge">Lab 1</span>
-        <span class="lab-title">Déployer une application avec 3 réplicas</span>
-        <span class="lab-time">~15 min</span>
-      </div>
-      <div class="lab-body">
-        <h4>Objectifs</h4>
-        <ul class="objective-list">
-          <li>Créer un Deployment multi-réplicas</li>
-          <li>Vérifier la distribution des pods sur les worker nodes</li>
-          <li>Observer le ReplicaSet créé automatiquement</li>
-        </ul>
 
-        <div class="code-block">
-          <div class="code-header"><span>httpbin-deployment.yaml</span></div>
-          <pre><code class="language-yaml">apiVersion: apps/v1
-kind: Deployment
+
+    <h3>Cycle de vie d'un Pod</h3>
+
+    <p>Un pod passe par plusieurs phases durant son existence :</p>
+
+    <ul>
+
+      <li><strong>Pending</strong> - Le pod est créé dans etcd mais pas encore schedulé, ou ses images sont en téléchargement</li>
+
+      <li><strong>Running</strong> - Tous les conteneurs ont démarré, au moins un est en cours d'exécution</li>
+
+      <li><strong>Succeeded</strong> - Tous les conteneurs se sont terminés avec succès (code 0). Pour les Jobs.</li>
+
+      <li><strong>Failed</strong> - Au moins un conteneur s'est terminé en erreur et ne sera pas redémarré</li>
+
+      <li><strong>Unknown</strong> - L'API Server ne peut plus communiquer avec le kubelet du node (node en panne)</li>
+
+    </ul>
+
+
+
+    <h3>Init Containers</h3>
+
+    <p>
+
+      Les <strong>init containers</strong> s'exécutent <em>avant</em> les conteneurs principaux, en séquence.
+
+      Ils servent à des tâches d'initialisation : attendre qu'une base de données soit prête,
+
+      télécharger des fichiers de config, exécuter des migrations, etc.
+
+    </p>
+
+
+
+    <div class="code-block">
+
+      <div class="code-header"><span>pod-complet.yaml</span></div>
+
+      <pre><code class="language-yaml">apiVersion: v1
+
+kind: Pod
+
 metadata:
-  name: httpbin
-  namespace: default
+
+  name: api-backend
+
+  labels:
+
+    app: api-backend
+
+    version: "1.0"
+
+    tier: backend
+
 spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: httpbin
-  template:
-    metadata:
-      labels:
-        app: httpbin
-    spec:
-      containers:
-        - name: httpbin
-          image: kennethreitz/httpbin:latest
-          ports:
-            - containerPort: 80
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
-              memory: "128Mi"
-              cpu: "200m"</code></pre>
-        </div>
+
+  # Init container : attend que la BDD soit prête
+
+  initContainers:
+
+    - name: wait-for-db
+
+      image: busybox:1.35
+
+      command: ['sh', '-c',
+
+        'until nc -z postgres-service 5432; do echo waiting for postgres; sleep 2; done']
+
+
+
+  containers:
+
+    - name: api
+
+      image: myregistry/api-backend:1.0.0
+
+      ports:
+
+        - containerPort: 8080
+
+
+
+      # Variables d'environnement
+
+      env:
+
+        - name: SPRING_PROFILES_ACTIVE
+
+          value: "prod"
+
+        - name: DB_PASSWORD
+
+          valueFrom:
+
+            secretKeyRef:
+
+              name: db-secret
+
+              key: password
+
+
+
+      # Ressources : requests = ce dont le pod a besoin (pour le scheduling)
+
+      #              limits    = le maximum absolu autorisé
+
+      resources:
+
+        requests:
+
+          memory: "256Mi"
+
+          cpu: "250m"       # 250 millicores = 0.25 vCPU
+
+        limits:
+
+          memory: "512Mi"
+
+          cpu: "500m"
+
+
+
+      # Liveness probe : si elle échoue → conteneur redémarré
+
+      livenessProbe:
+
+        httpGet:
+
+          path: /actuator/health/liveness
+
+          port: 8080
+
+        initialDelaySeconds: 30   # Attendre 30s avant la 1ère vérification
+
+        periodSeconds: 10         # Vérifier toutes les 10s
+
+        failureThreshold: 3       # 3 échecs consécutifs → redémarrage
+
+
+
+      # Readiness probe : si elle échoue → pod retiré du Service (plus de trafic)
+
+      readinessProbe:
+
+        httpGet:
+
+          path: /actuator/health/readiness
+
+          port: 8080
+
+        initialDelaySeconds: 10
+
+        periodSeconds: 5
+
+        failureThreshold: 2
+
+
+
+    # Sidecar : collecte les logs applicatifs
+
+    - name: log-collector
+
+      image: fluent/fluent-bit:2.1
+
+      volumeMounts:
+
+        - name: app-logs
+
+          mountPath: /var/log/app
+
+
+
+  volumes:
+
+    - name: app-logs
+
+      emptyDir: &#123;&#125;      # Volume temporaire partagé entre conteneurs du pod</code></pre>
+
+    </div>
+
+
+
+    <div class="callout tip">
+
+      <strong>Ne déployez jamais un Pod seul en production</strong>
+
+      <p>
+
+        Un pod nu n'est pas recréé s'il crash ou si son node tombe. Utilisez toujours un <strong>Deployment</strong>
+
+        (pour les applications stateless) ou un <strong>StatefulSet</strong> (pour les bases de données, queues…).
+
+        Ces ressources créent et gèrent automatiquement les pods via un ReplicaSet.
+
+      </p>
+
+    </div>
+
+  </section>
+
+
+  <app-quiz [questions]="quiz" title="Quiz de validation — Architecture Kubernetes"></app-quiz>
+
+  <div class="quiz-challenge">
+    <div class="quiz-challenge-header">
+      <span class="quiz-challenge-badge">Défi</span>
+      <span>Mise en pratique — cluster Kind requis</span>
+    </div>
+    <div class="quiz-challenge-body">
+      <p>
+        Avec votre cluster Kind actif, exécutez <strong>une seule commande</strong> pour afficher tous les pods
+        du namespace <code>kube-system</code> avec leur node d'appartenance.
+      </p>
+      <p>
+        <strong>Question :</strong> Quel composant du Control Plane tourne également sur les Worker Nodes ?
+        Et quel composant est absent du control-plane node ?
+      </p>
+      <details>
+        <summary>Voir la solution</summary>
         <div class="code-block">
           <div class="code-header"><span>bash</span></div>
-          <pre><code class="language-bash">kubectl apply -f httpbin-deployment.yaml
+          <pre><code class="language-bash">kubectl get pods -n kube-system -o wide
 
-# Voir les 3 pods et sur quel node ils tournent
-kubectl get pods -o wide
+# Sur le control-plane node : etcd, kube-apiserver, kube-scheduler,
+#                             kube-controller-manager, coredns
+# Sur les Workers uniquement : kube-proxy
 
-# Voir le ReplicaSet créé automatiquement
-kubectl get replicaset
-
-# Accéder à l'app
-kubectl port-forward deployment/httpbin 8080:80
-# → http://localhost:8080</code></pre>
+# kube-proxy est le seul composant présent sur CHAQUE node (control-plane inclus),
+# mais absent de la liste "system components" du control-plane lui-même.
+# À l'inverse, etcd, kube-apiserver, kube-scheduler et kube-controller-manager
+# ne tournent JAMAIS sur les Workers.</code></pre>
         </div>
-      </div>
-      <div class="lab-result">
-        <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>3 pods <code>Running</code>, répartis entre les 2 workers. Un ReplicaSet <code>httpbin-xxxxxxx</code> apparaît avec <code>DESIRED=3 CURRENT=3 READY=3</code>.</p>
-      </div>
+      </details>
     </div>
+  </div>
 
-    <div class="lab">
-      <div class="lab-header">
-        <span class="lab-badge">Lab 2</span>
-        <span class="lab-title">Observer le Self-Healing en action</span>
-        <span class="lab-time">~10 min</span>
-      </div>
-      <div class="lab-body">
-        <h4>Objectifs</h4>
-        <ul class="objective-list">
-          <li>Confirmer que Kubernetes ne laisse jamais un pod mort</li>
-          <li>Tuer un pod manuellement et observer sa recréation immédiate</li>
-          <li>Simuler la panne d'un node entier</li>
-        </ul>
 
-        <div class="code-block">
-          <div class="code-header"><span>bash — Terminal 1 : observer en temps réel</span></div>
-          <pre><code class="language-bash">kubectl get pods -w</code></pre>
-        </div>
-        <div class="code-block">
-          <div class="code-header"><span>bash — Terminal 2 : tuer un pod</span></div>
-          <pre><code class="language-bash"># Récupérer le nom d'un pod
-kubectl get pods
-
-# Le supprimer (simule un crash)
-kubectl delete pod &lt;nom-du-pod&gt;
-
-# Dans le Terminal 1 vous verrez :
-# httpbin-xxx   Terminating
-# httpbin-yyy   Pending → ContainerCreating → Running   ← recréé automatiquement</code></pre>
-        </div>
-        <div class="code-block">
-          <div class="code-header"><span>bash — Simuler la panne d'un node</span></div>
-          <pre><code class="language-bash"># Stopper le conteneur Docker d'un worker (simule une panne machine)
-docker stop k8s-lab-worker
-
-# Attendre ~1 min
-kubectl get nodes
-# k8s-lab-worker   NotReady
-
-kubectl get pods -o wide
-# Les pods du worker tombé sont re-schedulés sur worker2
-
-# Redémarrer le node
-docker start k8s-lab-worker</code></pre>
-        </div>
-      </div>
-      <div class="lab-result">
-        <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Le cluster maintient toujours 3 pods <code>Running</code>. Même avec un node en panne, K8s replace les pods sur les nodes disponibles. C'est la boucle de réconciliation en action.</p>
-      </div>
-    </div>
-
-    <div class="lab">
-      <div class="lab-header">
-        <span class="lab-badge">Lab 3</span>
-        <span class="lab-title">Rolling Update & Rollback sans downtime</span>
-        <span class="lab-time">~15 min</span>
-      </div>
-      <div class="lab-body">
-        <h4>Objectifs</h4>
-        <ul class="objective-list">
-          <li>Mettre à jour une application sans interruption de service</li>
-          <li>Observer le remplacement progressif des pods</li>
-          <li>Faire un rollback instantané en cas de problème</li>
-        </ul>
-
-        <div class="code-block">
-          <div class="code-header"><span>bash — Terminal 1 : watcher</span></div>
-          <pre><code class="language-bash">kubectl get pods -l app=httpbin -w</code></pre>
-        </div>
-        <div class="code-block">
-          <div class="code-header"><span>bash — Terminal 2 : mise à jour et rollback</span></div>
-          <pre><code class="language-bash"># Changer l'image (simule une nouvelle version)
-kubectl set image deployment/httpbin httpbin=nginx:1.25
-
-# Suivre le déploiement
-kubectl rollout status deployment/httpbin
-
-# Consulter l'historique
-kubectl rollout history deployment/httpbin
-
-# Rollback immédiat vers la version précédente
-kubectl rollout undo deployment/httpbin
-
-# Vérifier
-kubectl describe deployment/httpbin | grep Image</code></pre>
-        </div>
-      </div>
-      <div class="lab-result">
-        <div class="lab-result-title">✓ Résultat attendu</div>
-        <p>Les pods sont remplacés un à un. L'application reste disponible pendant toute la durée du déploiement. Le rollback remet l'image précédente en quelques secondes.</p>
-      </div>
-    </div>
-
-  </section>
-
+</app-lesson-page>
