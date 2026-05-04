@@ -1,0 +1,272 @@
+<app-lesson-page [data]="data">
+
+
+
+  <!-- ===== AUTOSCALING ===== -->
+  <section>
+
+    <h2>Autoscaling avec HPA</h2>
+
+    <p>
+      Le <strong>HorizontalPodAutoscaler</strong> (HPA) ajuste automatiquement le nombre de réplicas
+      d'un Deployment en fonction de métriques observées (CPU, mémoire, métriques custom).
+      Sur un VPS, l'autoscaling est limité par les ressources physiques - mais il permet
+      de maximiser l'utilisation de ce qui est disponible.
+    </p>
+
+    <div class="callout info">
+      <strong>Pré-requis</strong>
+      <p>
+        Le <strong>Metrics Server</strong> doit être installé. Avec k3s, il est inclus par défaut.
+        Vérifiez avec : <code>kubectl top nodes</code>
+      </p>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/overlays/prod/hpa.yaml</header>
+      <pre><code class="language-yaml">apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2              # Minimum en prod (haute dispo)
+  maxReplicas: 5              # Max réaliste pour un VPS 8GB
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70    # Scale up quand CPU > 70%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80    # Scale up quand RAM > 80%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60    # Attendre 60s avant de scale up
+      policies:
+        - type: Pods
+          value: 1                       # +1 pod à la fois
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Attendre 5min avant de scale down
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120</code></pre>
+    </div>
+
+    <h3>Explication des paramètres</h3>
+
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h4>Scale Up</h4>
+        <ul>
+          <li><strong>averageUtilization: 70</strong> - Si la moyenne CPU de tous les pods dépasse 70%, on ajoute un pod</li>
+          <li><strong>stabilizationWindow: 60s</strong> - Évite les oscillations rapides</li>
+          <li><strong>+1 pod par minute max</strong> - Scaling progressif, pas brutal</li>
+        </ul>
+      </div>
+      <div class="comparison-card">
+        <h4>Scale Down</h4>
+        <ul>
+          <li><strong>stabilizationWindow: 300s</strong> - Attend 5 minutes de calme avant de réduire</li>
+          <li><strong>-1 pod toutes les 2 min</strong> - Réduit progressivement pour éviter les pics de retour</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Tester l'autoscaling manuellement</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - Simuler de la charge</header>
+      <pre><code class="language-bash"># Appliquer le HPA
+kubectl apply -f k8s/overlays/prod/hpa.yaml
+
+# Vérifier le statut du HPA
+kubectl get hpa -n prod
+# NAME          REFERENCE        TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+# backend-hpa   Deployment/backend   25%/70%   2         5         2          1m
+
+# Simuler de la charge CPU avec un pod de stress
+kubectl run stress-test -n prod --rm -it \
+  --image=busybox -- sh -c \
+  "while true; do wget -q -O- http://backend/api/health; done"
+
+# Dans un autre terminal, observer le scaling
+kubectl get hpa -n prod --watch
+# TARGETS augmente... puis REPLICAS passe de 2 à 3, 4...
+
+# Arrêter le stress (Ctrl+C)
+# Après ~5 minutes, le HPA scale down progressivement
+
+# Vérifier les événements
+kubectl describe hpa backend-hpa -n prod
+# Events:
+#   Normal  SuccessfulRescale  ...  New size: 3; reason: cpu resource utilization above target</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== PROMETHEUS + GRAFANA ===== -->
+  <section>
+
+    <h2>Observabilité - Prometheus &amp; Grafana</h2>
+
+    <p>
+      <strong>Prometheus</strong> collecte les métriques en scrappant les endpoints <code>/metrics</code>.
+      <strong>Grafana</strong> les visualise dans des dashboards. Ensemble, ils forment le standard
+      de l'observabilité dans l'écosystème Kubernetes.
+    </p>
+
+    <h3>Installation via Helm</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Ajouter le repo Helm
+helm repo add prometheus-community \
+  https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Installer le stack complet (Prometheus + Grafana + AlertManager)
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --set prometheus.prometheusSpec.retention=7d \
+  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
+  --set prometheus.prometheusSpec.resources.limits.memory=512Mi \
+  --set grafana.resources.requests.memory=128Mi \
+  --set grafana.resources.limits.memory=256Mi \
+  --set alertmanager.enabled=true
+
+# Vérifier l'installation
+kubectl get pods -n monitoring
+# NAME                                                     READY   STATUS    RESTARTS   AGE
+# monitoring-grafana-xxx                                   3/3     Running   0          2m
+# monitoring-kube-prometheus-operator-xxx                  1/1     Running   0          2m
+# monitoring-kube-state-metrics-xxx                        1/1     Running   0          2m
+# monitoring-prometheus-node-exporter-xxx                  1/1     Running   0          2m
+# prometheus-monitoring-kube-prometheus-prometheus-0        2/2     Running   0          2m
+# alertmanager-monitoring-kube-prometheus-alertmanager-0    2/2     Running   0          2m</code></pre>
+    </div>
+
+    <h3>Accéder à Grafana</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># Méthode 1 : Port-forward (debug rapide)
+kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+# Accessible sur http://localhost:3000
+
+# Récupérer le mot de passe admin
+kubectl get secret monitoring-grafana -n monitoring \
+  -o jsonpath="&#123;.data.admin-password&#125;" | base64 -d
+# Login : admin / (le mot de passe affiché)
+
+# Méthode 2 : Ingress dédié pour un accès permanent
+# Ajoutez cette règle dans votre ingress.yaml :
+# - host: grafana.mondomaine.com
+#   http:
+#     paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: monitoring-grafana
+#             port:
+#               number: 80</code></pre>
+    </div>
+
+    <h3>Exposer les métriques Spring Boot</h3>
+
+    <div class="terminal-box">
+      <header>backend/pom.xml - Dépendance</header>
+      <pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
+    &lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>backend/src/main/resources/application.yml</header>
+      <pre><code class="language-yaml">management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, info
+  metrics:
+    tags:
+      application: myapp-backend</code></pre>
+    </div>
+
+    <h3>ServiceMonitor pour scraper le backend</h3>
+
+    <div class="terminal-box">
+      <header>k8s/base/backend-servicemonitor.yaml</header>
+      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-monitor
+  labels:
+    release: monitoring    # DOIT matcher le label du Prometheus Operator
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Vérifier</header>
+      <pre><code class="language-bash"># Appliquer le ServiceMonitor
+kubectl apply -f k8s/base/backend-servicemonitor.yaml
+
+# Vérifier que Prometheus scrape le backend
+# Ouvrir Grafana → Explorer → Prometheus
+# Requête PromQL :
+# up&#123;job="backend"&#125;
+# Résultat attendu : 1 (le target est UP)</code></pre>
+    </div>
+
+    <h3>Métriques essentielles à surveiller</h3>
+
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h4>Métriques Système</h4>
+        <ul>
+          <li><code>node_cpu_seconds_total</code> - Utilisation CPU du nœud</li>
+          <li><code>node_memory_MemAvailable_bytes</code> - RAM disponible</li>
+          <li><code>node_disk_io_time_seconds_total</code> - I/O disque</li>
+          <li><code>kubelet_running_pods</code> - Nombre de pods actifs</li>
+        </ul>
+      </div>
+      <div class="comparison-card">
+        <h4>Métriques Application</h4>
+        <ul>
+          <li><code>http_server_requests_seconds_count</code> - Nombre de requêtes HTTP</li>
+          <li><code>http_server_requests_seconds_sum</code> - Temps total de réponse</li>
+          <li><code>jvm_memory_used_bytes</code> - Mémoire JVM utilisée</li>
+          <li><code>hikaricp_connections_active</code> - Connexions DB actives</li>
+        </ul>
+      </div>
+    </div>
+
+  </section>
+
+
+
+  <app-quiz [questions]="quiz" />
+
+</app-lesson-page>

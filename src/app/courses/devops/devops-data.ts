@@ -59,5 +59,17 @@ export const DEVOPS_COURSE: Course = {
         { number: 16, title: 'Chaos Engineering', subtitle: 'Tester la résilience en production avec Chaos Mesh', route: 'chaos-engineering' },
       ]
     },
+    {
+      title: 'Mise en œuvre : Migration de l\'environnement DeleevX sur K8s',
+      icon: 'server',
+      lessons: [
+        { number: 17, title: 'Structure & Dockerisation', subtitle: 'Organisation du projet et Dockerfiles production-grade', route: 'structure-et-dockerisation' },
+        { number: 18, title: 'Installation K3s & Kustomize', subtitle: 'Cluster k3s sur VPS, namespaces et structure Kustomize', route: 'installation-k3s-et-kustomize' },
+        { number: 19, title: 'Déploiement & Ingress HTTPS', subtitle: 'Manifestes applicatifs, cert-manager et Let\'s Encrypt', route: 'deploiement-et-ingress-https' },
+        { number: 20, title: 'Autoscaling & Observabilité', subtitle: 'HPA, Prometheus, Grafana et métriques Spring Boot', route: 'autoscaling-et-observabilite' },
+        { number: 21, title: 'Logging, CI/CD & CDN', subtitle: 'Loki, pipeline GitHub Actions et stratégie CDN', route: 'logging-cicd-et-cdn' },
+        { number: 22, title: 'Hardening Production', subtitle: 'Quotas, Secrets, NetworkPolicies et rate limiting', route: 'hardening-production' },
+      ]
+    },
   ]
 };

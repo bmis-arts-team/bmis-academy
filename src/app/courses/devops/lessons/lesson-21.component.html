@@ -1,0 +1,548 @@
+<app-lesson-page [data]="data">
+
+
+
+  <!-- ===== LOGGING ===== -->
+  <section>
+
+    <h2>Logging centralisé - stdout + Loki</h2>
+
+    <p>
+      Dans Kubernetes, la règle d'or du logging est simple : <strong>tout sur stdout/stderr</strong>.
+      Les conteneurs sont éphémères - les fichiers de log disparaissent avec le pod.
+      Le container runtime (containerd) capture automatiquement stdout et le rend accessible via <code>kubectl logs</code>.
+    </p>
+
+    <h3>Configurer Spring Boot pour stdout</h3>
+
+    <div class="terminal-box">
+      <header>backend/src/main/resources/application.yml</header>
+      <pre><code class="language-yaml"># Spring Boot log sur stdout par défaut - mais en JSON pour Loki
+logging:
+  pattern:
+    console: >-
+      &#123;"timestamp":"%d&#123;ISO8601&#125;",
+      "level":"%level",
+      "logger":"%logger&#123;36&#125;",
+      "message":"%msg",
+      "thread":"%thread"&#125;%n</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Pourquoi le format JSON ?</strong>
+      <p>
+        Les logs en texte brut sont difficiles à parser pour les collecteurs.
+        En JSON structuré, Loki peut indexer par champs (level, logger, message) et permettre
+        des requêtes précises comme <code>&#123;app="backend"&#125; |= "ERROR"</code>.
+      </p>
+    </div>
+
+    <h3>kubectl logs - L'outil de base</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># Logs du pod le plus récent
+kubectl logs deployment/backend -n prod
+
+# Logs en temps réel (streaming)
+kubectl logs -f deployment/backend -n prod
+
+# Logs de tous les pods d'un Deployment
+kubectl logs -l app=backend -n prod --all-containers
+
+# Logs des 30 dernières minutes
+kubectl logs deployment/backend -n prod --since=30m
+
+# Logs du pod précédent (après un crash)
+kubectl logs deployment/backend -n prod --previous</code></pre>
+    </div>
+
+    <h3>Installer Loki + Promtail</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Ajouter le repo Grafana
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+# Installer Loki Stack (Loki + Promtail)
+helm install loki grafana/loki-stack \
+  --namespace monitoring \
+  --set loki.persistence.enabled=true \
+  --set loki.persistence.size=5Gi \
+  --set promtail.enabled=true \
+  --set loki.resources.requests.memory=128Mi \
+  --set loki.resources.limits.memory=256Mi
+
+# Vérifier
+kubectl get pods -n monitoring -l app=loki
+# NAME                    READY   STATUS    RESTARTS   AGE
+# loki-0                  1/1     Running   0          1m
+
+kubectl get pods -n monitoring -l app=promtail
+# NAME                 READY   STATUS    RESTARTS   AGE
+# loki-promtail-xxx    1/1     Running   0          1m</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Comment ça fonctionne</strong>
+      <ul>
+        <li><strong>Promtail</strong> - DaemonSet qui tourne sur chaque nœud, collecte les logs de <code>/var/log/pods/</code> et les envoie à Loki</li>
+        <li><strong>Loki</strong> - Stocke et indexe les logs par labels (namespace, pod, container), pas en full-text</li>
+        <li><strong>Grafana</strong> - Visualise les logs avec le langage de requête <strong>LogQL</strong></li>
+      </ul>
+    </div>
+
+    <h3>Configurer Grafana pour Loki</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - Ajouter Loki comme data source</header>
+      <pre><code class="language-bash"># Si Grafana est installé avec kube-prometheus-stack,
+# Loki doit être ajouté comme data source.
+
+# Option 1 : Via l'interface Grafana
+# Configuration → Data Sources → Add → Loki
+# URL : http://loki:3100
+
+# Option 2 : Via Helm values (recommandé)
+# Ajoutez lors de l'installation de Grafana :
+# --set grafana.additionalDataSources[0].name=Loki
+# --set grafana.additionalDataSources[0].type=loki
+# --set grafana.additionalDataSources[0].url=http://loki:3100</code></pre>
+    </div>
+
+    <h3>Requêtes LogQL dans Grafana</h3>
+
+    <div class="terminal-box">
+      <header>Exemples LogQL</header>
+      <pre><code class="language-logql"># Tous les logs du backend en prod
+&#123;namespace="prod", app="backend"&#125;
+
+# Uniquement les erreurs
+&#123;namespace="prod", app="backend"&#125; |= "ERROR"
+
+# Logs contenant "timeout" ou "connection refused"
+&#123;namespace="prod", app="backend"&#125; |~ "timeout|connection refused"
+
+# Parser les logs JSON et filtrer par level
+&#123;namespace="prod", app="backend"&#125; | json | level="ERROR"
+
+# Compter les erreurs par minute (métrique depuis les logs)
+rate(&#123;namespace="prod", app="backend"&#125; |= "ERROR" [1m])</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== CI/CD ===== -->
+  <section>
+
+    <h2>CI/CD - Pipeline GitHub Actions (2 repos séparés)</h2>
+
+    <p>
+      Dans notre architecture, le backend (Spring Boot) et le frontend (Angular) vivent dans
+      <strong>deux dépôts GitHub distincts</strong>. Chaque repo a son propre workflow qui build,
+      push et déploie de façon indépendante. Le dossier <code>k8s/</code> (manifestes Kubernetes)
+      peut être dans un troisième repo dédié ou dupliqué dans chaque repo - ici on le met dans le repo backend
+      car c'est le plus critique.
+    </p>
+
+    <div class="callout info">
+      <strong>Pourquoi 2 repos = 2 workflows ?</strong>
+      <ul>
+        <li>Un fix CSS ne redéploie pas le backend Java (et inversement)</li>
+        <li>Chaque équipe (front/back) peut release indépendamment</li>
+        <li>Les cycles de build sont plus rapides (pas de build inutile)</li>
+        <li>Les permissions GitHub (GITHUB_TOKEN) sont scopées au repo</li>
+      </ul>
+    </div>
+
+    <h3>Workflow Backend (repo Spring Boot)</h3>
+
+    <div class="terminal-box">
+      <header>.github/workflows/deploy.yml - Repo Backend</header>
+      <pre ngNonBindable><code class="language-yaml">name: Backend - Build &amp; Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/$&#123;&#123; github.repository &#125;&#125;
+
+jobs:
+  # ================================
+  # JOB 1 : Tests
+  # ================================
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Run Tests
+        run: ./mvnw verify -B
+
+  # ================================
+  # JOB 2 : Build &amp; Push Docker Image
+  # ================================
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: $&#123;&#123; steps.tag.outputs.TAG &#125;&#125;
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: $&#123;&#123; env.REGISTRY &#125;&#125;
+          username: $&#123;&#123; github.actor &#125;&#125;
+          password: $&#123;&#123; secrets.GITHUB_TOKEN &#125;&#125;
+
+      - name: Set image tag
+        id: tag
+        run: echo "TAG=$(echo $GITHUB_SHA | head -c 7)" >> $GITHUB_OUTPUT
+
+      - name: Build &amp; Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            $&#123;&#123; env.IMAGE &#125;&#125;:$&#123;&#123; steps.tag.outputs.TAG &#125;&#125;
+            $&#123;&#123; env.IMAGE &#125;&#125;:latest
+
+  # ================================
+  # JOB 3 : Deploy to Kubernetes
+  # ================================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set environment
+        id: env
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "ENV=prod" >> $GITHUB_OUTPUT
+          else
+            echo "ENV=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "$&#123;&#123; secrets.KUBECONFIG &#125;&#125;" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy backend
+        run: |
+          TAG=$&#123;&#123; needs.build.outputs.tag &#125;&#125;
+          NS=$&#123;&#123; steps.env.outputs.ENV &#125;&#125;
+
+          # Mettre à jour l'image du Deployment backend
+          kubectl set image deployment/backend \
+            backend=$&#123;&#123; env.IMAGE &#125;&#125;:$TAG \
+            -n $NS
+
+          # Attendre que le rollout soit terminé
+          kubectl rollout status deployment/backend \
+            -n $NS --timeout=120s
+
+      - name: Verify
+        run: |
+          kubectl get pods -n $&#123;&#123; steps.env.outputs.ENV &#125;&#125; -l app=backend
+          echo "Backend $&#123;&#123; needs.build.outputs.tag &#125;&#125; deployed to $&#123;&#123; steps.env.outputs.ENV &#125;&#125;"</code></pre>
+    </div>
+
+    <h3>Workflow Frontend (repo Angular)</h3>
+
+    <div class="terminal-box">
+      <header>.github/workflows/deploy.yml - Repo Frontend</header>
+      <pre ngNonBindable><code class="language-yaml">name: Frontend - Build &amp; Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/$&#123;&#123; github.repository &#125;&#125;
+
+jobs:
+  # ================================
+  # JOB 1 : Tests
+  # ================================
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install &amp; Test
+        run: |
+          npm ci
+          npm run test -- --watch=false --browsers=ChromeHeadless
+
+  # ================================
+  # JOB 2 : Build &amp; Push Docker Image
+  # ================================
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: $&#123;&#123; steps.tag.outputs.TAG &#125;&#125;
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: $&#123;&#123; env.REGISTRY &#125;&#125;
+          username: $&#123;&#123; github.actor &#125;&#125;
+          password: $&#123;&#123; secrets.GITHUB_TOKEN &#125;&#125;
+
+      - name: Set image tag
+        id: tag
+        run: echo "TAG=$(echo $GITHUB_SHA | head -c 7)" >> $GITHUB_OUTPUT
+
+      - name: Build &amp; Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            $&#123;&#123; env.IMAGE &#125;&#125;:$&#123;&#123; steps.tag.outputs.TAG &#125;&#125;
+            $&#123;&#123; env.IMAGE &#125;&#125;:latest
+
+  # ================================
+  # JOB 3 : Deploy to Kubernetes
+  # ================================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set environment
+        id: env
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "ENV=prod" >> $GITHUB_OUTPUT
+          else
+            echo "ENV=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "$&#123;&#123; secrets.KUBECONFIG &#125;&#125;" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy frontend
+        run: |
+          TAG=$&#123;&#123; needs.build.outputs.tag &#125;&#125;
+          NS=$&#123;&#123; steps.env.outputs.ENV &#125;&#125;
+
+          # Mettre à jour l'image du Deployment frontend
+          kubectl set image deployment/frontend \
+            frontend=$&#123;&#123; env.IMAGE &#125;&#125;:$TAG \
+            -n $NS
+
+          # Attendre que le rollout soit terminé
+          kubectl rollout status deployment/frontend \
+            -n $NS --timeout=60s
+
+      - name: Verify
+        run: |
+          kubectl get pods -n $&#123;&#123; steps.env.outputs.ENV &#125;&#125; -l app=frontend
+          echo "Frontend $&#123;&#123; needs.build.outputs.tag &#125;&#125; deployed to $&#123;&#123; steps.env.outputs.ENV &#125;&#125;"</code></pre>
+    </div>
+
+    <h3>Où placer les manifestes K8s ?</h3>
+
+    <div class="callout info">
+      <strong>3 options pour le dossier k8s/</strong>
+      <ul>
+        <li><strong>Option 1 (recommandée)</strong> - Un <strong>3ème repo dédié</strong> <code>infra-k8s</code> contenant uniquement les manifestes. Les deux workflows y accèdent via <code>kubectl set image</code> sans toucher aux YAML.</li>
+        <li><strong>Option 2</strong> - Dans le <strong>repo backend</strong> (le plus critique). Le workflow frontend fait juste <code>kubectl set image</code> sans checkout du repo backend.</li>
+        <li><strong>Option 3</strong> - Dupliqué dans les deux repos (à éviter, source de désynchronisation).</li>
+      </ul>
+    </div>
+
+    <p>
+      Avec <code>kubectl set image</code>, les workflows n'ont pas besoin d'accéder aux fichiers YAML.
+      Ils mettent à jour directement l'image du Deployment existant sur le cluster.
+      Le déploiement initial (première fois) se fait manuellement avec <code>kubectl apply -k</code>
+      depuis le repo contenant les manifestes.
+    </p>
+
+    <h3>Configuration des Secrets GitHub (dans CHAQUE repo)</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Sur le VPS : encoder le kubeconfig en base64
+cat ~/.kube/config | base64 -w 0
+# Copier le résultat
+
+# Sur GitHub (à faire dans les 2 repos) :
+# Settings → Secrets and variables → Actions → New repository secret
+# Name : KUBECONFIG
+# Value : (coller le base64)
+
+# Le GITHUB_TOKEN est automatique - pas besoin de le créer</code></pre>
+    </div>
+
+    <div class="callout warning">
+      <strong>Sécurité : limiter le kubeconfig</strong>
+      <p>
+        Plutôt que de donner un accès admin complet, créez un <strong>ServiceAccount</strong> Kubernetes
+        dédié au CI/CD avec des permissions limitées (uniquement update les Deployments dans les namespaces staging et prod).
+      </p>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Créer un ServiceAccount CI/CD (optionnel mais recommandé)</header>
+      <pre><code class="language-bash"># Créer le ServiceAccount
+kubectl create serviceaccount github-deployer -n prod
+
+# Créer un Role limité
+kubectl create role deployer \
+  --namespace=prod \
+  --verb=get,list,watch,update,patch \
+  --resource=deployments,pods,replicasets
+
+# Lier le Role au ServiceAccount
+kubectl create rolebinding github-deployer-binding \
+  --namespace=prod \
+  --role=deployer \
+  --serviceaccount=prod:github-deployer
+
+# Répéter pour staging
+kubectl create role deployer \
+  --namespace=staging \
+  --verb=get,list,watch,update,patch \
+  --resource=deployments,pods,replicasets
+
+kubectl create rolebinding github-deployer-binding \
+  --namespace=staging \
+  --role=deployer \
+  --serviceaccount=staging:github-deployer
+
+# Générer le kubeconfig limité pour ce ServiceAccount
+# → Utiliser ce kubeconfig dans le secret KUBECONFIG de GitHub</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== CDN ===== -->
+  <section>
+
+    <h2>CDN - Cloudflare devant NGINX</h2>
+
+    <p>
+      Un CDN met en cache les assets statiques (JS, CSS, images) sur des serveurs répartis mondialement.
+      Les utilisateurs récupèrent les fichiers depuis le point de présence le plus proche,
+      réduisant la latence et la charge sur votre VPS.
+    </p>
+
+    <h3>Pourquoi ça fonctionne avec Angular</h3>
+
+    <p>
+      Angular produit des fichiers avec un <strong>content hash</strong> dans le nom :
+      <code>main.abc123def.js</code>. Quand le code change, le hash change, donc l'URL change.
+      On peut donc mettre un cache <strong>agressif</strong> (1 an) sur ces fichiers - ils ne seront
+      jamais périmés car leur nom change à chaque build.
+    </p>
+
+    <h3>Configuration Cloudflare</h3>
+
+    <div class="callout info">
+      <strong>Étapes chez Cloudflare (interface web)</strong>
+      <ol>
+        <li>Ajouter votre domaine dans Cloudflare</li>
+        <li>Changer les nameservers chez votre registrar vers ceux de Cloudflare</li>
+        <li>Mettre le proxy en mode <strong>Proxied</strong> (nuage orange) sur les enregistrements A</li>
+        <li>Activer <strong>SSL/TLS → Full (Strict)</strong> (car vous avez déjà HTTPS avec cert-manager)</li>
+        <li>Page Rules ou Cache Rules :
+          <ul>
+            <li><code>mondomaine.com/*.js</code> → Cache Everything, Edge TTL 1 month</li>
+            <li><code>mondomaine.com/*.css</code> → Cache Everything, Edge TTL 1 month</li>
+            <li><code>mondomaine.com/assets/*</code> → Cache Everything, Edge TTL 1 month</li>
+            <li><code>api.mondomaine.com/*</code> → Bypass Cache (ne jamais cacher l'API !)</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+
+    <h3>Vérifier que le CDN fonctionne</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># Vérifier les headers de cache
+curl -I https://mondomaine.com/main.abc123.js
+
+# Résultat attendu (avec Cloudflare) :
+# cf-cache-status: HIT          ← Servi depuis le cache Cloudflare
+# cache-control: public, max-age=31536000, immutable
+# cf-ray: xxx-CDG               ← Edge server (CDG = Paris)
+
+# Premier accès :
+# cf-cache-status: MISS          ← Pas encore en cache, récupéré depuis le VPS
+# Deuxième accès :
+# cf-cache-status: HIT           ← En cache !</code></pre>
+    </div>
+
+    <div class="callout warning">
+      <strong>Ne jamais cacher l'API</strong>
+      <p>
+        Les requêtes vers <code>api.mondomaine.com</code> ne doivent JAMAIS être mises en cache par le CDN.
+        Chaque requête API doit atteindre le backend pour retourner des données fraîches.
+        Cloudflare bypass automatiquement les requêtes avec un header <code>Authorization</code>,
+        mais configurez aussi une Page Rule explicite par sécurité.
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <app-quiz [questions]="quiz" />
+
+</app-lesson-page>

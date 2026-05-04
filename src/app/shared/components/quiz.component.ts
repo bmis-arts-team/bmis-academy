@@ -123,10 +123,10 @@ export class QuizComponent {
 
   scoreLabel = computed(() => {
     const p = this.scorePercent();
-    if (p === 100) return '🏆 Score parfait — architecture maîtrisée !';
-    if (p >= 80)   return '✅ Très bien — quelques détails à consolider';
-    if (p >= 60)   return '📚 Bonne base — relisez les sections incorrectes';
-    return '🔄 À retravailler — relire la leçon et recommencer';
+    if (p === 100) return '🏆 Score parfait - architecture maîtrisée !';
+    if (p >= 80)   return '✅ Très bien - quelques détails à consolider';
+    if (p >= 60)   return '📚 Bonne base - relisez les sections incorrectes';
+    return '🔄 À retravailler - relire la leçon et recommencer';
   });
 
   scoreClass = computed(() => {

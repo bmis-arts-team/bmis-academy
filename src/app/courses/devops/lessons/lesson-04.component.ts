@@ -22,7 +22,7 @@ export class Lesson04Component {
       ],
       correct: 1,
       explanation:
-        "Toutes les requêtes — kubectl, scheduler, kubelet, controller — passent obligatoirement par l'API Server. C'est le seul composant accessible de l'extérieur du cluster.",
+        "Toutes les requêtes - kubectl, scheduler, kubelet, controller - passent obligatoirement par l'API Server. C'est le seul composant accessible de l'extérieur du cluster.",
     },
     {
       q: 'Un pod est en état Pending depuis plusieurs minutes. Quelle est la cause la plus probable ?',

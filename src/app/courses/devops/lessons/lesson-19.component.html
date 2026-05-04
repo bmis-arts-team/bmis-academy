@@ -1,0 +1,520 @@
+<app-lesson-page [data]="data">
+
+
+
+  <!-- ===== BACKEND DEPLOYMENT ===== -->
+  <section>
+
+    <h2>Déployer le Backend Spring Boot</h2>
+
+    <p>
+      Voici le manifeste complet du backend. Chaque section est expliquée - pas de copier-coller aveugle.
+    </p>
+
+    <div class="terminal-box">
+      <header>k8s/base/backend-deployment.yaml</header>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0       # Jamais de pod en moins pendant l'update
+      maxSurge: 1              # 1 pod supplémentaire max pendant l'update
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: api
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/votre-org/backend:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/mydb"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: SPRING_DATA_REDIS_HOST
+              value: "redis"
+          resources:
+            requests:
+              cpu: "250m"        # 0.25 vCPU garanti
+              memory: "512Mi"    # 512 MB garanti
+            limits:
+              cpu: "1000m"       # Max 1 vCPU
+              memory: "1Gi"      # Max 1 GB - OOMKill si dépassé
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30   # 30 × 5s = 150s max pour démarrer</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Les 3 probes expliquées</strong>
+      <ul>
+        <li><strong>startupProbe</strong> - Laisse le temps au Spring Boot de démarrer (jusqu'à 150s). Bloque les autres probes tant que le startup n'est pas OK.</li>
+        <li><strong>readinessProbe</strong> - L'application est-elle prête à recevoir du trafic ? Si non → retirée du Service, pas de trafic.</li>
+        <li><strong>livenessProbe</strong> - L'application est-elle vivante ? Si non → le conteneur est redémarré.</li>
+      </ul>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/base/backend-service.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  type: ClusterIP          # Accessible uniquement dans le cluster
+  selector:
+    app: backend
+  ports:
+    - port: 80             # Port du Service
+      targetPort: 8080     # Port du conteneur
+      protocol: TCP
+      name: http</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== FRONTEND DEPLOYMENT ===== -->
+  <section>
+
+    <h2>Déployer le Frontend Angular</h2>
+
+    <div class="terminal-box">
+      <header>k8s/base/frontend-deployment.yaml</header>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+    tier: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: web
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/votre-org/frontend:latest
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            periodSeconds: 5</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/base/frontend-service.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Ressources Angular vs Spring Boot</strong>
+      <p>
+        NGINX servant des fichiers statiques consomme très peu de ressources (50m CPU, 64Mi RAM).
+        Spring Boot a besoin de beaucoup plus à cause de la JVM (250m CPU, 512Mi RAM minimum).
+        Ajustez selon vos observations en production.
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== DATABASES ===== -->
+  <section>
+
+    <h2>PostgreSQL et Redis</h2>
+
+    <div class="terminal-box">
+      <header>k8s/base/postgres-statefulset.yaml</header>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "mydb"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/base/postgres-service.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/base/redis-deployment.yaml</header>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          command: ["redis-server", "--maxmemory", "256mb",
+                    "--maxmemory-policy", "allkeys-lru"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "300Mi"</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/base/redis-service.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379</code></pre>
+    </div>
+
+    <div class="callout warning">
+      <strong>Créer les Secrets pour la base de données</strong>
+      <p>
+        Les Secrets ne sont pas versionnés dans Git. Créez-les manuellement sur le cluster :
+      </p>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Créer les secrets</header>
+      <pre><code class="language-bash"># Créer le secret dans chaque namespace
+for ns in dev staging prod; do
+  kubectl create secret generic db-credentials \
+    --namespace=$ns \
+    --from-literal=username=myapp \
+    --from-literal=password='VotreMotDePasseSecurise123!'
+done
+
+# Vérifier
+kubectl get secrets -n prod
+# NAME              TYPE     DATA   AGE
+# db-credentials    Opaque   2      5s</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== INGRESS + HTTPS ===== -->
+  <section>
+
+    <h2>Ingress + HTTPS avec Let's Encrypt</h2>
+
+    <h3>Installer NGINX Ingress Controller</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Installer NGINX Ingress Controller via Helm
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace \
+  --set controller.service.type=NodePort \
+  --set controller.service.nodePorts.http=80 \
+  --set controller.service.nodePorts.https=443 \
+  --set controller.hostNetwork=true
+
+# Vérifier
+kubectl get pods -n ingress-nginx
+# NAME                                        READY   STATUS    RESTARTS   AGE
+# ingress-nginx-controller-xxx                1/1     Running   0          30s</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>hostNetwork=true</strong>
+      <p>
+        Sur un VPS unique (pas de LoadBalancer cloud), on utilise <code>hostNetwork: true</code>
+        pour que le contrôleur NGINX écoute directement sur les ports 80 et 443 du VPS.
+      </p>
+    </div>
+
+    <h3>Installer cert-manager pour HTTPS automatique</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Installer cert-manager
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+
+# Attendre que tous les pods soient prêts
+kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=120s
+
+# Vérifier
+kubectl get pods -n cert-manager
+# NAME                                       READY   STATUS    RESTARTS   AGE
+# cert-manager-xxx                           1/1     Running   0          30s
+# cert-manager-cainjector-xxx                1/1     Running   0          30s
+# cert-manager-webhook-xxx                   1/1     Running   0          30s</code></pre>
+    </div>
+
+    <h3>Configurer Let's Encrypt</h3>
+
+    <div class="terminal-box">
+      <header>k8s/base/cluster-issuer.yaml</header>
+      <pre><code class="language-yaml">apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: votre-email@domaine.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx</code></pre>
+    </div>
+
+    <h3>L'Ingress complet</h3>
+
+    <div class="terminal-box">
+      <header>k8s/base/ingress.yaml</header>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - mondomaine.com
+        - api.mondomaine.com
+      secretName: tls-certificate
+  rules:
+    # Frontend : mondomaine.com → frontend service
+    - host: mondomaine.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    # API : api.mondomaine.com → backend service
+    - host: api.mondomaine.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80</code></pre>
+    </div>
+
+    <h3>Configuration DNS (externe)</h3>
+
+    <div class="callout warning">
+      <strong>Chez votre registrar DNS</strong>
+      <p>
+        Créez deux enregistrements A pointant vers l'IP publique de votre VPS :
+      </p>
+      <ul>
+        <li><code>mondomaine.com</code> → <code>IP_DU_VPS</code></li>
+        <li><code>api.mondomaine.com</code> → <code>IP_DU_VPS</code></li>
+      </ul>
+    </div>
+
+    <h3>Tester l'accès</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># Appliquer le ClusterIssuer et l'Ingress
+kubectl apply -f k8s/base/cluster-issuer.yaml
+kubectl apply -k k8s/overlays/prod
+
+# Vérifier que le certificat est émis
+kubectl get certificate -n prod
+# NAME              READY   SECRET            AGE
+# tls-certificate   True    tls-certificate   2m
+
+# Tester l'accès HTTPS
+curl -I https://mondomaine.com
+# HTTP/2 200
+# ...
+
+curl -I https://api.mondomaine.com/actuator/health
+# HTTP/2 200
+# &#123;"status":"UP"&#125;</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <app-quiz [questions]="quiz" />
+
+</app-lesson-page>

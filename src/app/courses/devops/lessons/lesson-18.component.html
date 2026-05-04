@@ -1,0 +1,271 @@
+<app-lesson-page [data]="data">
+
+
+
+  <!-- ===== INSTALLATION K3S ===== -->
+  <section>
+
+    <h2>Installer k3s sur le VPS</h2>
+
+    <p>
+      <strong>k3s</strong> est une distribution Kubernetes certifiée CNCF, optimisée pour les environnements
+      à ressources limitées. Un seul binaire de ~70 MB qui inclut tout : containerd, Traefik, CoreDNS.
+      Parfait pour un VPS.
+    </p>
+
+    <div class="callout warning">
+      <strong>Pré-requis VPS</strong>
+      <ul>
+        <li>Ubuntu 22.04+ ou Debian 12+</li>
+        <li>Minimum 4 GB RAM (8 GB recommandé pour tout héberger)</li>
+        <li>2 vCPU minimum</li>
+        <li>Accès root ou sudo</li>
+        <li>Ports ouverts : 6443 (API), 80 (HTTP), 443 (HTTPS)</li>
+      </ul>
+    </div>
+
+    <h3>Étape 1 : Installation</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS (SSH)</header>
+      <pre><code class="language-bash"># Installer k3s (dernière version stable)
+curl -sfL https://get.k3s.io | sh -s - \
+  --disable traefik \
+  --write-kubeconfig-mode 644
+
+# --disable traefik : on utilisera NGINX Ingress Controller à la place
+# --write-kubeconfig-mode 644 : rend le kubeconfig lisible sans sudo</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Pourquoi désactiver Traefik ?</strong>
+      <p>
+        k3s inclut Traefik par défaut comme Ingress Controller. On le désactive pour installer
+        NGINX Ingress Controller qui est plus documenté, plus utilisé en entreprise,
+        et compatible avec les annotations que vous verrez dans les manifestes.
+      </p>
+    </div>
+
+    <h3>Étape 2 : Configurer kubectl</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># k3s place son kubeconfig ici :
+# /etc/rancher/k3s/k3s.yaml
+
+# Copier vers l'emplacement standard
+mkdir -p ~/.kube
+cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+chmod 600 ~/.kube/config
+
+# Vérifier que kubectl fonctionne
+kubectl get nodes
+
+# Résultat attendu :
+# NAME         STATUS   ROLES                  AGE   VERSION
+# mon-vps      Ready    control-plane,master   30s   v1.31.x+k3s1</code></pre>
+    </div>
+
+    <h3>Étape 3 : Vérifier le cluster</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Vérifier tous les pods système
+kubectl get pods -n kube-system
+
+# Résultat attendu (tous en Running) :
+# NAME                                      READY   STATUS    RESTARTS   AGE
+# coredns-xxx                               1/1     Running   0          1m
+# local-path-provisioner-xxx                1/1     Running   0          1m
+# metrics-server-xxx                        1/1     Running   0          1m
+
+# Vérifier les informations du cluster
+kubectl cluster-info
+
+# Résultat attendu :
+# Kubernetes control plane is running at https://127.0.0.1:6443
+# CoreDNS is running at https://127.0.0.1:6443/api/v1/...</code></pre>
+    </div>
+
+    <div class="callout success">
+      <strong>k3s est prêt</strong>
+      <p>
+        En une seule commande, vous avez un cluster Kubernetes complet avec containerd, CoreDNS,
+        Metrics Server et un provisioner de stockage local. Comparé à kubeadm qui nécessite
+        20+ étapes de configuration.
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== NAMESPACES ===== -->
+  <section>
+
+    <h2>Créer les namespaces</h2>
+
+    <p>
+      Les namespaces isolent logiquement les environnements dans un même cluster.
+      Chaque namespace a ses propres Deployments, Services, Secrets et quotas de ressources.
+    </p>
+
+    <div class="terminal-box">
+      <header>k8s/base/namespace.yaml</header>
+      <pre><code class="language-yaml">---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    env: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    env: staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod
+  labels:
+    env: prod</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Appliquer</header>
+      <pre><code class="language-bash"># Créer les 3 namespaces
+kubectl apply -f k8s/base/namespace.yaml
+
+# Vérifier
+kubectl get namespaces
+
+# Résultat :
+# NAME              STATUS   AGE
+# default           Active   5m
+# dev               Active   5s
+# kube-system       Active   5m
+# prod              Active   5s
+# staging           Active   5s</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== STRUCTURE KUSTOMIZE ===== -->
+  <section>
+
+    <h2>Structure Kustomize - Base + Overlays</h2>
+
+    <p>
+      <strong>Kustomize</strong> (intégré nativement dans kubectl) permet de gérer les variations entre environnements
+      sans dupliquer les manifestes. Le principe : une <code>base/</code> commune et des <code>overlays/</code>
+      qui patchent uniquement ce qui change.
+    </p>
+
+    <h3>Le fichier kustomization.yaml de base</h3>
+
+    <div class="terminal-box">
+      <header>k8s/base/kustomization.yaml</header>
+      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - postgres-statefulset.yaml
+  - postgres-service.yaml
+  - redis-deployment.yaml
+  - redis-service.yaml
+  - ingress.yaml</code></pre>
+    </div>
+
+    <h3>Overlay de production</h3>
+
+    <div class="terminal-box">
+      <header>k8s/overlays/prod/kustomization.yaml</header>
+      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: prod
+
+resources:
+  - ../../base
+  - hpa.yaml
+
+patches:
+  - path: patches/backend-replicas.yaml
+  - path: patches/resource-limits.yaml</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/overlays/prod/patches/backend-replicas.yaml</header>
+      <pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 3</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>k8s/overlays/dev/kustomization.yaml</header>
+      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dev
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1</code></pre>
+    </div>
+
+    <h3>Déployer par environnement</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># Prévisualiser ce que Kustomize va générer
+kubectl kustomize k8s/overlays/dev
+
+# Déployer en dev
+kubectl apply -k k8s/overlays/dev
+
+# Déployer en staging
+kubectl apply -k k8s/overlays/staging
+
+# Déployer en production
+kubectl apply -k k8s/overlays/prod
+
+# Vérifier un déploiement spécifique
+kubectl get all -n prod</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>kubectl apply -k vs kubectl apply -f</strong>
+      <p>
+        <code>-f</code> applique un fichier YAML brut. <code>-k</code> utilise Kustomize pour fusionner
+        la base avec l'overlay avant d'appliquer. C'est la méthode recommandée pour les environnements multiples.
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <app-quiz [questions]="quiz" />
+
+</app-lesson-page>

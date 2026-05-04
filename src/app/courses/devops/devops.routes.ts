@@ -18,4 +18,10 @@ export const DEVOPS_ROUTES: Routes = [
   { path: 'cdn-et-distribution', loadComponent: () => import('./lessons/lesson-14.component').then(m => m.Lesson14Component) },
   { path: 'bonnes-pratiques-production', loadComponent: () => import('./lessons/lesson-15.component').then(m => m.Lesson15Component) },
   { path: 'chaos-engineering', loadComponent: () => import('./lessons/lesson-16.component').then(m => m.Lesson16Component) },
+  { path: 'structure-et-dockerisation', loadComponent: () => import('./lessons/lesson-17.component').then(m => m.Lesson17Component) },
+  { path: 'installation-k3s-et-kustomize', loadComponent: () => import('./lessons/lesson-18.component').then(m => m.Lesson18Component) },
+  { path: 'deploiement-et-ingress-https', loadComponent: () => import('./lessons/lesson-19.component').then(m => m.Lesson19Component) },
+  { path: 'autoscaling-et-observabilite', loadComponent: () => import('./lessons/lesson-20.component').then(m => m.Lesson20Component) },
+  { path: 'logging-cicd-et-cdn', loadComponent: () => import('./lessons/lesson-21.component').then(m => m.Lesson21Component) },
+  { path: 'hardening-production', loadComponent: () => import('./lessons/lesson-22.component').then(m => m.Lesson22Component) },
 ];
