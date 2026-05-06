@@ -14,7 +14,7 @@
     </p>
 
     <div class="terminal-box">
-      <header>apps/overlays/production/resource-quota.yaml (dans repo-infra)</header>
+      <header>apps/deleevx/overlays/production/resource-quota.yaml (dans repo-infra)</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -32,7 +32,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>apps/overlays/production/limit-range.yaml (dans repo-infra)</header>
+      <header>apps/deleevx/overlays/production/limit-range.yaml (dans repo-infra)</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: LimitRange
 metadata:
@@ -58,8 +58,8 @@ spec:
     <div class="terminal-box">
       <header>Terminal - Appliquer et vérifier</header>
       <pre><code class="language-bash"># Appliquer (opération initiale — Flux gère les mises à jour ensuite)
-kubectl apply -f apps/overlays/production/resource-quota.yaml
-kubectl apply -f apps/overlays/production/limit-range.yaml
+kubectl apply -f apps/deleevx/overlays/production/resource-quota.yaml
+kubectl apply -f apps/deleevx/overlays/production/limit-range.yaml
 
 # Vérifier le quota
 kubectl describe resourcequota deleevx-prod-quota -n deleevx-prod
@@ -161,7 +161,7 @@ rm secret.yaml</code></pre>
     </p>
 
     <div class="terminal-box">
-      <header>k8s/apps/deleevx/overlays/prod/network-policy.yaml</header>
+      <header>k8s/apps/deleevx/overlays/production/network-policy.yaml</header>
       <pre><code class="language-yaml"># Politique par défaut : bloquer tout trafic entrant dans prod
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -541,7 +541,7 @@ rm ./sa-backup-key.json</code></pre>
     </p>
 
     <div class="terminal-box">
-      <header>k8s/apps/deleevx/overlays/prod/backup-cronjob.yaml</header>
+      <header>k8s/apps/deleevx/overlays/production/backup-cronjob.yaml</header>
       <pre><code class="language-yaml">apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -646,7 +646,7 @@ spec:
     <h3>4. Déclarer le CronJob dans l'overlay prod</h3>
 
     <div class="terminal-box">
-      <header>k8s/apps/deleevx/overlays/prod/kustomization.yaml</header>
+      <header>k8s/apps/deleevx/overlays/production/kustomization.yaml</header>
       <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -655,9 +655,14 @@ namespace: deleevx-prod
 resources:
   - ../../base
   - backup-cronjob.yaml       # ← ajouté ici (prod uniquement)
+  - resource-quota.yaml
+  - limit-range.yaml
+  - network-policy.yaml
+  - hpa.yaml
+  - backend/sealed-secret.yaml
 
 patches:
-  - path: patches/ingress.yaml</code></pre>
+  - path: backend/patches/ingress.yaml</code></pre>
     </div>
 
     <h3>5. Vérifier et tester</h3>

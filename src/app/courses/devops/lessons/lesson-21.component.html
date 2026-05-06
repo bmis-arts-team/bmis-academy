@@ -23,7 +23,7 @@
     </div>
 
     <div class="terminal-box">
-      <header>apps/overlays/production/hpa.yaml (dans repo-infra)</header>
+      <header>apps/deleevx/overlays/production/hpa.yaml (dans repo-infra)</header>
       <pre><code class="language-yaml">apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -88,7 +88,7 @@ spec:
     <div class="terminal-box">
       <header>Terminal - Simuler de la charge</header>
       <pre><code class="language-bash"># Appliquer le HPA (opération initiale — Flux gère les mises à jour ensuite)
-kubectl apply -f apps/overlays/production/hpa.yaml
+kubectl apply -f apps/deleevx/overlays/production/hpa.yaml
 
 # Vérifier le statut du HPA
 kubectl get hpa -n deleevx-prod
@@ -211,7 +211,7 @@ kubectl get secret monitoring-grafana -n monitoring \
     <h3>ServiceMonitor pour scraper le backend</h3>
 
     <div class="terminal-box">
-      <header>k8s/apps/deleevx/base/backend-servicemonitor.yaml</header>
+      <header>k8s/apps/deleevx/base/backend/servicemonitor.yaml</header>
       <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -230,8 +230,8 @@ spec:
 
     <div class="terminal-box">
       <header>Terminal - Vérifier</header>
-      <pre><code class="language-bash"># Appliquer le ServiceMonitor
-kubectl apply -f k8s/apps/deleevx/base/backend-servicemonitor.yaml
+      <pre><code class="language-bash"># Appliquer le ServiceMonitor (Flux le gère via la base)
+kubectl apply -f apps/deleevx/base/backend/servicemonitor.yaml
 
 # Vérifier que Prometheus scrape le backend
 # Ouvrir Grafana → Explorer → Prometheus

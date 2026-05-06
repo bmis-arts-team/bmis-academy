@@ -88,13 +88,15 @@ jobs:
           token: \${{ secrets.INFRA_REPO_TOKEN }}
           ref: main
 
-      - name: Update image tag in development overlay
+      - name: Update image tag in staging overlay
         run: |
           NEW_TAG="\${{ needs.build-and-push.outputs.image_tag }}"
 
-          # Mise à jour du tag dans le kustomization.yaml de l'overlay dev
-          sed -i "s|newTag:.*|newTag: \${NEW_TAG}|" \\
-            apps/overlays/development/backend/kustomization.yaml
+          # kustomize edit set image met à jour le champ images.newTag
+          # dans apps/deleevx/overlays/staging/kustomization.yaml
+          cd apps/deleevx/overlays/staging
+          kustomize edit set image \
+            ghcr.io/\${{ env.IMAGE_NAME }}=ghcr.io/\${{ env.IMAGE_NAME }}:\${NEW_TAG}
 
           echo "Image tag mis à jour : \${NEW_TAG}"
 
@@ -102,8 +104,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/overlays/development/backend/kustomization.yaml
-          git commit -m "chore(dev): deploy backend \${{ needs.build-and-push.outputs.image_tag }}"
+          git add apps/deleevx/overlays/staging/kustomization.yaml
+          git commit -m "chore(staging): deploy backend \${{ needs.build-and-push.outputs.image_tag }}"
           git push`;
 
   quiz: QuizQuestion[] = [

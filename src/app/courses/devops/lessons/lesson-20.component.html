@@ -1,4 +1,4 @@
-<app-lesson-page [data]="data">
+﻿<app-lesson-page [data]="data">
 
 
 
@@ -9,44 +9,124 @@
 
     <h3>Installer NGINX Ingress Controller</h3>
 
+    <p>
+      Comme pour Sealed Secrets, on ne lance aucune commande <code>helm</code> manuellement.
+      On déclare deux ressources Flux dans <code>infrastructure/ingress-nginx/</code> — Flux s'occupe du reste.
+    </p>
+
     <div class="terminal-box">
-      <header>Terminal - VPS</header>
-      <pre><code class="language-bash"># Installer NGINX Ingress Controller via Helm
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo update
+      <header>repo-infra/infrastructure/ingress-nginx/helmrepository.yaml</header>
+      <pre><code class="language-yaml">apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: ingress-nginx
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: https://kubernetes.github.io/ingress-nginx</code></pre>
+    </div>
 
-helm install ingress-nginx ingress-nginx/ingress-nginx   --namespace ingress-nginx   --create-namespace   --set controller.service.type=NodePort   --set controller.service.nodePorts.http=80   --set controller.service.nodePorts.https=443   --set controller.hostNetwork=true
-
-# Vérifier
-kubectl get pods -n ingress-nginx
-# NAME                                        READY   STATUS    RESTARTS   AGE
-# ingress-nginx-controller-xxx                1/1     Running   0          30s</code></pre>
+    <div class="terminal-box">
+      <header>repo-infra/infrastructure/ingress-nginx/helmrelease.yaml</header>
+      <pre><code class="language-yaml">apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ingress-nginx
+  namespace: flux-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: ingress-nginx
+      version: ">=4.0.0"
+      sourceRef:
+        kind: HelmRepository
+        name: ingress-nginx
+        namespace: flux-system
+  targetNamespace: ingress-nginx
+  install:
+    createNamespace: true
+    crds: CreateReplace
+  values:
+    controller:
+      # Sur un VPS sans LoadBalancer cloud, le contrôleur NGINX écoute
+      # directement sur les ports 80/443 du nœud via hostNetwork.
+      hostNetwork: true
+      service:
+        type: NodePort
+        nodePorts:
+          http: "80"
+          https: "443"</code></pre>
     </div>
 
     <div class="callout info">
-      <strong>hostNetwork=true</strong>
+      <strong>hostNetwork: true</strong>
       <p>
-        Sur un VPS unique (pas de LoadBalancer cloud), on utilise <code>hostNetwork: true</code>
-        pour que le contrôleur NGINX écoute directement sur les ports 80 et 443 du VPS.
+        Sur un VPS unique (pas de LoadBalancer cloud), <code>hostNetwork: true</code> fait écouter
+        le contrôleur NGINX directement sur les ports 80 et 443 du VPS.
+        En environnement cloud (GKE, EKS…), on utiliserait <code>service.type: LoadBalancer</code> à la place.
       </p>
     </div>
 
     <h3>Installer cert-manager pour HTTPS automatique</h3>
 
     <div class="terminal-box">
-      <header>Terminal - VPS</header>
-      <pre><code class="language-bash"># Installer cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+      <header>repo-infra/infrastructure/cert-manager/helmrepository.yaml</header>
+      <pre><code class="language-yaml">apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: cert-manager
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: https://charts.jetstack.io</code></pre>
+    </div>
 
-# Attendre que tous les pods soient prêts
-kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=120s
+    <div class="terminal-box">
+      <header>repo-infra/infrastructure/cert-manager/helmrelease.yaml</header>
+      <pre><code class="language-yaml">apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cert-manager
+  namespace: flux-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: cert-manager
+      version: ">=1.14.0"
+      sourceRef:
+        kind: HelmRepository
+        name: cert-manager
+        namespace: flux-system
+  targetNamespace: cert-manager
+  install:
+    createNamespace: true
+    crds: CreateReplace          # Installe les CRDs (ClusterIssuer, Certificate...)
+  values:
+    crds:
+      enabled: true</code></pre>
+    </div>
 
-# Vérifier
+    <div class="terminal-box">
+      <header>Terminal - Vérifier après réconciliation Flux</header>
+      <pre><code class="language-bash"># NGINX Ingress Controller
+kubectl get helmrelease -n flux-system ingress-nginx
+# NAME            AGE   READY   STATUS
+# ingress-nginx   3m    True    Release reconciliation succeeded
+
+kubectl get pods -n ingress-nginx
+# ingress-nginx-controller-xxx   1/1   Running   0   3m
+
+# cert-manager
+kubectl get helmrelease -n flux-system cert-manager
+# NAME           AGE   READY   STATUS
+# cert-manager   3m    True    Release reconciliation succeeded
+
 kubectl get pods -n cert-manager
-# NAME                                       READY   STATUS    RESTARTS   AGE
-# cert-manager-xxx                           1/1     Running   0          30s
-# cert-manager-cainjector-xxx                1/1     Running   0          30s
-# cert-manager-webhook-xxx                   1/1     Running   0          30s</code></pre>
+# cert-manager-xxx             1/1   Running   0   3m
+# cert-manager-cainjector-xxx  1/1   Running   0   3m
+# cert-manager-webhook-xxx     1/1   Running   0   3m</code></pre>
     </div>
 
     <h3>Configurer Let's Encrypt</h3>
@@ -74,7 +154,7 @@ spec:
     <p>
       La <code>base/</code> définit la <strong>structure</strong> de l'Ingress (services cibles, annotations).
       Les noms de domaine sont injectés par chaque overlay via un patch — sinon vous auriez les URLs de prod
-      codées en dur dans la base, ce qui est faux pour dev et staging.
+      codées en dur dans la base, ce qui est faux pour staging.
     </p>
 
     <div class="terminal-box">
@@ -136,7 +216,7 @@ spec:
     </p>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/ingress-sse.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/ingress-sse.yaml</header>
       <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -145,17 +225,25 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
 
+    # Activer le routing par regex — requis pour le path pattern ci-dessous
+    nginx.ingress.kubernetes.io/use-regex: "true"
+
     # Désactiver le buffering — indispensable pour SSE
     # Sans ça, NGINX retient les événements jusqu'à remplir le buffer
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
 
-    # Timeout de lecture élevé — les connexions SSE sont longues
-    # 3600s = 1h, ajustez selon vos besoins
+    # Timeout de lecture élevé — les connexions SSE sont longues (1h)
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
-    # Désactiver le cache pour ces routes
+    # Configuration fine du proxy SSE — appliquée dans le bloc location
     nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_http_version 1.1;
+      proxy_set_header Connection "";   # Vide = keep-alive HTTP/1.1, requis pour SSE
+      proxy_buffering off;
+      proxy_cache off;
+      gzip off;                         # Gzip incompatible avec le streaming chunked
+      chunked_transfer_encoding on;
       add_header Cache-Control "no-cache";
       add_header X-Accel-Buffering "no";
 spec:
@@ -168,8 +256,12 @@ spec:
     - host: api.placeholder.com
       http:
         paths:
-          - path: /api/events      # Adaptez au(x) chemin(s) SSE de votre backend
-            pathType: Prefix
+          # Couvre tous les endpoints SSE/stream du backend :
+          # /api/v1/&#123;ressource&#125;/sse
+          # /api/v1/&#123;ressource&#125;/stream
+          # /api/v1/&#123;ressource&#125;/stream-public
+          - path: /api/v1/.+/(sse|stream|stream-public)(/.*)?$
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: backend
@@ -177,14 +269,26 @@ spec:
                   number: 80</code></pre>
     </div>
 
-    <div class="callout info">
-      <strong>X-Accel-Buffering: no</strong>
+    <div class="callout warning">
+      <strong>pathType: ImplementationSpecific pour les regex</strong>
       <p>
-        Ce header demande à NGINX de désactiver le buffering au niveau du proxy upstream.
-        C'est le mécanisme standard reconnu par NGINX, Varnish et d'autres proxies.
-        Spring Boot peut aussi l'émettre lui-même depuis le contrôleur SSE :
+        <code>pathType: Prefix</code> et <code>Exact</code> ne supportent pas les expressions régulières.
+        <code>ImplementationSpecific</code> délègue l'interprétation à l'Ingress Controller — NGINX
+        l'utilise comme un <code>location ~</code>, ce qui correspond exactement à la config NGINX native
+        <code>location ~ ^/api/v1/.*/(sse|stream|stream-public)(/.*)?$</code>.
       </p>
-      <pre><code class="language-java">&#64;GetMapping(value = "/api/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    </div>
+
+    <div class="callout info">
+      <strong>Pourquoi ces annotations ?</strong>
+      <ul>
+        <li><code>proxy_http_version 1.1</code> + <code>Connection: ""</code> — HTTP/1.1 est requis pour le keep-alive SSE ; vider le header <code>Connection</code> empêche NGINX de le downgrader en HTTP/1.0.</li>
+        <li><code>gzip off</code> — gzip bufférise la réponse avant de la compresser : incompatible avec le streaming chunked.</li>
+        <li><code>chunked_transfer_encoding on</code> — permet l'envoi des événements au fur et à mesure, sans attendre la fin de la réponse.</li>
+        <li><code>proxy_cache off</code> + <code>X-Accel-Buffering: no</code> — double garantie : désactive le cache et signale à tout proxy intermédiaire de ne pas buffériser.</li>
+      </ul>
+      <p>Spring Boot peut aussi émettre <code>X-Accel-Buffering: no</code> directement depuis le contrôleur :</p>
+      <pre><code class="language-java">&#64;GetMapping(value = "/api/v1/notifications/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 public SseEmitter stream(HttpServletResponse response) &#123;
     response.setHeader("X-Accel-Buffering", "no");
     response.setHeader("Cache-Control", "no-cache");
@@ -203,11 +307,11 @@ public SseEmitter stream(HttpServletResponse response) &#123;
 
     <p>
       Chaque overlay surcharge les hosts avec ses propres domaines.
-      Dev et staging utilisent des sous-domaines dédiés, prod utilise le domaine principal.
+      Staging utilise des sous-domaines dédiés, prod utilise le domaine principal.
     </p>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/overlays/development/backend/patches/ingress.yaml</header>
+      <header>repo-infra/apps/deleevx/overlays/staging/backend/patches/ingress.yaml</header>
       <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -215,46 +319,11 @@ metadata:
 spec:
   tls:
     - hosts:
-        - dev.deleevx.com
-        - api-dev.deleevx.com
-      secretName: tls-certificate-dev
-  rules:
-    - host: dev.deleevx.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: frontend
-                port:
-                  number: 80
-    - host: api-dev.deleevx.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: backend
-                port:
-                  number: 80</code></pre>
-    </div>
-
-    <div class="terminal-box">
-      <header>repo-infra/apps/overlays/staging/backend/patches/ingress.yaml</header>
-      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: main-ingress
-spec:
-  tls:
-    - hosts:
-        - staging.deleevx.com
-        - api-staging.deleevx.com
+        - staging.app.deleevx.com
+        - staging.api.deleevx.com
       secretName: tls-certificate-staging
   rules:
-    - host: staging.deleevx.com
+    - host: staging.app.deleevx.com
       http:
         paths:
           - path: /
@@ -264,7 +333,7 @@ spec:
                 name: frontend
                 port:
                   number: 80
-    - host: api-staging.deleevx.com
+    - host: staging.api.deleevx.com
       http:
         paths:
           - path: /
@@ -277,7 +346,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/overlays/production/backend/patches/ingress.yaml</header>
+      <header>repo-infra/apps/deleevx/overlays/production/backend/patches/ingress.yaml</header>
       <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -285,11 +354,11 @@ metadata:
 spec:
   tls:
     - hosts:
-        - deleevx.com
+        - app.deleevx.com
         - api.deleevx.com
       secretName: tls-certificate-prod
   rules:
-    - host: deleevx.com
+    - host: app.deleevx.com
       http:
         paths:
           - path: /
@@ -327,9 +396,8 @@ spec:
         Créez des enregistrements A pointant vers l'IP publique de votre VPS pour chaque environnement :
       </p>
       <ul>
-        <li><code>deleevx.com</code> + <code>api.deleevx.com</code> → <code>IP_DU_VPS</code> (prod)</li>
-        <li><code>staging.deleevx.com</code> + <code>api-staging.deleevx.com</code> → <code>IP_DU_VPS</code></li>
-        <li><code>dev.deleevx.com</code> + <code>api-dev.deleevx.com</code> → <code>IP_DU_VPS</code></li>
+        <li><code>app.deleevx.com</code> + <code>api.deleevx.com</code> → <code>IP_DU_VPS</code> (prod)</li>
+        <li><code>staging.app.deleevx.com</code> + <code>staging.api.deleevx.com</code> → <code>IP_DU_VPS</code></li>
       </ul>
     </div>
 
@@ -388,11 +456,11 @@ curl -I https://api.mondomaine.com/actuator/health
 
     <div class="terminal-box">
       <header>Terminal - Désactiver Traefik au bootstrap K3s</header>
-      <pre><code class="language-bash"># Installer K3s sans Traefik intégré
+      <pre><code class="language-bash"># Installer K3s sans Traefik intégré (déjà fait en lesson-18)
 curl -sfL https://get.k3s.io | sh -s - --disable traefik
 
-# Puis installer NGINX Ingress Controller
-helm install ingress-nginx ingress-nginx/ingress-nginx   --namespace ingress-nginx --create-namespace   --set controller.hostNetwork=true</code></pre>
+# Puis lancer le bootstrap Flux — il lit infrastructure/ingress-nginx/
+# et installe NGINX Ingress Controller automatiquement via HelmRelease</code></pre>
     </div>
 
     <h3>Stockage persistant avec local-path</h3>
@@ -475,32 +543,32 @@ kubectl get pods -n flux-system
 # source-controller-xxx                 1/1     Running   0          1m</code></pre>
     </div>
 
-    <h3>Déploiement automatique sur la branche <code>develop</code></h3>
+    <h3>Déploiement automatique vers staging</h3>
 
     <p>
-      Chaque push sur <code>develop</code> déclenche un pipeline qui, si le build passe,
-      met à jour automatiquement le tag d'image dans l'overlay <code>development</code> de
-      <code>repo-infra</code>. Flux détecte la modification et déploie sur l'environnement dev
-      sans intervention humaine.
+      Chaque merge dans <code>main</code> déclenche un pipeline qui, si le build passe,
+      met à jour automatiquement le tag d'image dans l'overlay <code>staging</code> de
+      <code>repo-infra</code>. Flux détecte la modification et déploie sans intervention humaine.
+      C'est là que le PO valide et que les tests d'intégration tournent avant la promotion en prod.
     </p>
 
     <div class="callout info">
-      <strong>Séquence complète push → déploiement dev</strong>
+      <strong>Séquence complète merge → déploiement staging</strong>
       <ol>
-        <li>Push sur <code>develop</code> dans <code>repo-backend</code></li>
-        <li>GitHub Actions build l'image et la pousse sur GHCR avec le tag <code>develop-&lt;sha&gt;</code></li>
-        <li>Le pipeline met à jour <code>newTag</code> dans l'overlay <code>development</code> de <code>repo-infra</code> et commit</li>
+        <li>Merge d'une PR dans <code>main</code> sur <code>repo-backend</code></li>
+        <li>GitHub Actions build l'image et la pousse sur GHCR avec le tag <code>staging-&lt;sha&gt;</code></li>
+        <li>Le pipeline met à jour <code>newTag</code> dans l'overlay <code>staging</code> de <code>repo-infra</code> et commit</li>
         <li>Flux détecte le commit dans <code>repo-infra</code> et applique le manifeste</li>
-        <li>Rolling update automatique sur le namespace <code>development</code></li>
+        <li>Rolling update automatique sur le namespace <code>deleevx-staging</code></li>
       </ol>
       <p>
-        Le tag <code>develop-&lt;sha&gt;</code> (ex : <code>develop-a3f9c12</code>) est immutable et traçable —
-        on sait exactement quel commit est déployé sur dev.
+        Le tag <code>staging-&lt;sha&gt;</code> (ex : <code>staging-a3f9c12</code>) est immutable et traçable —
+        on sait exactement quel commit est déployé en staging.
       </p>
     </div>
 
     <div class="terminal-box">
-      <header>repo-backend/.github/workflows/deploy-dev.yaml</header>
+      <header>repo-backend/.github/workflows/deploy-staging.yaml</header>
       <pre><code class="language-yaml" [textContent]="deployDevWorkflow"></code></pre>
     </div>
     <div class="callout warning">
@@ -512,7 +580,7 @@ kubectl get pods -n flux-system
         et stockez-le dans les secrets de <code>repo-backend</code> sous le nom <code>INFRA_REPO_TOKEN</code>.
       </p>
       <p>
-        Même logique pour <code>repo-frontend</code> → overlay <code>development/frontend</code>.
+        Même logique pour <code>repo-frontend</code> → overlay <code>staging/frontend</code>.
       </p>
     </div>
 
@@ -544,31 +612,24 @@ flux events</code></pre>
     <h3>Exemple d'overlay production avec tag précis</h3>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/overlays/production/backend/kustomization.yaml</header>
+      <header>repo-infra/apps/deleevx/overlays/production/backend/kustomization.yaml</header>
       <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: production
+namespace: deleevx-prod
 
 resources:
   - ../../../base/backend
   - sealed-secret.yaml        # Secret chiffré propre à la prod
 
 patches:
-  - path: patch-replicas.yaml
-  - path: patch-resources.yaml
+  - path: patches/ingress.yaml
+  - path: patch-uploads-pvc.yaml
 
 # Tag précis en prod — jamais "latest"
 # Mis à jour automatiquement par la CI à chaque release
 images:
   - name: ghcr.io/ITCloud-Consulting/deleevx-backend
-    newTag: "v1.4.2"
-
-configMapGenerator:
-  - name: backend-config
-    literals:
-      - SPRING_PROFILES_ACTIVE=prod
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/mydb
-      - LOG_LEVEL=warn</code></pre>
+    newTag: "v1.4.2"</code></pre>
     </div>
 
   </section>

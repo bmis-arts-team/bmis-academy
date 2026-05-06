@@ -1,4 +1,4 @@
-<app-lesson-page [data]="data">
+﻿<app-lesson-page [data]="data">
 
 
 
@@ -45,51 +45,44 @@
 │       └── release.yaml
 │
 ├── apps/
-│   ├── base/                        # Manifestes "purs" sans environnement
-│   │   ├── backend/
-│   │   │   ├── deployment.yaml
-│   │   │   ├── service.yaml
-│   │   │   ├── ingress.yaml
-│   │   │   ├── ingress-sse.yaml
-│   │   │   ├── postgres-statefulset.yaml
-│   │   │   ├── postgres-service.yaml
-│   │   │   ├── redis-deployment.yaml
-│   │   │   ├── redis-service.yaml
-│   │   │   ├── uploads-pvc.yaml          # PersistentVolumeClaim pour les fichiers uploadés
-│   │   │   └── kustomization.yaml
-│   │   └── frontend/
-│   │       ├── deployment.yaml
-│   │       ├── service.yaml
-│   │       ├── ingress.yaml
-│   │       └── kustomization.yaml
-│   │
-│   └── overlays/                    # Surcharges par environnement
-│       ├── development/
+│   └── deleevx/                     # Une app par dossier → nouvelle-app/ à côté demain
+│       ├── base/                    # Manifestes "purs" sans environnement
 │       │   ├── backend/
-│       │   │   ├── kustomization.yaml
-│       │   │   ├── patch-replicas.yaml    # replicas: 1
-│       │   │   └── patch-resources.yaml   # limits réduites
+│       │   │   ├── deployment.yaml
+│       │   │   ├── service.yaml
+│       │   │   ├── ingress.yaml
+│       │   │   ├── ingress-sse.yaml
+│       │   │   ├── postgres-statefulset.yaml
+│       │   │   ├── postgres-service.yaml
+│       │   │   ├── redis-deployment.yaml
+│       │   │   ├── redis-service.yaml
+│       │   │   ├── uploads-pvc.yaml          # PersistentVolumeClaim pour les fichiers uploadés
+│       │   │   └── kustomization.yaml
 │       │   └── frontend/
+│       │       ├── deployment.yaml
+│       │       ├── service.yaml
+│       │       ├── ingress.yaml
 │       │       └── kustomization.yaml
-│       ├── staging/
-│       │   ├── backend/
-│       │   │   ├── kustomization.yaml
-│       │   │   ├── patch-replicas.yaml    # replicas: 2
-│       │   │   └── sealed-secret.yaml     # Secret chiffré staging
-│       │   └── frontend/
-│       │       └── kustomization.yaml
-│       └── production/
-│           ├── backend/
-│           │   ├── kustomization.yaml
-│           │   ├── patch-replicas.yaml    # replicas: 3
-│           │   ├── patch-resources.yaml   # limits de prod
-│           │   └── sealed-secret.yaml     # Secret chiffré prod
-│           └── frontend/
-│               ├── kustomization.yaml
-│               └── sealed-secret.yaml
+│       │
+│       └── overlays/                # Surcharges par environnement
+│           ├── staging/
+│           │   ├── backend/
+│           │   │   ├── kustomization.yaml
+│           │   │   ├── patch-replicas.yaml    # replicas: 2
+│           │   │   └── sealed-secret.yaml     # Secret chiffré staging
+│           │   └── frontend/
+│           │       └── kustomization.yaml
+│           └── production/
+│               ├── backend/
+│               │   ├── kustomization.yaml
+│               │   ├── patch-replicas.yaml    # replicas: 3
+│               │   ├── patch-resources.yaml   # limits de prod
+│               │   └── sealed-secret.yaml     # Secret chiffré prod
+│               └── frontend/
+│                   ├── kustomization.yaml
+│                   └── sealed-secret.yaml
 │
 ├── namespaces/
-│   ├── development.yaml
 │   ├── staging.yaml
 │   └── production.yaml
 │
@@ -126,7 +119,7 @@
     </p>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/deployment.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/deployment.yaml</header>
       <pre><code class="language-yaml"># La version de l'API Kubernetes à utiliser pour cette ressource.
 # "apps/v1" est le groupe stable pour les workloads (Deployment, StatefulSet, DaemonSet...)
 apiVersion: apps/v1
@@ -136,7 +129,7 @@ apiVersion: apps/v1
 kind: Deployment
 
 metadata:
-  # Nom unique du Deployment dans le namespace Kubernetes (dev / staging / prod).
+  # Nom unique du Deployment dans le namespace Kubernetes (staging / prod).
   # kubectl get deployment backend -n deleevx-prod
   #
   # Convention adoptée : 1 namespace par app × environnement (app-env).
@@ -153,7 +146,7 @@ metadata:
 spec:
   # Nombre de réplicas (pods identiques) à maintenir en permanence.
   # Si un pod crash, Kubernetes en recrée un immédiatement pour atteindre ce chiffre.
-  # Valeur surchargée dans overlays/prod (3 replicas) et overlays/dev (1 replica).
+  # Valeur surchargée dans overlays/production (3 replicas) et overlays/staging (2 replicas).
   replicas: 2
 
   # Le selector définit quels pods ce Deployment "possède" et gère.
@@ -321,7 +314,7 @@ spec:
     </p>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/uploads-pvc.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/uploads-pvc.yaml</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -366,7 +359,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/overlays/production/backend/patch-uploads-pvc.yaml</header>
+      <header>repo-infra/apps/deleevx/overlays/production/backend/patch-uploads-pvc.yaml</header>
       <pre><code class="language-yaml"># Surcharge la taille du volume pour la production.
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -390,7 +383,7 @@ kubectl exec -n production deploy/backend -- du -sh /app/uploads</code></pre>
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/service.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/service.yaml</header>
       <pre><code class="language-yaml"># "v1" = API core de Kubernetes (pas de groupe "apps/").
 # Services, ConfigMaps, Secrets, Namespaces sont tous dans le groupe "v1".
 apiVersion: v1
@@ -401,7 +394,7 @@ kind: Service
 
 metadata:
   # Ce nom devient le nom DNS dans le cluster.
-  # "namespace" dans les exemples ci-dessous = namespace Kubernetes (dev/staging/prod).
+  # "namespace" dans les exemples ci-dessous = namespace Kubernetes (staging/prod).
   #
   # Forme courte   : http://backend:80
   #   → fonctionne depuis un pod du MÊME namespace (ex: depuis le frontend dans deleevx-prod)
@@ -453,7 +446,7 @@ spec:
     <h2>Déployer le Frontend Angular</h2>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/frontend/deployment.yaml</header>
+      <header>repo-infra/apps/deleevx/base/frontend/deployment.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -498,7 +491,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/frontend/service.yaml</header>
+      <header>repo-infra/apps/deleevx/base/frontend/service.yaml</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: Service
 metadata:
@@ -535,7 +528,7 @@ spec:
     <h2>PostgreSQL et Redis</h2>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/postgres-statefulset.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/postgres-statefulset.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -603,7 +596,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/postgres-service.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/postgres-service.yaml</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: Service
 metadata:
@@ -618,7 +611,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/redis-deployment.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/redis-deployment.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -652,7 +645,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/base/backend/redis-service.yaml</header>
+      <header>repo-infra/apps/deleevx/base/backend/redis-service.yaml</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: Service
 metadata:
@@ -678,16 +671,83 @@ spec:
       </p>
     </div>
 
-    <h4>1 — Installer le contrôleur Sealed Secrets (une seule fois)</h4>
+    <h4>1 — Installer le contrôleur Sealed Secrets via GitOps</h4>
+
+    <div class="callout info">
+      <strong>Helm CLI n'est pas installé sur le VPS</strong>
+      <p>
+        Les ressources <code>HelmRepository</code> et <code>HelmRelease</code> sont des CRDs propres à Flux.
+        C'est le <strong>helm-controller</strong> de Flux — déployé automatiquement lors du bootstrap Flux —
+        qui les interprète et exécute les opérations Helm en interne.
+        Aucun binaire <code>helm</code> n'est requis sur le VPS.
+      </p>
+      <p>
+        En revanche, vous pouvez installer Helm CLI <strong>sur votre machine locale</strong> si vous souhaitez
+        prévisualiser le rendu d'un chart (<code>helm template</code>) ou inspecter les valeurs disponibles
+        (<code>helm show values</code>) avant de rédiger votre <code>HelmRelease</code>.
+      </p>
+    </div>
+
+    <div class="callout warning">
+      <strong>Pas de <code>helm install</code> manuel</strong>
+      <p>
+        Dans une architecture GitOps, on ne lance jamais <code>helm install</code> en ligne de commande.
+        Ce serait un changement hors Git — invisible, non auditable, non réconciliable.
+        À la place, on déclare le chart comme une ressource Flux dans <code>infrastructure/sealed-secrets/</code> :
+        Flux détecte les fichiers, installe le chart, et le réconcilie en permanence avec l'état dans Git.
+      </p>
+    </div>
 
     <div class="terminal-box">
-      <header>Terminal - VPS</header>
-      <pre><code class="language-bash">helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
-helm install sealed-secrets sealed-secrets/sealed-secrets   -n kube-system   --set fullnameOverride=sealed-secrets-controller
+      <header>repo-infra/infrastructure/sealed-secrets/helmrepository.yaml</header>
+      <pre><code class="language-yaml"># HelmRepository = source Flux qui pointe vers un registre de charts Helm.
+# Flux vérifie régulièrement ce registre pour détecter de nouvelles versions.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: sealed-secrets
+  namespace: flux-system
+spec:
+  interval: 1h                                             # Vérifier les nouvelles versions toutes les heures
+  url: https://bitnami-labs.github.io/sealed-secrets</code></pre>
+    </div>
 
-# Vérifier
+    <div class="terminal-box">
+      <header>repo-infra/infrastructure/sealed-secrets/helmrelease.yaml</header>
+      <pre><code class="language-yaml"># HelmRelease = installation d'un chart Helm gérée par Flux.
+# Équivalent déclaratif de "helm install" — mais dans Git, donc auditable et réconcilié.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sealed-secrets
+  namespace: flux-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: sealed-secrets           # Nom du chart dans le HelmRepository
+      version: ">=2.0.0"              # Contrainte de version (semver) — Flux met à jour automatiquement
+      sourceRef:
+        kind: HelmRepository
+        name: sealed-secrets          # Référence au HelmRepository déclaré ci-dessus
+        namespace: flux-system
+  targetNamespace: kube-system        # Namespace de déploiement du contrôleur
+  install:
+    crds: CreateReplace               # Installer/mettre à jour les CRDs au déploiement
+  values:
+    fullnameOverride: sealed-secrets-controller</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Vérifier après que Flux a appliqué</header>
+      <pre><code class="language-bash"># Vérifier que Flux a réconcilié le HelmRelease
+kubectl get helmrelease -n flux-system
+# NAME             AGE   READY   STATUS
+# sealed-secrets   2m    True    Release reconciliation succeeded
+
+# Vérifier le pod contrôleur
 kubectl get pods -n kube-system | grep sealed
-# sealed-secrets-controller-xxx   1/1   Running   0   30s</code></pre>
+# sealed-secrets-controller-xxx   1/1   Running   0   2m</code></pre>
     </div>
 
     <h4>2 — Créer un secret chiffré</h4>
@@ -703,14 +763,14 @@ SECRET_NAME=$3  # ex: db-credentials
 KEY=$4          # ex: username
 VALUE=$5        # ex: myapp
 
-kubectl create secret generic $&#123;SECRET_NAME&#125;   --from-literal=$&#123;KEY&#125;="$&#123;VALUE&#125;"   --namespace=$&#123;NAMESPACE&#125;   --dry-run=client   -o yaml | kubeseal   --controller-namespace kube-system   --controller-name sealed-secrets-controller   --format yaml > apps/overlays/$&#123;NAMESPACE&#125;/$&#123;APP&#125;/sealed-secret.yaml
+kubectl create secret generic $&#123;SECRET_NAME&#125;   --from-literal=$&#123;KEY&#125;="$&#123;VALUE&#125;"   --namespace=$&#123;NAMESPACE&#125;   --dry-run=client   -o yaml | kubeseal   --controller-namespace kube-system   --controller-name sealed-secrets-controller   --format yaml > apps/deleevx/overlays/$&#123;NAMESPACE&#125;/$&#123;APP&#125;/sealed-secret.yaml
 
-echo "Secret scellé → apps/overlays/$&#123;NAMESPACE&#125;/$&#123;APP&#125;/sealed-secret.yaml"
+echo "Secret scellé → apps/deleevx/overlays/$&#123;NAMESPACE&#125;/$&#123;APP&#125;/sealed-secret.yaml"
 echo "Ce fichier est safe à commiter dans Git."</code></pre>
     </div>
 
     <div class="terminal-box">
-      <header>repo-infra/apps/overlays/production/backend/sealed-secret.yaml (résultat)</header>
+      <header>repo-infra/apps/deleevx/overlays/production/backend/sealed-secret.yaml (résultat)</header>
       <pre><code class="language-yaml"># Safe à commiter — chiffré avec la clé publique du cluster.
 # Seul le cluster peut le déchiffrer avec sa clé privée.
 apiVersion: bitnami.com/v1alpha1

@@ -116,15 +116,27 @@ kubectl cluster-info
       chaque app a ses propres namespaces isolés, avec ses propres Secrets et quotas.
     </p>
 
-    <div class="terminal-box">
-      <header>repo-infra/namespaces/development.yaml</header>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Namespace
-metadata:
-  name: deleevx-dev
-  labels:
-    app: deleevx
-    env: development</code></pre>
+    <div class="callout info">
+      <strong>Labels standards Kubernetes — pas de labels maison</strong>
+      <p>
+        Les labels <code>app: deleevx</code> et <code>env: staging</code> sont des conventions informelles.
+        Kubernetes définit un schéma de labels recommandés sous le préfixe <code>app.kubernetes.io/</code>
+        reconnus par les outils de l'écosystème (Lens, ArgoCD, Flux, Prometheus…).
+        Un namespace n'est pas une app — c'est une frontière d'isolation.
+        Le bon label est <code>app.kubernetes.io/part-of</code> : "ce namespace appartient à l'app DeleevX".
+      </p>
+      <ul>
+        <li><code>app.kubernetes.io/part-of</code> — l'application à laquelle appartient ce namespace</li>
+        <li><code>app.kubernetes.io/managed-by</code> — l'outil qui gère cette ressource (Flux)</li>
+        <li><code>environment</code> — l'environnement cible (mot complet, sans abréviation)</li>
+      </ul>
+      <p>
+        Avec ce schéma, <code>kubectl get namespaces -l app.kubernetes.io/part-of=deleevx</code>
+        liste uniquement les namespaces DeleevX, et
+        <code>kubectl get namespaces -l environment=production</code>
+        liste tous les namespaces de prod — toutes apps confondues.
+        Demain, <code>nouvelle-app-prod</code> aura <code>part-of: nouvelle-app</code> et les deux coexisteront sans ambiguïté.
+      </p>
     </div>
 
     <div class="terminal-box">
@@ -134,8 +146,9 @@ kind: Namespace
 metadata:
   name: deleevx-staging
   labels:
-    app: deleevx
-    env: staging</code></pre>
+    app.kubernetes.io/part-of: deleevx
+    app.kubernetes.io/managed-by: flux
+    environment: staging</code></pre>
     </div>
 
     <div class="terminal-box">
@@ -145,8 +158,9 @@ kind: Namespace
 metadata:
   name: deleevx-prod
   labels:
-    app: deleevx
-    env: production</code></pre>
+    app.kubernetes.io/part-of: deleevx
+    app.kubernetes.io/managed-by: flux
+    environment: production</code></pre>
     </div>
 
     <div class="terminal-box">
@@ -154,20 +168,25 @@ metadata:
       <pre><code class="language-bash"># Créer les namespaces DeleevX (opération initiale)
 kubectl apply -f namespaces/
 
-# Vérifier
+# Vérifier tous les namespaces
 kubectl get namespaces
 
 # Résultat :
-# NAME              STATUS   AGE
-# deleevx-dev       Active   5s
-# deleevx-prod      Active   5s
-# deleevx-staging   Active   5s
-# default           Active   5m
-# kube-system       Active   5m
+# NAME               STATUS   AGE
+# deleevx-prod       Active   5s
+# deleevx-staging    Active   5s
+# default            Active   5m
+# kube-system        Active   5m
+
+# Filtrer par app (toutes les envs d'une app)
+kubectl get namespaces -l app.kubernetes.io/part-of=deleevx
+
+# Filtrer par environnement (toutes les apps de staging)
+kubectl get namespaces -l environment=staging
 
 # Demain, pour une 2ème app, on ajouterait :
-# k8s/namespaces/nouvelle-app-dev.yaml
-# k8s/namespaces/nouvelle-app-prod.yaml</code></pre>
+# namespaces/nouvelle-app-staging.yaml  → part-of: nouvelle-app
+# namespaces/nouvelle-app-prod.yaml     → part-of: nouvelle-app</code></pre>
     </div>
 
   </section>
@@ -186,36 +205,29 @@ kubectl get namespaces
     </p>
 
     <p>
-      Les manifestes de DeleevX vivent dans <code>apps/</code> de <code>repo-infra</code>.
+      Les manifestes de DeleevX vivent dans <code>apps/deleevx/</code> de <code>repo-infra</code>.
       Si demain vous hébergez une deuxième application sur le même cluster, vous créez simplement
-      <code>apps/base/nouvelle-app/</code> — les namespaces et la structure existante ne bougent pas.
+      <code>apps/nouvelle-app/</code> avec ses dossiers <code>base/</code> et <code>overlays/</code> — les namespaces et la structure existante ne bougent pas.
     </p>
 
     <h3>Le fichier kustomization.yaml de base</h3>
 
     <div class="terminal-box">
-      <header>apps/base/kustomization.yaml</header>
+      <header>apps/deleevx/base/kustomization.yaml</header>
       <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # Les namespaces sont gérés séparément dans k8s/namespaces/
+# Chaque composant a son propre kustomization.yaml dans son dossier
 resources:
-  - backend-deployment.yaml
-  - backend-service.yaml
-  - frontend-deployment.yaml
-  - frontend-service.yaml
-  - postgres-statefulset.yaml
-  - postgres-service.yaml
-  - redis-deployment.yaml
-  - redis-service.yaml
-  - ingress.yaml
-  - ingress-sse.yaml</code></pre>
+  - backend/
+  - frontend/</code></pre>
     </div>
 
     <h3>Overlay de production</h3>
 
     <div class="terminal-box">
-      <header>apps/overlays/production/kustomization.yaml</header>
+      <header>apps/deleevx/overlays/production/kustomization.yaml</header>
       <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -231,7 +243,7 @@ patches:
     </div>
 
     <div class="terminal-box">
-      <header>apps/overlays/production/patches/backend-replicas.yaml</header>
+      <header>apps/deleevx/overlays/production/patches/backend-replicas.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -240,40 +252,28 @@ spec:
   replicas: 3</code></pre>
     </div>
 
-    <div class="terminal-box">
-      <header>apps/overlays/development/kustomization.yaml</header>
-      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-namespace: deleevx-dev
-
-resources:
-  - ../../base
-
-patches:
-  - target:
-      kind: Deployment
-    patch: |
-      - op: replace
-        path: /spec/replicas
-        value: 1</code></pre>
-    </div>
-
     <h3>Déployer par environnement</h3>
+
+    <div class="callout info">
+      <strong>Pas de namespace dev dans le cluster</strong>
+      <p>
+        Le développement se fait en local avec Docker Compose — feedback immédiat, pas de push d'image,
+        pas de manifeste à appliquer. Le cluster ne connaît que <strong>staging</strong> et <strong>production</strong>.
+        Staging joue le rôle de validation pré-prod : c'est là que le PO valide, que les tests d'intégration
+        tournent et que les migrations DB sont testées avant d'aller en prod.
+      </p>
+    </div>
 
     <div class="terminal-box">
       <header>Terminal</header>
       <pre><code class="language-bash"># Prévisualiser ce que Kustomize va générer
-kubectl kustomize apps/overlays/development
+kubectl kustomize apps/deleevx/overlays/staging
 
-# Déployer en dev (opération initiale ou test — Flux gère ensuite le reste)
-kubectl apply -k apps/overlays/development
-
-# Déployer en staging
-kubectl apply -k apps/overlays/staging
+# Déployer en staging (opération initiale ou test — Flux gère ensuite le reste)
+kubectl apply -k apps/deleevx/overlays/staging
 
 # Déployer en production
-kubectl apply -k apps/overlays/production
+kubectl apply -k apps/deleevx/overlays/production
 
 # Vérifier un déploiement spécifique
 kubectl get all -n deleevx-prod</code></pre>

@@ -70,7 +70,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ── JOB 3 : Mettre à jour repo-infra (develop → dev + staging)
+  # ── JOB 3 : Mettre à jour repo-infra (develop → staging)
   update-infra-dev:
     needs: build
     runs-on: ubuntu-latest
@@ -83,24 +83,23 @@ jobs:
           token: \${{ secrets.INFRA_REPO_TOKEN }}
           ref: main
 
-      - name: Mettre à jour les overlays development et staging
+      - name: Mettre à jour l'overlay staging
         run: |
           TAG=\${{ needs.build.outputs.tag }}
-          for ENV in development staging; do
-            cd apps/overlays/$ENV/backend
-            kustomize edit set image \${{ env.IMAGE }}=\${{ env.IMAGE }}:$TAG
-            cd -
-          done
+          cd apps/deleevx/overlays/staging
+          kustomize edit set image \${{ env.IMAGE }}=\${{ env.IMAGE }}:$TAG
 
       - name: Commit & push repo-infra
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/overlays/development/backend/kustomization.yaml \\
-                  apps/overlays/staging/backend/kustomization.yaml
-          git commit -m "chore(backend/dev+staging): deploy \${{ needs.build.outputs.tag }}"
+          git add apps/deleevx/overlays/staging/kustomization.yaml
+          git commit -m "chore(backend/staging): deploy \${{ needs.build.outputs.tag }}"
           git push
-      # Flux détecte le commit et déploie sur deleevx-dev et deleevx-staging
+      # Flux détecte le commit et déploie sur deleevx-staging
+          git commit -m "chore(backend/staging): deploy \${{ needs.build.outputs.tag }}"
+          git push
+      # Flux détecte le commit et déploie sur deleevx-staging
 
   # ── JOB 4 : Mettre à jour repo-infra (main → prod, approbation manuelle)
   update-infra-prod:
@@ -119,14 +118,14 @@ jobs:
       - name: Mettre à jour l'overlay production
         run: |
           TAG=\${{ needs.build.outputs.tag }}
-          cd apps/overlays/production/backend
+          cd apps/deleevx/overlays/production
           kustomize edit set image \${{ env.IMAGE }}=\${{ env.IMAGE }}:$TAG
 
       - name: Commit & push repo-infra
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/overlays/production/backend/kustomization.yaml
+          git add apps/deleevx/overlays/production/kustomization.yaml
           git commit -m "chore(backend/prod): deploy \${{ needs.build.outputs.tag }}"
           git push
       # Flux détecte le commit et déploie sur deleevx-prod`;
@@ -198,17 +197,13 @@ jobs:
       - name: Mettre à jour les overlays frontend
         run: |
           TAG=\${{ needs.build.outputs.tag }}
-          for ENV in development staging; do
-            cd apps/overlays/$ENV/frontend
-            kustomize edit set image \${{ env.IMAGE }}=\${{ env.IMAGE }}:$TAG
-            cd -
-          done
+          cd apps/deleevx/overlays/staging
+          kustomize edit set image \${{ env.IMAGE }}=\${{ env.IMAGE }}:$TAG
       - run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/overlays/development/frontend/kustomization.yaml \\
-                  apps/overlays/staging/frontend/kustomization.yaml
-          git commit -m "chore(frontend/dev+staging): deploy \${{ needs.build.outputs.tag }}"
+          git add apps/deleevx/overlays/staging/kustomization.yaml
+          git commit -m "chore(frontend/staging): deploy \${{ needs.build.outputs.tag }}"
           git push
 
   update-infra-prod:
@@ -225,12 +220,12 @@ jobs:
       - name: Mettre à jour l'overlay frontend production
         run: |
           TAG=\${{ needs.build.outputs.tag }}
-          cd apps/overlays/production/frontend
+          cd apps/deleevx/overlays/production
           kustomize edit set image \${{ env.IMAGE }}=\${{ env.IMAGE }}:$TAG
       - run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/overlays/production/frontend/kustomization.yaml
+          git add apps/deleevx/overlays/production/kustomization.yaml
           git commit -m "chore(frontend/prod): deploy \${{ needs.build.outputs.tag }}"
           git push`;
 

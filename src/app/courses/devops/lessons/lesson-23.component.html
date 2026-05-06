@@ -34,8 +34,8 @@
         <li>
           <strong>Push sur <code>develop</code></strong> →
           image taguée <code>develop-&lt;sha&gt;</code> →
-          mise à jour de l'overlay <code>development</code> dans <code>repo-infra</code> →
-          Flux déploie automatiquement sur <code>deleevx-dev</code>, puis <code>deleevx-staging</code>
+          mise à jour de l'overlay <code>staging</code> dans <code>repo-infra</code> →
+          Flux déploie automatiquement sur <code>deleevx-staging</code>
         </li>
         <li>
           <strong>Push sur <code>main</code></strong> →
@@ -118,9 +118,9 @@
       <ol>
         <li><strong>repo-backend</strong> ou <strong>repo-frontend</strong> : push sur <code>develop</code> ou <code>main</code></li>
         <li>GitHub Actions : tests → build image → push GHCR</li>
-        <li>GitHub Actions : clone <code>repo-infra</code>, <code>kustomize edit set image</code>, commit, push</li>
+        <li>GitHub Actions : clone <code>repo-infra</code>, <code>kustomize edit set image</code> dans l'overlay cible, commit, push</li>
         <li><strong>repo-infra</strong> : PR de validation auto déclenchée (workflow <code>validate.yaml</code> vu en leçon 20)</li>
-        <li><strong>Flux CD</strong> : détecte le nouveau commit dans <code>repo-infra</code> toutes les 60s</li>
+        <li><strong>Flux CD</strong> : détecte le nouveau commit dans <code>repo-infra</code> toutes les 5m</li>
         <li>Flux applique l'overlay modifié → rolling update sur le namespace cible</li>
         <li>Kubernetes : <code>kubectl rollout status</code> confirme la mise à jour</li>
       </ol>
