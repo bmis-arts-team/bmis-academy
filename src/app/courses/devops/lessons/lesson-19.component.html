@@ -2,6 +2,120 @@
 
 
 
+  <!-- ===== REPO ORGANISATION ===== -->
+  <section>
+
+    <h2>Stratégie de repositories</h2>
+
+    <p>
+      Avant d'écrire le moindre manifeste, une décision d'architecture s'impose :
+      <strong>où vivent les fichiers Kubernetes ?</strong>
+      Ce choix impacte la sécurité, la collaboration et la maintenabilité à long terme.
+    </p>
+
+    <div class="callout warning">
+      <strong>Trois approches — une seule recommandée en production</strong>
+      <ul>
+        <li><strong>Mono-repo</strong> — tout dans un seul dépôt : simple au départ, mais la CI/CD devient ingérable et les droits d'accès impossibles à segmenter.</li>
+        <li><strong>Infra dans chaque repo applicatif</strong> — les manifestes vivent à côté du code : pratique en apparence, mais duplication massive et vision globale de l'infrastructure impossible.</li>
+        <li><strong>Repo infra dédié <code>repo-infra</code></strong> — les manifestes de tous les environnements vivent dans un repo séparé, accès restreint DevOps uniquement. <strong>C'est le standard de l'industrie.</strong></li>
+      </ul>
+    </div>
+
+    <p>
+      Dans notre cas : les repos <code>repo-frontend</code> et <code>repo-backend</code> ne contiennent que
+      le code source et le Dockerfile. Les manifestes Kubernetes vivent exclusivement dans <code>repo-infra</code>.
+    </p>
+
+    <div class="terminal-box">
+      <header>Structure de repo-infra/</header>
+      <pre><code class="language-bash">repo-infra/
+│
+├── clusters/
+│   └── vps-production/
+│       └── infrastructure.yaml      # Kustomization racine (point d'entrée Flux)
+│
+├── infrastructure/                   # Composants système du cluster
+│   ├── cert-manager/
+│   │   ├── release.yaml
+│   │   └── cluster-issuer.yaml
+│   ├── ingress-nginx/
+│   │   └── values.yaml
+│   └── sealed-secrets/              # Contrôleur de chiffrement des secrets
+│       └── release.yaml
+│
+├── apps/
+│   ├── base/                        # Manifestes "purs" sans environnement
+│   │   ├── backend/
+│   │   │   ├── deployment.yaml
+│   │   │   ├── service.yaml
+│   │   │   ├── ingress.yaml
+│   │   │   ├── ingress-sse.yaml
+│   │   │   ├── postgres-statefulset.yaml
+│   │   │   ├── postgres-service.yaml
+│   │   │   ├── redis-deployment.yaml
+│   │   │   ├── redis-service.yaml
+│   │   │   ├── uploads-pvc.yaml          # PersistentVolumeClaim pour les fichiers uploadés
+│   │   │   └── kustomization.yaml
+│   │   └── frontend/
+│   │       ├── deployment.yaml
+│   │       ├── service.yaml
+│   │       ├── ingress.yaml
+│   │       └── kustomization.yaml
+│   │
+│   └── overlays/                    # Surcharges par environnement
+│       ├── development/
+│       │   ├── backend/
+│       │   │   ├── kustomization.yaml
+│       │   │   ├── patch-replicas.yaml    # replicas: 1
+│       │   │   └── patch-resources.yaml   # limits réduites
+│       │   └── frontend/
+│       │       └── kustomization.yaml
+│       ├── staging/
+│       │   ├── backend/
+│       │   │   ├── kustomization.yaml
+│       │   │   ├── patch-replicas.yaml    # replicas: 2
+│       │   │   └── sealed-secret.yaml     # Secret chiffré staging
+│       │   └── frontend/
+│       │       └── kustomization.yaml
+│       └── production/
+│           ├── backend/
+│           │   ├── kustomization.yaml
+│           │   ├── patch-replicas.yaml    # replicas: 3
+│           │   ├── patch-resources.yaml   # limits de prod
+│           │   └── sealed-secret.yaml     # Secret chiffré prod
+│           └── frontend/
+│               ├── kustomization.yaml
+│               └── sealed-secret.yaml
+│
+├── namespaces/
+│   ├── development.yaml
+│   ├── staging.yaml
+│   └── production.yaml
+│
+└── scripts/
+    ├── seal-secret.sh               # Chiffre un secret avec kubeseal
+    ├── bootstrap-cluster.sh         # Initialise K3s + Flux
+    └── rotate-secret.sh             # Rotation de secrets</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Matrice des accès par rôle</strong>
+      <p>La séparation des repos permet une gestion fine des permissions :</p>
+      <ul>
+        <li><strong>Développeur frontend</strong> — Write sur repo-frontend, Read sur repo-backend</li>
+        <li><strong>Développeur backend</strong> — Write sur repo-backend, Read sur repo-frontend</li>
+        <li><strong>DevOps junior</strong> — Write sur repo-infra (hors production)</li>
+        <li><strong>DevOps senior</strong> — Write sur repo-infra (tous environnements)</li>
+        <li><strong>CI/CD (GitHub Actions)</strong> — Write limité sur repo-infra (mise à jour des tags d'image uniquement)</li>
+      </ul>
+      <p>Les développeurs n'ont <strong>aucun accès</strong> à repo-infra en production.</p>
+    </div>
+
+  </section>
+
+
+
   <!-- ===== BACKEND DEPLOYMENT ===== -->
   <section>
 
@@ -12,108 +126,320 @@
     </p>
 
     <div class="terminal-box">
-      <header>k8s/base/backend-deployment.yaml</header>
-      <pre><code class="language-yaml">apiVersion: apps/v1
+      <header>repo-infra/apps/base/backend/deployment.yaml</header>
+      <pre><code class="language-yaml"># La version de l'API Kubernetes à utiliser pour cette ressource.
+# "apps/v1" est le groupe stable pour les workloads (Deployment, StatefulSet, DaemonSet...)
+apiVersion: apps/v1
+
+# Le type de ressource à créer.
+# Deployment = gère un ensemble de pods identiques avec rolling update, rollback, scaling.
 kind: Deployment
+
 metadata:
+  # Nom unique du Deployment dans le namespace Kubernetes (dev / staging / prod).
+  # kubectl get deployment backend -n deleevx-prod
+  #
+  # Convention adoptée : 1 namespace par app × environnement (app-env).
+  # → deleevx-prod et nouvelle-app-prod sont deux namespaces distincts :
+  #   chacun peut avoir son propre "backend" sans aucun conflit.
   name: backend
+
+  # Labels appliqués AU Deployment lui-même (pas aux pods).
+  # Utiles pour filtrer/organiser les ressources : kubectl get deploy -l app=backend
   labels:
     app: backend
     tier: api
+
 spec:
+  # Nombre de réplicas (pods identiques) à maintenir en permanence.
+  # Si un pod crash, Kubernetes en recrée un immédiatement pour atteindre ce chiffre.
+  # Valeur surchargée dans overlays/prod (3 replicas) et overlays/dev (1 replica).
   replicas: 2
+
+  # Le selector définit quels pods ce Deployment "possède" et gère.
+  # Il cherche les pods ayant le label app=backend.
+  # DOIT correspondre exactement aux labels du template ci-dessous.
   selector:
     matchLabels:
       app: backend
+
+  # Stratégie de mise à jour quand on change l'image ou la config.
   strategy:
+    # RollingUpdate = remplace les pods un par un, sans coupure de service.
+    # Alternative : Recreate (coupe tous les pods, puis recrée) → utile si l'app
+    # ne supporte pas 2 versions en parallèle (migrations DB bloquantes par ex.)
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0       # Jamais de pod en moins pendant l'update
-      maxSurge: 1              # 1 pod supplémentaire max pendant l'update
+      # 0 = on ne retire AUCUN pod existant avant d'en avoir un nouveau Ready.
+      # Garantit qu'on a toujours 2 pods actifs pendant le déploiement.
+      maxUnavailable: 0
+      # 1 = on peut créer 1 pod de plus que replicas pendant l'update.
+      # Avec replicas=2 : on passe temporairement à 3 pods, puis retire les anciens.
+      maxSurge: 1
+
+  # Le template décrit le pod que Kubernetes va créer (et recréer si besoin).
   template:
     metadata:
+      # Ces labels sont appliqués AUX PODS créés par ce Deployment.
+      # Le selector ci-dessus utilise ces labels pour identifier "ses" pods.
+      # Règle : les labels du template DOIVENT contenir les labels du selector.
       labels:
         app: backend
         tier: api
+
     spec:
       containers:
+        # Un pod peut avoir plusieurs conteneurs (sidecar pattern).
+        # Ici un seul : le backend Spring Boot.
         - name: backend
-          image: ghcr.io/votre-org/backend:latest
+
+          # Image Docker à utiliser. Format : registry/owner/image:tag
+          # ghcr.io = GitHub Container Registry (inclus dans tout compte GitHub gratuit)
+          # owner = nom de l'organisation GitHub (ITCloud-Consulting)
+          image: ghcr.io/ITCloud-Consulting/deleevx-backend:latest
+
           ports:
+            # Port sur lequel le processus dans le conteneur écoute.
+            # "name: http" permet d'y référer par nom dans le Service et les probes.
             - containerPort: 8080
               name: http
+
           env:
+            # Variables d'environnement injectées dans le conteneur au démarrage.
+            # Spring Boot les lit pour surcharger application.yml.
+
+            # Active le profil Spring "prod" → charge application-prod.yml
             - name: SPRING_PROFILES_ACTIVE
               value: "prod"
+
+            # URL JDBC de la base. "postgres" est le nom DNS du Service PostgreSQL
+            # dans le même namespace → Kubernetes résout automatiquement ce nom.
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:postgresql://postgres:5432/mydb"
+
+            # Ne jamais mettre un mot de passe en clair ici.
+            # valueFrom.secretKeyRef lit la valeur depuis un Secret Kubernetes.
+            # "db-credentials" = nom du Secret, "username" = clé dans ce Secret.
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: db-credentials
                   key: username
+
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: db-credentials
                   key: password
+
+            # "redis" = nom DNS du Service Redis dans le namespace.
+            # Spring Data Redis s'y connecte sur le port 6379 par défaut.
             - name: SPRING_DATA_REDIS_HOST
               value: "redis"
+
           resources:
+            # requests = ressources GARANTIES. Kubernetes utilise ces valeurs pour
+            # décider sur quel nœud placer le pod (scheduling). Si le nœud n'a pas
+            # assez de CPU/RAM disponibles, le pod reste en Pending.
             requests:
-              cpu: "250m"        # 0.25 vCPU garanti
-              memory: "512Mi"    # 512 MB garanti
+              cpu: "250m"     # "250 millicores" = 0.25 vCPU garanti en permanence
+              memory: "512Mi" # 512 MiB de RAM garantis
+
+            # limits = plafond absolu. Si le conteneur dépasse :
+            # - CPU limit → il est throttlé (ralenti), pas tué
+            # - memory limit → OOMKill immédiat (le pod redémarre)
             limits:
-              cpu: "1000m"       # Max 1 vCPU
-              memory: "1Gi"      # Max 1 GB - OOMKill si dépassé
+              cpu: "1000m"    # Max 1 vCPU (le conteneur peut burster jusqu'ici)
+              memory: "1Gi"   # Max 1 GiB → la JVM doit rester en dessous
+
+          # Les 3 probes permettent à Kubernetes de savoir dans quel état est l'app.
+
+          # livenessProbe : "le conteneur est-il encore vivant ?"
+          # Si cette probe échoue failureThreshold fois → le conteneur est REDÉMARRÉ.
+          # Utile pour détecter un deadlock : l'app répond encore au réseau mais est bloquée.
           livenessProbe:
             httpGet:
-              path: /actuator/health/liveness
+              path: /actuator/health/liveness  # Endpoint Spring Boot Actuator dédié
               port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            failureThreshold: 3
+            initialDelaySeconds: 30  # Attendre 30s après le démarrage avant la 1ère vérif
+            periodSeconds: 10        # Vérifier toutes les 10 secondes
+            failureThreshold: 3      # 3 échecs consécutifs → redémarrage du conteneur
+
+          # readinessProbe : "le conteneur est-il prêt à recevoir du trafic ?"
+          # Si cette probe échoue → le pod est RETIRÉ des endpoints du Service.
+          # Aucune requête ne lui est envoyée tant qu'il n'est pas Ready.
+          # Ne redémarre PAS le conteneur → il attend juste qu'il soit prêt.
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
               port: 8080
-            initialDelaySeconds: 20
+            initialDelaySeconds: 20  # Spring Boot met ~20s à être prêt
             periodSeconds: 5
             failureThreshold: 3
+
+          # startupProbe : "le conteneur a-t-il fini de démarrer ?"
+          # BLOQUE liveness et readiness tant qu'elle n'est pas OK.
+          # Indispensable pour les apps lentes à démarrer (JVM, chargement de contexte Spring).
+          # Sans ça, livenessProbe tuerait le pod avant qu'il ait fini de démarrer.
           startupProbe:
             httpGet:
               path: /actuator/health
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 5
-            failureThreshold: 30   # 30 × 5s = 150s max pour démarrer</code></pre>
+            failureThreshold: 30  # 30 essais × 5s = 150s max pour démarrer
+
+          # Monte le volume "uploads" sur le chemin où Spring Boot écrit les fichiers.
+          # Doit correspondre à la propriété file.upload-dir dans application.yml.
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+
+      # Volumes attachés au pod → déclarés au niveau du pod (pas du conteneur).
+      # Ce PVC est créé séparément dans uploads-pvc.yaml.
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: backend-uploads</code></pre>
     </div>
 
     <div class="callout info">
       <strong>Les 3 probes expliquées</strong>
       <ul>
-        <li><strong>startupProbe</strong> - Laisse le temps au Spring Boot de démarrer (jusqu'à 150s). Bloque les autres probes tant que le startup n'est pas OK.</li>
-        <li><strong>readinessProbe</strong> - L'application est-elle prête à recevoir du trafic ? Si non → retirée du Service, pas de trafic.</li>
-        <li><strong>livenessProbe</strong> - L'application est-elle vivante ? Si non → le conteneur est redémarré.</li>
+        <li><strong>startupProbe</strong> — Laisse le temps au Spring Boot de démarrer (jusqu'à 150s). Bloque les autres probes tant que le startup n'est pas OK.</li>
+        <li><strong>readinessProbe</strong> — L'application est-elle prête à recevoir du trafic ? Si non → retirée du Service, pas de trafic.</li>
+        <li><strong>livenessProbe</strong> — L'application est-elle vivante ? Si non → le conteneur est redémarré.</li>
+      </ul>
+    </div>
+
+    <h3>Volume persistant pour les fichiers uploadés</h3>
+
+    <p>
+      Le backend stocke les fichiers uploadés dans le dossier <code>uploads/</code> à la racine du projet.
+      Dans un pod Kubernetes, le système de fichiers est <strong>éphémère</strong> : si le pod redémarre,
+      tous les fichiers sont perdus. Il faut monter un <strong>PersistentVolume</strong>.
+    </p>
+
+    <div class="terminal-box">
+      <header>repo-infra/apps/base/backend/uploads-pvc.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-uploads
+spec:
+  # local-path = StorageClass intégrée à K3s, provisionne un dossier sur le disque du nœud.
+  # Pas besoin de configuration supplémentaire sur un VPS avec K3s.
+  storageClassName: local-path
+
+  # ReadWriteOnce = ce volume est monté en lecture/écriture par UN SEUL nœud.
+  # Conséquence directe : le Deployment backend doit avoir replicas: 1.
+  # (Voir callout ci-dessous pour la solution multi-replicas.)
+  accessModes:
+    - ReadWriteOnce
+
+  resources:
+    requests:
+      # Taille initiale du volume. Ajustable par overlay selon l'environnement.
+      # La valeur de prod est surchargée dans overlays/production/backend/patch-uploads-pvc.yaml.
+      storage: 5Gi</code></pre>
+    </div>
+
+    <div class="callout warning">
+      <strong>ReadWriteOnce impose replicas: 1 pour le backend</strong>
+      <p>
+        <code>ReadWriteOnce</code> signifie qu'un seul nœud peut monter le volume en écriture simultanément.
+        Avec <code>replicas: 2</code>, le second pod resterait en <code>Pending</code> s'il est schedulé
+        sur un nœud différent. Deux solutions :
+      </p>
+      <ul>
+        <li>
+          <strong>replicas: 1 en production</strong> (le plus simple sur un VPS nœud unique) —
+          le rolling update crée le nouveau pod, il monte le volume, puis l'ancien est supprimé.
+          Zéro perte de fichier, mais une courte fenêtre sans pod pendant la transition.
+        </li>
+        <li>
+          <strong>Migrer vers un object storage</strong> (MinIO auto-hébergé ou S3 AWS) —
+          recommandé si vous avez besoin de haute disponibilité ou de plusieurs nœuds.
+          Spring Boot se connecte à l'API S3 ; les fichiers ne sont plus sur le disque local.
+        </li>
       </ul>
     </div>
 
     <div class="terminal-box">
-      <header>k8s/base/backend-service.yaml</header>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: Service
+      <header>repo-infra/apps/overlays/production/backend/patch-uploads-pvc.yaml</header>
+      <pre><code class="language-yaml"># Surcharge la taille du volume pour la production.
+apiVersion: v1
+kind: PersistentVolumeClaim
 metadata:
+  name: backend-uploads
+spec:
+  resources:
+    requests:
+      storage: 20Gi   # Plus d'espace en prod qu'en dev (5Gi)</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Vérifier l'espace utilisé</strong>
+      <pre><code class="language-bash"># Voir les PVC et leur état
+kubectl get pvc -n production
+# NAME              STATUS   VOLUME          CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+# backend-uploads   Bound    pvc-xxx-yyy     20Gi       RWO            local-path     5d
+
+# Entrer dans le pod et inspecter le dossier uploads
+kubectl exec -n production deploy/backend -- du -sh /app/uploads</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>repo-infra/apps/base/backend/service.yaml</header>
+      <pre><code class="language-yaml"># "v1" = API core de Kubernetes (pas de groupe "apps/").
+# Services, ConfigMaps, Secrets, Namespaces sont tous dans le groupe "v1".
+apiVersion: v1
+
+# Un Service expose un ensemble de pods sous une adresse IP stable et un nom DNS.
+# Sans Service, les pods sont inaccessibles — ils n'ont que des IPs éphémères.
+kind: Service
+
+metadata:
+  # Ce nom devient le nom DNS dans le cluster.
+  # "namespace" dans les exemples ci-dessous = namespace Kubernetes (dev/staging/prod).
+  #
+  # Forme courte   : http://backend:80
+  #   → fonctionne depuis un pod du MÊME namespace (ex: depuis le frontend dans deleevx-prod)
+  # Forme complète : http://backend.deleevx-prod.svc.cluster.local:80
+  #   → fonctionne depuis n'importe où dans le cluster
+  #   → format : &#123;service&#125;.&#123;namespace-k8s&#125;.svc.cluster.local
+  #   → sans ambiguïté : backend.deleevx-prod ≠ backend.nouvelle-app-prod
   name: backend
   labels:
     app: backend
+
 spec:
-  type: ClusterIP          # Accessible uniquement dans le cluster
+  # ClusterIP = IP virtuelle accessible UNIQUEMENT à l'intérieur du cluster.
+  # C'est le type par défaut — ne jamais exposer le backend directement à internet.
+  # L'Ingress Controller est le seul point d'entrée externe.
+  # Autres types : NodePort (expose sur chaque nœud), LoadBalancer (cloud uniquement).
+  type: ClusterIP
+
+  # Le Service route le trafic vers les pods qui ont ce label.
+  # Correspond aux labels définis dans template.metadata.labels du Deployment.
+  # Kubernetes maintient automatiquement la liste des pods Ready matchant ce selector.
   selector:
     app: backend
+
   ports:
-    - port: 80             # Port du Service
-      targetPort: 8080     # Port du conteneur
+    # port : le port sur lequel le Service lui-même écoute.
+    # Les autres pods font : http://backend:80
+    - port: 80
+
+      # targetPort : le port du CONTENEUR vers lequel le trafic est redirigé.
+      # Ici 80 (Service) → 8080 (Spring Boot). On peut aussi écrire name: http
+      # pour référencer le nom déclaré dans containerPort du Deployment.
+      targetPort: 8080
+
       protocol: TCP
+
+      # Nommer le port est important pour Prometheus (ServiceMonitor) et
+      # pour les Ingress rules qui référencent le port par nom.
       name: http</code></pre>
     </div>
 
@@ -127,7 +453,7 @@ spec:
     <h2>Déployer le Frontend Angular</h2>
 
     <div class="terminal-box">
-      <header>k8s/base/frontend-deployment.yaml</header>
+      <header>repo-infra/apps/base/frontend/deployment.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -148,7 +474,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/votre-org/frontend:latest
+          image: ghcr.io/ITCloud-Consulting/deleevx-frontend:latest
           ports:
             - containerPort: 80
               name: http
@@ -172,7 +498,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>k8s/base/frontend-service.yaml</header>
+      <header>repo-infra/apps/base/frontend/service.yaml</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: Service
 metadata:
@@ -194,7 +520,7 @@ spec:
       <strong>Ressources Angular vs Spring Boot</strong>
       <p>
         NGINX servant des fichiers statiques consomme très peu de ressources (50m CPU, 64Mi RAM).
-        Spring Boot a besoin de beaucoup plus à cause de la JVM (250m CPU, 512Mi RAM minimum).
+        Spring Boot a besoin de beaucoup plus — à cause de la JVM (250m CPU, 512Mi RAM minimum).
         Ajustez selon vos observations en production.
       </p>
     </div>
@@ -209,7 +535,7 @@ spec:
     <h2>PostgreSQL et Redis</h2>
 
     <div class="terminal-box">
-      <header>k8s/base/postgres-statefulset.yaml</header>
+      <header>repo-infra/apps/base/backend/postgres-statefulset.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -257,18 +583,27 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+  # volumeClaimTemplates est SPÉCIFIQUE aux StatefulSets — absent des Deployments.
+  # Pour chaque replica, Kubernetes crée automatiquement un PersistentVolumeClaim (PVC)
+  # DISTINCT et PERSISTANT. Même si le pod est supprimé et recréé, il retrouve son volume.
+  # Avec un Deployment classique, il faudrait gérer le PVC séparément.
   volumeClaimTemplates:
     - metadata:
+        # Nom du PVC généré : postgres-data-postgres-0, postgres-data-postgres-1...
+        # Le suffixe -0, -1 correspond à l'index ordinal du pod StatefulSet.
         name: postgres-data
       spec:
+        # ReadWriteOnce = ce volume ne peut être monté en écriture que par UN seul nœud.
+        # Adapté pour PostgreSQL (1 replica). Pour un stockage partagé entre pods,
+        # on utiliserait ReadWriteMany (NFS, CephFS...).
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 10Gi</code></pre>
+            storage: 10Gi  # Taille du disque alloué. Irréversible sans manipulation manuelle.</code></pre>
     </div>
 
     <div class="terminal-box">
-      <header>k8s/base/postgres-service.yaml</header>
+      <header>repo-infra/apps/base/backend/postgres-service.yaml</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: Service
 metadata:
@@ -283,7 +618,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>k8s/base/redis-deployment.yaml</header>
+      <header>repo-infra/apps/base/backend/redis-deployment.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -317,7 +652,7 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>k8s/base/redis-service.yaml</header>
+      <header>repo-infra/apps/base/backend/redis-service.yaml</header>
       <pre><code class="language-yaml">apiVersion: v1
 kind: Service
 metadata:
@@ -331,184 +666,81 @@ spec:
       targetPort: 6379</code></pre>
     </div>
 
+    <h3>Secrets avec Sealed Secrets</h3>
+
     <div class="callout warning">
-      <strong>Créer les Secrets pour la base de données</strong>
+      <strong>Jamais de secrets en clair dans Git</strong>
       <p>
-        Les Secrets ne sont pas versionnés dans Git. Créez-les manuellement sur le cluster :
+        Un Secret Kubernetes n'est qu'encodé en base64 — pas chiffré. Le committer dans Git
+        exposerait directement vos credentials. La solution : <strong>Sealed Secrets</strong>,
+        qui chiffre avec la clé publique du cluster. Seul le cluster peut déchiffrer. Le fichier
+        résultant est <strong>safe à commiter</strong>.
       </p>
     </div>
 
-    <div class="terminal-box">
-      <header>Terminal - Créer les secrets</header>
-      <pre><code class="language-bash"># Créer le secret dans chaque namespace
-for ns in dev staging prod; do
-  kubectl create secret generic db-credentials \
-    --namespace=$ns \
-    --from-literal=username=myapp \
-    --from-literal=password='VotreMotDePasseSecurise123!'
-done
-
-# Vérifier
-kubectl get secrets -n prod
-# NAME              TYPE     DATA   AGE
-# db-credentials    Opaque   2      5s</code></pre>
-    </div>
-
-  </section>
-
-
-
-  <!-- ===== INGRESS + HTTPS ===== -->
-  <section>
-
-    <h2>Ingress + HTTPS avec Let's Encrypt</h2>
-
-    <h3>Installer NGINX Ingress Controller</h3>
+    <h4>1 — Installer le contrôleur Sealed Secrets (une seule fois)</h4>
 
     <div class="terminal-box">
       <header>Terminal - VPS</header>
-      <pre><code class="language-bash"># Installer NGINX Ingress Controller via Helm
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo update
-
-helm install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx \
-  --create-namespace \
-  --set controller.service.type=NodePort \
-  --set controller.service.nodePorts.http=80 \
-  --set controller.service.nodePorts.https=443 \
-  --set controller.hostNetwork=true
+      <pre><code class="language-bash">helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
+helm install sealed-secrets sealed-secrets/sealed-secrets   -n kube-system   --set fullnameOverride=sealed-secrets-controller
 
 # Vérifier
-kubectl get pods -n ingress-nginx
-# NAME                                        READY   STATUS    RESTARTS   AGE
-# ingress-nginx-controller-xxx                1/1     Running   0          30s</code></pre>
+kubectl get pods -n kube-system | grep sealed
+# sealed-secrets-controller-xxx   1/1   Running   0   30s</code></pre>
     </div>
 
-    <div class="callout info">
-      <strong>hostNetwork=true</strong>
-      <p>
-        Sur un VPS unique (pas de LoadBalancer cloud), on utilise <code>hostNetwork: true</code>
-        pour que le contrôleur NGINX écoute directement sur les ports 80 et 443 du VPS.
-      </p>
-    </div>
-
-    <h3>Installer cert-manager pour HTTPS automatique</h3>
+    <h4>2 — Créer un secret chiffré</h4>
 
     <div class="terminal-box">
-      <header>Terminal - VPS</header>
-      <pre><code class="language-bash"># Installer cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+      <header>repo-infra/scripts/seal-secret.sh</header>
+      <pre><code class="language-bash">#!/bin/bash
+# Usage: ./scripts/seal-secret.sh production backend db-credentials username "myapp"
 
-# Attendre que tous les pods soient prêts
-kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=120s
+NAMESPACE=$1    # ex: production
+APP=$2          # ex: backend
+SECRET_NAME=$3  # ex: db-credentials
+KEY=$4          # ex: username
+VALUE=$5        # ex: myapp
 
-# Vérifier
-kubectl get pods -n cert-manager
-# NAME                                       READY   STATUS    RESTARTS   AGE
-# cert-manager-xxx                           1/1     Running   0          30s
-# cert-manager-cainjector-xxx                1/1     Running   0          30s
-# cert-manager-webhook-xxx                   1/1     Running   0          30s</code></pre>
+kubectl create secret generic $&#123;SECRET_NAME&#125;   --from-literal=$&#123;KEY&#125;="$&#123;VALUE&#125;"   --namespace=$&#123;NAMESPACE&#125;   --dry-run=client   -o yaml | kubeseal   --controller-namespace kube-system   --controller-name sealed-secrets-controller   --format yaml > apps/overlays/$&#123;NAMESPACE&#125;/$&#123;APP&#125;/sealed-secret.yaml
+
+echo "Secret scellé → apps/overlays/$&#123;NAMESPACE&#125;/$&#123;APP&#125;/sealed-secret.yaml"
+echo "Ce fichier est safe à commiter dans Git."</code></pre>
     </div>
 
-    <h3>Configurer Let's Encrypt</h3>
-
     <div class="terminal-box">
-      <header>k8s/base/cluster-issuer.yaml</header>
-      <pre><code class="language-yaml">apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+      <header>repo-infra/apps/overlays/production/backend/sealed-secret.yaml (résultat)</header>
+      <pre><code class="language-yaml"># Safe à commiter — chiffré avec la clé publique du cluster.
+# Seul le cluster peut le déchiffrer avec sa clé privée.
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
 metadata:
-  name: letsencrypt-prod
+  name: db-credentials
+  namespace: production
 spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: votre-email@domaine.com
-    privateKeySecretRef:
-      name: letsencrypt-prod-key
-    solvers:
-      - http01:
-          ingress:
-            class: nginx</code></pre>
+  encryptedData:
+    username: AgBj3k9...    # Valeur chiffrée — illisible sans la clé privée
+    password: AgCx7m2...
+  template:
+    metadata:
+      name: db-credentials
+      namespace: production
+    type: Opaque</code></pre>
     </div>
-
-    <h3>L'Ingress complet</h3>
-
-    <div class="terminal-box">
-      <header>k8s/base/ingress.yaml</header>
-      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: main-ingress
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-spec:
-  ingressClassName: nginx
-  tls:
-    - hosts:
-        - mondomaine.com
-        - api.mondomaine.com
-      secretName: tls-certificate
-  rules:
-    # Frontend : mondomaine.com → frontend service
-    - host: mondomaine.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: frontend
-                port:
-                  number: 80
-    # API : api.mondomaine.com → backend service
-    - host: api.mondomaine.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: backend
-                port:
-                  number: 80</code></pre>
-    </div>
-
-    <h3>Configuration DNS (externe)</h3>
 
     <div class="callout warning">
-      <strong>Chez votre registrar DNS</strong>
+      <strong>Sauvegardez la clé maître — point de défaillance critique</strong>
       <p>
-        Créez deux enregistrements A pointant vers l'IP publique de votre VPS :
+        Si le contrôleur Sealed Secrets est supprimé sans sauvegarde de sa clé privée,
+        tous les secrets chiffrés deviennent <strong>irrécupérables</strong>.
+        Exportez la clé et stockez-la dans un gestionnaire de mots de passe (1Password, Bitwarden) :
       </p>
-      <ul>
-        <li><code>mondomaine.com</code> → <code>IP_DU_VPS</code></li>
-        <li><code>api.mondomaine.com</code> → <code>IP_DU_VPS</code></li>
-      </ul>
-    </div>
+      <pre><code class="language-bash"># Exporter la clé maître (stocker HORS Git)
+kubectl get secret   -n kube-system   -l sealedsecrets.bitnami.com/sealed-secrets-key   -o yaml > sealed-secrets-master-key.yaml
 
-    <h3>Tester l'accès</h3>
-
-    <div class="terminal-box">
-      <header>Terminal</header>
-      <pre><code class="language-bash"># Appliquer le ClusterIssuer et l'Ingress
-kubectl apply -f k8s/base/cluster-issuer.yaml
-kubectl apply -k k8s/overlays/prod
-
-# Vérifier que le certificat est émis
-kubectl get certificate -n prod
-# NAME              READY   SECRET            AGE
-# tls-certificate   True    tls-certificate   2m
-
-# Tester l'accès HTTPS
-curl -I https://mondomaine.com
-# HTTP/2 200
-# ...
-
-curl -I https://api.mondomaine.com/actuator/health
-# HTTP/2 200
-# &#123;"status":"UP"&#125;</code></pre>
+# Chiffrer avec GPG avant de stocker
+gpg --encrypt --recipient votre@email.com sealed-secrets-master-key.yaml</code></pre>
     </div>
 
   </section>

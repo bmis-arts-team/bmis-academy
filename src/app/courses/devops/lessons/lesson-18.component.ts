@@ -72,5 +72,41 @@ export class Lesson18Component {
       explanation:
         'Dans le pattern Kustomize, base/ définit les ressources « par défaut » (Deployments, Services…) et chaque overlay (dev/, staging/, prod/) surcharge uniquement ce qui change : nombre de replicas, limites de ressources, variables d\'environnement…',
     },
+    {
+      q: 'Pourquoi la convention de nommage des namespaces est-elle app-env (ex: deleevx-prod) plutôt que juste prod ?',
+      options: [
+        'Pour respecter les normes Kubernetes officielles',
+        'Pour éviter les conflits de noms quand plusieurs applications coexistent sur le même cluster : deleevx-prod et nouvelle-app-prod sont des namespaces distincts',
+        'Pour améliorer les performances du cluster',
+        'Par convention de style uniquement',
+      ],
+      correct: 1,
+      explanation:
+        'Un namespace commun prod partagé entre plusieurs apps causerait des conflits de noms (deux Services "backend") et compliquerait l\'isolation des Secrets et des ResourceQuotas. Un namespace par app × env est plus propre.',
+    },
+    {
+      q: 'Quelle commande kubectl permet d\'appliquer un overlay Kustomize complet en une seule fois ?',
+      options: [
+        'kubectl apply -f k8s/apps/deleevx/overlays/prod',
+        'kubectl apply -k k8s/apps/deleevx/overlays/prod',
+        'kubectl kustomize apply prod',
+        'kubectl deploy -k prod',
+      ],
+      correct: 1,
+      explanation:
+        'Le flag -k (majuscule) active Kustomize intégré dans kubectl. Il fusionne la base avec les patches de l\'overlay avant d\'appliquer, en une seule opération atomique.',
+    },
+    {
+      q: 'Que fait l\'option --disable traefik lors de l\'installation de k3s ?',
+      options: [
+        'Elle désactive le réseau dans le cluster',
+        'Elle empêche k3s d\'installer Traefik comme Ingress Controller par défaut, laissant la place à NGINX Ingress Controller',
+        'Elle désactive le pare-feu du VPS',
+        'Elle réduit la consommation mémoire de k3s',
+      ],
+      correct: 1,
+      explanation:
+        'k3s inclut Traefik par défaut. On le désactive pour utiliser NGINX Ingress Controller à la place, qui est plus documenté, plus utilisé en entreprise, et compatible avec les annotations standards des manifestes.',
+    },
   ];
 }

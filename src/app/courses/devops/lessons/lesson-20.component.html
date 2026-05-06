@@ -2,265 +2,679 @@
 
 
 
-  <!-- ===== AUTOSCALING ===== -->
+  <!-- ===== INGRESS + HTTPS ===== -->
   <section>
 
-    <h2>Autoscaling avec HPA</h2>
+    <h2>Ingress + HTTPS avec Let's Encrypt</h2>
 
-    <p>
-      Le <strong>HorizontalPodAutoscaler</strong> (HPA) ajuste automatiquement le nombre de réplicas
-      d'un Deployment en fonction de métriques observées (CPU, mémoire, métriques custom).
-      Sur un VPS, l'autoscaling est limité par les ressources physiques - mais il permet
-      de maximiser l'utilisation de ce qui est disponible.
-    </p>
+    <h3>Installer NGINX Ingress Controller</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Installer NGINX Ingress Controller via Helm
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm install ingress-nginx ingress-nginx/ingress-nginx   --namespace ingress-nginx   --create-namespace   --set controller.service.type=NodePort   --set controller.service.nodePorts.http=80   --set controller.service.nodePorts.https=443   --set controller.hostNetwork=true
+
+# Vérifier
+kubectl get pods -n ingress-nginx
+# NAME                                        READY   STATUS    RESTARTS   AGE
+# ingress-nginx-controller-xxx                1/1     Running   0          30s</code></pre>
+    </div>
 
     <div class="callout info">
-      <strong>Pré-requis</strong>
+      <strong>hostNetwork=true</strong>
       <p>
-        Le <strong>Metrics Server</strong> doit être installé. Avec k3s, il est inclus par défaut.
-        Vérifiez avec : <code>kubectl top nodes</code>
+        Sur un VPS unique (pas de LoadBalancer cloud), on utilise <code>hostNetwork: true</code>
+        pour que le contrôleur NGINX écoute directement sur les ports 80 et 443 du VPS.
       </p>
     </div>
 
+    <h3>Installer cert-manager pour HTTPS automatique</h3>
+
     <div class="terminal-box">
-      <header>k8s/overlays/prod/hpa.yaml</header>
-      <pre><code class="language-yaml">apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Installer cert-manager
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+
+# Attendre que tous les pods soient prêts
+kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=120s
+
+# Vérifier
+kubectl get pods -n cert-manager
+# NAME                                       READY   STATUS    RESTARTS   AGE
+# cert-manager-xxx                           1/1     Running   0          30s
+# cert-manager-cainjector-xxx                1/1     Running   0          30s
+# cert-manager-webhook-xxx                   1/1     Running   0          30s</code></pre>
+    </div>
+
+    <h3>Configurer Let's Encrypt</h3>
+
+    <div class="terminal-box">
+      <header>repo-infra/infrastructure/cert-manager/cluster-issuer.yaml</header>
+      <pre><code class="language-yaml">apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
 metadata:
-  name: backend-hpa
+  name: letsencrypt-prod
 spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: backend
-  minReplicas: 2              # Minimum en prod (haute dispo)
-  maxReplicas: 5              # Max réaliste pour un VPS 8GB
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70    # Scale up quand CPU > 70%
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80    # Scale up quand RAM > 80%
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 60    # Attendre 60s avant de scale up
-      policies:
-        - type: Pods
-          value: 1                       # +1 pod à la fois
-          periodSeconds: 60
-    scaleDown:
-      stabilizationWindowSeconds: 300   # Attendre 5min avant de scale down
-      policies:
-        - type: Pods
-          value: 1
-          periodSeconds: 120</code></pre>
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: votre-email@domaine.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx</code></pre>
     </div>
 
-    <h3>Explication des paramètres</h3>
+    <h3>L'Ingress de base — structure sans domaine</h3>
 
-    <div class="comparison-grid">
-      <div class="comparison-card">
-        <h4>Scale Up</h4>
-        <ul>
-          <li><strong>averageUtilization: 70</strong> - Si la moyenne CPU de tous les pods dépasse 70%, on ajoute un pod</li>
-          <li><strong>stabilizationWindow: 60s</strong> - Évite les oscillations rapides</li>
-          <li><strong>+1 pod par minute max</strong> - Scaling progressif, pas brutal</li>
-        </ul>
-      </div>
-      <div class="comparison-card">
-        <h4>Scale Down</h4>
-        <ul>
-          <li><strong>stabilizationWindow: 300s</strong> - Attend 5 minutes de calme avant de réduire</li>
-          <li><strong>-1 pod toutes les 2 min</strong> - Réduit progressivement pour éviter les pics de retour</li>
-        </ul>
-      </div>
-    </div>
-
-    <h3>Tester l'autoscaling manuellement</h3>
+    <p>
+      La <code>base/</code> définit la <strong>structure</strong> de l'Ingress (services cibles, annotations).
+      Les noms de domaine sont injectés par chaque overlay via un patch — sinon vous auriez les URLs de prod
+      codées en dur dans la base, ce qui est faux pour dev et staging.
+    </p>
 
     <div class="terminal-box">
-      <header>Terminal - Simuler de la charge</header>
-      <pre><code class="language-bash"># Appliquer le HPA
-kubectl apply -f k8s/overlays/prod/hpa.yaml
+      <header>repo-infra/apps/base/backend/ingress.yaml</header>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - placeholder.com          # Remplacé par chaque overlay
+        - api.placeholder.com
+      secretName: tls-certificate
+  rules:
+    - host: placeholder.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    - host: api.placeholder.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80</code></pre>
+    </div>
 
-# Vérifier le statut du HPA
-kubectl get hpa -n prod
-# NAME          REFERENCE        TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-# backend-hpa   Deployment/backend   25%/70%   2         5         2          1m
+    <h3>Ingress dédié pour les SSE (Server-Sent Events)</h3>
 
-# Simuler de la charge CPU avec un pod de stress
-kubectl run stress-test -n prod --rm -it \
-  --image=busybox -- sh -c \
-  "while true; do wget -q -O- http://backend/api/health; done"
+    <div class="callout warning">
+      <strong>Problème : NGINX bufférise les réponses par défaut</strong>
+      <p>
+        Le backend Spring Boot expose des endpoints SSE (ex: <code>/api/events</code>).
+        NGINX bufférise les réponses HTTP — il attend d'avoir un buffer plein avant de transmettre au client.
+        Résultat : les événements SSE sont bloqués ou retardés, et la connexion est coupée après le
+        timeout par défaut de <strong>60 secondes</strong>.
+      </p>
+    </div>
 
-# Dans un autre terminal, observer le scaling
-kubectl get hpa -n prod --watch
-# TARGETS augmente... puis REPLICAS passe de 2 à 3, 4...
+    <p>
+      La solution : un <strong>second Ingress</strong> ciblant uniquement les routes SSE du backend,
+      avec les annotations adaptées. On ne modifie pas l'Ingress principal pour ne pas impacter
+      le frontend et les autres endpoints.
+    </p>
 
-# Arrêter le stress (Ctrl+C)
-# Après ~5 minutes, le HPA scale down progressivement
+    <div class="terminal-box">
+      <header>repo-infra/apps/base/backend/ingress-sse.yaml</header>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-sse-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 
-# Vérifier les événements
-kubectl describe hpa backend-hpa -n prod
-# Events:
-#   Normal  SuccessfulRescale  ...  New size: 3; reason: cpu resource utilization above target</code></pre>
+    # Désactiver le buffering — indispensable pour SSE
+    # Sans ça, NGINX retient les événements jusqu'à remplir le buffer
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+
+    # Timeout de lecture élevé — les connexions SSE sont longues
+    # 3600s = 1h, ajustez selon vos besoins
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+    # Désactiver le cache pour ces routes
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header Cache-Control "no-cache";
+      add_header X-Accel-Buffering "no";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.placeholder.com      # Remplacé par chaque overlay
+      secretName: tls-certificate
+  rules:
+    - host: api.placeholder.com
+      http:
+        paths:
+          - path: /api/events      # Adaptez au(x) chemin(s) SSE de votre backend
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>X-Accel-Buffering: no</strong>
+      <p>
+        Ce header demande à NGINX de désactiver le buffering au niveau du proxy upstream.
+        C'est le mécanisme standard reconnu par NGINX, Varnish et d'autres proxies.
+        Spring Boot peut aussi l'émettre lui-même depuis le contrôleur SSE :
+      </p>
+      <pre><code class="language-java">&#64;GetMapping(value = "/api/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public SseEmitter stream(HttpServletResponse response) &#123;
+    response.setHeader("X-Accel-Buffering", "no");
+    response.setHeader("Cache-Control", "no-cache");
+    SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
+    // ...
+    return emitter;
+&#125;</code></pre>
+    </div>
+
+    <p>
+      Ajoutez <code>ingress-sse.yaml</code> dans <code>base/kustomization.yaml</code>
+      et créez un patch par overlay pour substituer le host (même pattern que l'Ingress principal).
+    </p>
+
+    <h3>Patch Ingress par overlay</h3>
+
+    <p>
+      Chaque overlay surcharge les hosts avec ses propres domaines.
+      Dev et staging utilisent des sous-domaines dédiés, prod utilise le domaine principal.
+    </p>
+
+    <div class="terminal-box">
+      <header>repo-infra/apps/overlays/development/backend/patches/ingress.yaml</header>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+spec:
+  tls:
+    - hosts:
+        - dev.deleevx.com
+        - api-dev.deleevx.com
+      secretName: tls-certificate-dev
+  rules:
+    - host: dev.deleevx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    - host: api-dev.deleevx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>repo-infra/apps/overlays/staging/backend/patches/ingress.yaml</header>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+spec:
+  tls:
+    - hosts:
+        - staging.deleevx.com
+        - api-staging.deleevx.com
+      secretName: tls-certificate-staging
+  rules:
+    - host: staging.deleevx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    - host: api-staging.deleevx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>repo-infra/apps/overlays/production/backend/patches/ingress.yaml</header>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+spec:
+  tls:
+    - hosts:
+        - deleevx.com
+        - api.deleevx.com
+      secretName: tls-certificate-prod
+  rules:
+    - host: deleevx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    - host: api.deleevx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Référencer le patch dans le kustomization.yaml de l'overlay</strong>
+      <p>Ajoutez le patch dans chaque <code>overlays/&#123;env&#125;/backend/kustomization.yaml</code> :</p>
+      <pre><code class="language-yaml">patches:
+  - path: patches/ingress.yaml
+  # ... autres patches</code></pre>
+    </div>
+
+    <h3>Configuration DNS (externe)</h3>
+
+    <div class="callout warning">
+      <strong>Chez votre registrar DNS</strong>
+      <p>
+        Créez des enregistrements A pointant vers l'IP publique de votre VPS pour chaque environnement :
+      </p>
+      <ul>
+        <li><code>deleevx.com</code> + <code>api.deleevx.com</code> → <code>IP_DU_VPS</code> (prod)</li>
+        <li><code>staging.deleevx.com</code> + <code>api-staging.deleevx.com</code> → <code>IP_DU_VPS</code></li>
+        <li><code>dev.deleevx.com</code> + <code>api-dev.deleevx.com</code> → <code>IP_DU_VPS</code></li>
+      </ul>
+    </div>
+
+    <h3>Tester l'accès</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># Appliquer le ClusterIssuer
+kubectl apply -f repo-infra/infrastructure/cert-manager/cluster-issuer.yaml
+
+# Appliquer l'overlay de production (lors du bootstrap initial — Flux prend le relais ensuite)
+kubectl apply -k repo-infra/apps/overlays/production/backend
+
+# Vérifier que le certificat est émis
+kubectl get certificate -n deleevx-prod
+# NAME              READY   SECRET            AGE
+# tls-certificate   True    tls-certificate   2m
+
+# Tester l'accès HTTPS
+curl -I https://mondomaine.com
+# HTTP/2 200
+# ...
+
+curl -I https://api.mondomaine.com/actuator/health
+# HTTP/2 200
+# &#123;"status":"UP"&#125;</code></pre>
     </div>
 
   </section>
 
 
 
-  <!-- ===== PROMETHEUS + GRAFANA ===== -->
+  <!-- ===== K3S SPECIFICS ===== -->
   <section>
 
-    <h2>Observabilité - Prometheus &amp; Grafana</h2>
+    <h2>Spécificités K3s</h2>
 
     <p>
-      <strong>Prometheus</strong> collecte les métriques en scrappant les endpoints <code>/metrics</code>.
-      <strong>Grafana</strong> les visualise dans des dashboards. Ensemble, ils forment le standard
-      de l'observabilité dans l'écosystème Kubernetes.
+      K3s est une distribution Kubernetes allégée, idéale pour les VPS.
+      Elle intègre plusieurs composants qui diffèrent d'un cluster cloud standard (EKS, GKE).
     </p>
 
-    <h3>Installation via Helm</h3>
+    <h3>Traefik vs NGINX Ingress</h3>
 
-    <div class="terminal-box">
-      <header>Terminal - VPS</header>
-      <pre><code class="language-bash"># Ajouter le repo Helm
-helm repo add prometheus-community \
-  https://prometheus-community.github.io/helm-charts
-helm repo update
-
-# Installer le stack complet (Prometheus + Grafana + AlertManager)
-helm install monitoring prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --create-namespace \
-  --set prometheus.prometheusSpec.retention=7d \
-  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
-  --set prometheus.prometheusSpec.resources.limits.memory=512Mi \
-  --set grafana.resources.requests.memory=128Mi \
-  --set grafana.resources.limits.memory=256Mi \
-  --set alertmanager.enabled=true
-
-# Vérifier l'installation
-kubectl get pods -n monitoring
-# NAME                                                     READY   STATUS    RESTARTS   AGE
-# monitoring-grafana-xxx                                   3/3     Running   0          2m
-# monitoring-kube-prometheus-operator-xxx                  1/1     Running   0          2m
-# monitoring-kube-state-metrics-xxx                        1/1     Running   0          2m
-# monitoring-prometheus-node-exporter-xxx                  1/1     Running   0          2m
-# prometheus-monitoring-kube-prometheus-prometheus-0        2/2     Running   0          2m
-# alertmanager-monitoring-kube-prometheus-alertmanager-0    2/2     Running   0          2m</code></pre>
+    <div class="callout info">
+      <strong>K3s inclut Traefik par défaut</strong>
+      <p>
+        Contrairement à un cluster cloud, K3s déploie automatiquement Traefik comme Ingress Controller.
+        Deux options :
+      </p>
+      <ul>
+        <li><strong>Utiliser Traefik</strong> — remplacez <code>ingressClassName: nginx</code> par <code>ingressClassName: traefik</code> dans vos Ingress.</li>
+        <li><strong>Remplacer par NGINX</strong> — désactivez Traefik au bootstrap et installez NGINX Ingress Controller (comme dans ce cours). Plus de flexibilité, annotations familières.</li>
+      </ul>
     </div>
 
-    <h3>Accéder à Grafana</h3>
+    <div class="terminal-box">
+      <header>Terminal - Désactiver Traefik au bootstrap K3s</header>
+      <pre><code class="language-bash"># Installer K3s sans Traefik intégré
+curl -sfL https://get.k3s.io | sh -s - --disable traefik
+
+# Puis installer NGINX Ingress Controller
+helm install ingress-nginx ingress-nginx/ingress-nginx   --namespace ingress-nginx --create-namespace   --set controller.hostNetwork=true</code></pre>
+    </div>
+
+    <h3>Stockage persistant avec local-path</h3>
+
+    <div class="callout info">
+      <strong>StorageClass <code>local-path</code> intégrée</strong>
+      <p>
+        K3s inclut la StorageClass <code>local-path</code> qui provisionne automatiquement
+        des volumes sur le disque local du nœud. Aucune configuration supplémentaire n'est nécessaire —
+        c'est ce qui permet au StatefulSet PostgreSQL de fonctionner sans infrastructure de stockage externe.
+      </p>
+      <pre><code class="language-bash"># Vérifier les StorageClasses disponibles
+kubectl get storageclass
+# NAME                   PROVISIONER             RECLAIMPOLICY
+# local-path (default)   rancher.io/local-path   Delete</code></pre>
+    </div>
+
+    <h3>Sauvegarde du control plane</h3>
+
+    <div class="callout warning">
+      <strong>K3s utilise SQLite — pas etcd</strong>
+      <p>
+        Par défaut, K3s stocke l'état du cluster dans un fichier SQLite
+        (<code>/var/lib/rancher/k3s/server/db/state.db</code>).
+        Ce fichier et la clé maître Sealed Secrets sont vos deux points de défaillance critiques.
+        Automatisez leur sauvegarde.
+      </p>
+      <pre><code class="language-bash"># Sauvegarder la DB K3s automatiquement chaque nuit
+echo "0 3 * * * root cp /var/lib/rancher/k3s/server/db/state.db   /backup/k3s-$(date +%Y%m%d).db" >> /etc/cron.d/k3s-backup</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== GITOPS FLUX ===== -->
+  <section>
+
+    <h2>GitOps avec Flux CD</h2>
+
+    <p>
+      Appliquer <code>kubectl apply</code> manuellement en production est une source d'erreurs
+      et d'inconsistances. Flux CD synchronise automatiquement l'état du cluster avec Git :
+      <strong>ce qui est dans la branche <code>main</code> est ce qui tourne en production</strong>.
+    </p>
+
+    <div class="callout info">
+      <strong>Le cycle de déploiement GitOps</strong>
+      <ol>
+        <li>Développeur push du code → GitHub Actions build l'image Docker</li>
+        <li>L'image est publiée sur GHCR avec un tag précis (ex : <code>v1.4.2</code>)</li>
+        <li>La CI ouvre une PR sur <code>repo-infra</code> pour mettre à jour le tag d'image</li>
+        <li>PR revue et mergée → Flux détecte le changement dans Git</li>
+        <li>Flux applique le manifeste mis à jour → rolling update automatique</li>
+      </ol>
+      <p>
+        En production, on n'utilise <strong>jamais</strong> le tag <code>latest</code> —
+        toujours un tag précis et immutable (<code>v1.4.2</code>, <code>sha-abc123</code>).
+        <code>latest</code> est acceptable uniquement en développement local.
+      </p>
+    </div>
+
+    <h3>Installer Flux</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - Bootstrap Flux (une seule fois)</header>
+      <pre><code class="language-bash"># Installer le CLI Flux
+curl -s https://fluxcd.io/install.sh | sudo bash
+
+# Bootstrap : Flux s'installe sur le cluster ET se connecte à repo-infra
+flux bootstrap github   --owner=ITCloud-Consulting   --repository=repo-infra   --branch=main   --path=clusters/vps-production   --personal
+
+# Vérifier
+flux check
+kubectl get pods -n flux-system
+# NAME                                  READY   STATUS    RESTARTS   AGE
+# helm-controller-xxx                   1/1     Running   0          1m
+# kustomize-controller-xxx              1/1     Running   0          1m
+# notification-controller-xxx           1/1     Running   0          1m
+# source-controller-xxx                 1/1     Running   0          1m</code></pre>
+    </div>
+
+    <h3>Déploiement automatique sur la branche <code>develop</code></h3>
+
+    <p>
+      Chaque push sur <code>develop</code> déclenche un pipeline qui, si le build passe,
+      met à jour automatiquement le tag d'image dans l'overlay <code>development</code> de
+      <code>repo-infra</code>. Flux détecte la modification et déploie sur l'environnement dev
+      sans intervention humaine.
+    </p>
+
+    <div class="callout info">
+      <strong>Séquence complète push → déploiement dev</strong>
+      <ol>
+        <li>Push sur <code>develop</code> dans <code>repo-backend</code></li>
+        <li>GitHub Actions build l'image et la pousse sur GHCR avec le tag <code>develop-&lt;sha&gt;</code></li>
+        <li>Le pipeline met à jour <code>newTag</code> dans l'overlay <code>development</code> de <code>repo-infra</code> et commit</li>
+        <li>Flux détecte le commit dans <code>repo-infra</code> et applique le manifeste</li>
+        <li>Rolling update automatique sur le namespace <code>development</code></li>
+      </ol>
+      <p>
+        Le tag <code>develop-&lt;sha&gt;</code> (ex : <code>develop-a3f9c12</code>) est immutable et traçable —
+        on sait exactement quel commit est déployé sur dev.
+      </p>
+    </div>
+
+    <div class="terminal-box">
+      <header>repo-backend/.github/workflows/deploy-dev.yaml</header>
+      <pre><code class="language-yaml" [textContent]="deployDevWorkflow"></code></pre>
+    </div>
+    <div class="callout warning">
+      <strong>Créer le secret <code>INFRA_REPO_TOKEN</code></strong>
+      <p>
+        Le pipeline doit écrire dans <code>repo-infra</code> depuis <code>repo-backend</code>.
+        Le <code>GITHUB_TOKEN</code> par défaut n'a accès qu'au repo courant.
+        Créez un Personal Access Token (PAT) ou un GitHub App Token avec accès Write sur <code>repo-infra</code>
+        et stockez-le dans les secrets de <code>repo-backend</code> sous le nom <code>INFRA_REPO_TOKEN</code>.
+      </p>
+      <p>
+        Même logique pour <code>repo-frontend</code> → overlay <code>development/frontend</code>.
+      </p>
+    </div>
+
+    <div class="callout info">
+      <strong>Pourquoi ne pas déployer directement avec <code>kubectl</code> depuis la CI ?</strong>
+      <p>
+        La CI n'a pas besoin de connaître l'adresse du cluster ni d'avoir un kubeconfig.
+        Elle fait une seule chose : mettre à jour un fichier dans Git.
+        Flux fait le reste. Cette séparation est le cœur du pattern GitOps —
+        <strong>le cluster tire ses déploiements depuis Git</strong>,
+        il ne les reçoit pas en push depuis l'extérieur.
+      </p>
+    </div>
+
+    <h3>Surveiller la synchronisation</h3>
 
     <div class="terminal-box">
       <header>Terminal</header>
-      <pre><code class="language-bash"># Méthode 1 : Port-forward (debug rapide)
-kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
-# Accessible sur http://localhost:3000
+      <pre><code class="language-bash"># Voir l'état de la synchronisation
+flux get kustomizations
 
-# Récupérer le mot de passe admin
-kubectl get secret monitoring-grafana -n monitoring \
-  -o jsonpath="&#123;.data.admin-password&#125;" | base64 -d
-# Login : admin / (le mot de passe affiché)
+# Forcer une réconciliation immédiate sans attendre le polling
+flux reconcile kustomization flux-system --with-source
 
-# Méthode 2 : Ingress dédié pour un accès permanent
-# Ajoutez cette règle dans votre ingress.yaml :
-# - host: grafana.mondomaine.com
-#   http:
-#     paths:
-#       - path: /
-#         pathType: Prefix
-#         backend:
-#           service:
-#             name: monitoring-grafana
-#             port:
-#               number: 80</code></pre>
+# Voir les événements récents (déploiements, erreurs)
+flux events</code></pre>
     </div>
 
-    <h3>Exposer les métriques Spring Boot</h3>
+    <h3>Exemple d'overlay production avec tag précis</h3>
 
     <div class="terminal-box">
-      <header>backend/pom.xml - Dépendance</header>
-      <pre><code class="language-xml">&lt;dependency&gt;
-    &lt;groupId&gt;io.micrometer&lt;/groupId&gt;
-    &lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;
-&lt;/dependency&gt;</code></pre>
+      <header>repo-infra/apps/overlays/production/backend/kustomization.yaml</header>
+      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: production
+
+resources:
+  - ../../../base/backend
+  - sealed-secret.yaml        # Secret chiffré propre à la prod
+
+patches:
+  - path: patch-replicas.yaml
+  - path: patch-resources.yaml
+
+# Tag précis en prod — jamais "latest"
+# Mis à jour automatiquement par la CI à chaque release
+images:
+  - name: ghcr.io/ITCloud-Consulting/deleevx-backend
+    newTag: "v1.4.2"
+
+configMapGenerator:
+  - name: backend-config
+    literals:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/mydb
+      - LOG_LEVEL=warn</code></pre>
     </div>
+
+  </section>
+
+
+
+  <!-- ===== CI VALIDATION ===== -->
+  <section>
+
+    <h2>Validation CI/CD des manifestes</h2>
+
+    <p>
+      Toute PR sur <code>repo-infra</code> déclenche une validation automatique.
+      Deux vérifications essentielles : conformité des manifestes Kubernetes et
+      absence de secrets en clair.
+    </p>
 
     <div class="terminal-box">
-      <header>backend/src/main/resources/application.yml</header>
-      <pre><code class="language-yaml">management:
-  endpoints:
-    web:
-      exposure:
-        include: health, prometheus, info
-  metrics:
-    tags:
-      application: myapp-backend</code></pre>
+      <header>repo-infra/.github/workflows/validate.yaml</header>
+      <pre><code class="language-yaml">name: Validate Manifests
+
+on: [pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Install kubeconform
+        run: |
+          wget -q https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Valider tous les overlays
+        run: |
+          for overlay in apps/overlays/*/; do
+            echo "Validation de $overlay"
+            kustomize build $overlay | kubeconform               -strict               -ignore-missing-schemas
+          done
+
+      - name: Vérifier l'absence de secrets en clair
+        run: |
+          # Interdit : "kind: Secret" non chiffré dans les manifestes
+          if grep -rn "^kind: Secret$" apps/ --include="*.yaml"              | grep -v "SealedSecret"; then
+            echo "ERREUR : Secret non chiffré détecté — utilisez Sealed Secrets"
+            exit 1
+          fi
+          echo "OK : aucun secret en clair trouvé"</code></pre>
     </div>
 
-    <h3>ServiceMonitor pour scraper le backend</h3>
-
-    <div class="terminal-box">
-      <header>k8s/base/backend-servicemonitor.yaml</header>
-      <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: backend-monitor
-  labels:
-    release: monitoring    # DOIT matcher le label du Prometheus Operator
-spec:
-  selector:
-    matchLabels:
-      app: backend
-  endpoints:
-    - port: http
-      path: /actuator/prometheus
-      interval: 15s</code></pre>
+    <div class="callout info">
+      <strong>Protection de branche sur repo-infra</strong>
+      <p>Configurez la branche <code>main</code> pour exiger :</p>
+      <ul>
+        <li>Au moins 1 reviewer DevOps senior</li>
+        <li>Passage des checks CI (validation des manifestes)</li>
+        <li>Commits signés — <strong>audit trail</strong> : qui a déployé quoi et quand</li>
+      </ul>
     </div>
 
-    <div class="terminal-box">
-      <header>Terminal - Vérifier</header>
-      <pre><code class="language-bash"># Appliquer le ServiceMonitor
-kubectl apply -f k8s/base/backend-servicemonitor.yaml
+  </section>
 
-# Vérifier que Prometheus scrape le backend
-# Ouvrir Grafana → Explorer → Prometheus
-# Requête PromQL :
-# up&#123;job="backend"&#125;
-# Résultat attendu : 1 (le target est UP)</code></pre>
-    </div>
 
-    <h3>Métriques essentielles à surveiller</h3>
 
-    <div class="comparison-grid">
-      <div class="comparison-card">
-        <h4>Métriques Système</h4>
-        <ul>
-          <li><code>node_cpu_seconds_total</code> - Utilisation CPU du nœud</li>
-          <li><code>node_memory_MemAvailable_bytes</code> - RAM disponible</li>
-          <li><code>node_disk_io_time_seconds_total</code> - I/O disque</li>
-          <li><code>kubelet_running_pods</code> - Nombre de pods actifs</li>
-        </ul>
-      </div>
-      <div class="comparison-card">
-        <h4>Métriques Application</h4>
-        <ul>
-          <li><code>http_server_requests_seconds_count</code> - Nombre de requêtes HTTP</li>
-          <li><code>http_server_requests_seconds_sum</code> - Temps total de réponse</li>
-          <li><code>jvm_memory_used_bytes</code> - Mémoire JVM utilisée</li>
-          <li><code>hikaricp_connections_active</code> - Connexions DB actives</li>
-        </ul>
-      </div>
+  <!-- ===== REGLES D'OR ===== -->
+  <section>
+
+    <h2>Règles d'or</h2>
+
+    <div class="callout info">
+      <strong>À retenir et appliquer dès le premier jour</strong>
+      <ul>
+        <li>
+          <strong>Un repo infra dédié</strong> — non négociable dès que vous avez plusieurs environnements
+          et plusieurs personnes. Les manifestes de prod n'ont rien à faire dans le repo applicatif.
+        </li>
+        <li>
+          <strong>Aucun secret en clair dans Git, jamais</strong> — Sealed Secrets est la solution
+          la plus pragmatique pour K3s. HashiCorp Vault est pour les équipes ayant déjà une maturité DevOps avancée.
+        </li>
+        <li>
+          <strong>Kustomize base + overlays</strong> — chaque patch doit être minimal et explicite.
+          Ne copiez jamais un manifeste complet d'un environnement à l'autre.
+        </li>
+        <li>
+          <strong>GitOps avec Flux ou ArgoCD</strong> — même sur un VPS, n'appliquez jamais
+          <code>kubectl apply</code> manuellement en prod. Ce que Git dit = ce qui tourne.
+        </li>
+        <li>
+          <strong>Jamais <code>latest</code> en production</strong> — utilisez des tags précis
+          et immutables (<code>v1.4.2</code>, <code>sha-abc123</code>). <code>latest</code>
+          est mutable et non reproductible.
+        </li>
+        <li>
+          <strong>Sauvegardez les deux points critiques K3s</strong> — la base SQLite
+          (<code>/var/lib/rancher/k3s/server/db/state.db</code>) et la clé maître Sealed Secrets.
+          Leur perte est irréversible.
+        </li>
+      </ul>
     </div>
 
   </section>

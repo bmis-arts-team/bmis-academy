@@ -65,10 +65,12 @@ export const DEVOPS_COURSE: Course = {
       lessons: [
         { number: 17, title: 'Structure & Dockerisation', subtitle: 'Organisation du projet et Dockerfiles production-grade', route: 'structure-et-dockerisation' },
         { number: 18, title: 'Installation K3s & Kustomize', subtitle: 'Cluster k3s sur VPS, namespaces et structure Kustomize', route: 'installation-k3s-et-kustomize' },
-        { number: 19, title: 'Déploiement & Ingress HTTPS', subtitle: 'Manifestes applicatifs, cert-manager et Let\'s Encrypt', route: 'deploiement-et-ingress-https' },
-        { number: 20, title: 'Autoscaling & Observabilité', subtitle: 'HPA, Prometheus, Grafana et métriques Spring Boot', route: 'autoscaling-et-observabilite' },
-        { number: 21, title: 'Logging, CI/CD & CDN', subtitle: 'Loki, pipeline GitHub Actions et stratégie CDN', route: 'logging-cicd-et-cdn' },
-        { number: 22, title: 'Hardening Production', subtitle: 'Quotas, Secrets, NetworkPolicies et rate limiting', route: 'hardening-production' },
+        { number: 19, title: 'Manifestes, Secrets & PVC', subtitle: 'Deployments, Services, PostgreSQL, Redis et Sealed Secrets', route: 'manifestes-secrets-et-pvc' },
+        { number: 20, title: 'Ingress HTTPS & GitOps Flux CD', subtitle: 'cert-manager, Let\'s Encrypt, K3s et synchronisation automatique', route: 'ingress-https-et-gitops' },
+        { number: 21, title: 'Autoscaling & Observabilité', subtitle: 'HPA, Prometheus, Grafana et métriques Spring Boot', route: 'autoscaling-et-observabilite' },
+        { number: 22, title: 'Logging centralisé', subtitle: 'stdout, Loki, Promtail et requêtes LogQL', route: 'logging-centralise' },
+        { number: 23, title: 'CI/CD Pipeline', subtitle: 'GitHub Actions, Kustomize et déploiement multi-environnements', route: 'cicd-pipeline' },
+        { number: 24, title: 'Hardening Production', subtitle: 'Quotas, Secrets, NetworkPolicies et rate limiting', route: 'hardening-production' },
       ]
     },
   ]

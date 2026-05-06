@@ -106,50 +106,68 @@ kubectl cluster-info
     <h2>Créer les namespaces</h2>
 
     <p>
-      Les namespaces isolent logiquement les environnements dans un même cluster.
+      Les namespaces isolent logiquement les ressources dans un même cluster.
       Chaque namespace a ses propres Deployments, Services, Secrets et quotas de ressources.
     </p>
 
+    <p>
+      On adopte la convention <strong>app-env</strong> : un namespace par application par environnement.
+      Ça évite tout conflit de noms si une deuxième application est hébergée sur le même cluster —
+      chaque app a ses propres namespaces isolés, avec ses propres Secrets et quotas.
+    </p>
+
     <div class="terminal-box">
-      <header>k8s/base/namespace.yaml</header>
-      <pre><code class="language-yaml">---
-apiVersion: v1
+      <header>repo-infra/namespaces/development.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
 kind: Namespace
 metadata:
-  name: dev
+  name: deleevx-dev
   labels:
-    env: dev
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: staging
-  labels:
-    env: staging
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: prod
-  labels:
-    env: prod</code></pre>
+    app: deleevx
+    env: development</code></pre>
     </div>
 
     <div class="terminal-box">
-      <header>Terminal - Appliquer</header>
-      <pre><code class="language-bash"># Créer les 3 namespaces
-kubectl apply -f k8s/base/namespace.yaml
+      <header>repo-infra/namespaces/staging.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: deleevx-staging
+  labels:
+    app: deleevx
+    env: staging</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>repo-infra/namespaces/production.yaml</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: deleevx-prod
+  labels:
+    app: deleevx
+    env: production</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Appliquer (depuis le répertoire de repo-infra)</header>
+      <pre><code class="language-bash"># Créer les namespaces DeleevX (opération initiale)
+kubectl apply -f namespaces/
 
 # Vérifier
 kubectl get namespaces
 
 # Résultat :
 # NAME              STATUS   AGE
+# deleevx-dev       Active   5s
+# deleevx-prod      Active   5s
+# deleevx-staging   Active   5s
 # default           Active   5m
-# dev               Active   5s
 # kube-system       Active   5m
-# prod              Active   5s
-# staging           Active   5s</code></pre>
+
+# Demain, pour une 2ème app, on ajouterait :
+# k8s/namespaces/nouvelle-app-dev.yaml
+# k8s/namespaces/nouvelle-app-prod.yaml</code></pre>
     </div>
 
   </section>
@@ -167,15 +185,21 @@ kubectl get namespaces
       qui patchent uniquement ce qui change.
     </p>
 
+    <p>
+      Les manifestes de DeleevX vivent dans <code>apps/</code> de <code>repo-infra</code>.
+      Si demain vous hébergez une deuxième application sur le même cluster, vous créez simplement
+      <code>apps/base/nouvelle-app/</code> — les namespaces et la structure existante ne bougent pas.
+    </p>
+
     <h3>Le fichier kustomization.yaml de base</h3>
 
     <div class="terminal-box">
-      <header>k8s/base/kustomization.yaml</header>
+      <header>apps/base/kustomization.yaml</header>
       <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Les namespaces sont gérés séparément dans k8s/namespaces/
 resources:
-  - namespace.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml
@@ -184,17 +208,18 @@ resources:
   - postgres-service.yaml
   - redis-deployment.yaml
   - redis-service.yaml
-  - ingress.yaml</code></pre>
+  - ingress.yaml
+  - ingress-sse.yaml</code></pre>
     </div>
 
     <h3>Overlay de production</h3>
 
     <div class="terminal-box">
-      <header>k8s/overlays/prod/kustomization.yaml</header>
+      <header>apps/overlays/production/kustomization.yaml</header>
       <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: prod
+namespace: deleevx-prod
 
 resources:
   - ../../base
@@ -206,7 +231,7 @@ patches:
     </div>
 
     <div class="terminal-box">
-      <header>k8s/overlays/prod/patches/backend-replicas.yaml</header>
+      <header>apps/overlays/production/patches/backend-replicas.yaml</header>
       <pre><code class="language-yaml">apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -216,11 +241,11 @@ spec:
     </div>
 
     <div class="terminal-box">
-      <header>k8s/overlays/dev/kustomization.yaml</header>
+      <header>apps/overlays/development/kustomization.yaml</header>
       <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: dev
+namespace: deleevx-dev
 
 resources:
   - ../../base
@@ -239,19 +264,19 @@ patches:
     <div class="terminal-box">
       <header>Terminal</header>
       <pre><code class="language-bash"># Prévisualiser ce que Kustomize va générer
-kubectl kustomize k8s/overlays/dev
+kubectl kustomize apps/overlays/development
 
-# Déployer en dev
-kubectl apply -k k8s/overlays/dev
+# Déployer en dev (opération initiale ou test — Flux gère ensuite le reste)
+kubectl apply -k apps/overlays/development
 
 # Déployer en staging
-kubectl apply -k k8s/overlays/staging
+kubectl apply -k apps/overlays/staging
 
 # Déployer en production
-kubectl apply -k k8s/overlays/prod
+kubectl apply -k apps/overlays/production
 
 # Vérifier un déploiement spécifique
-kubectl get all -n prod</code></pre>
+kubectl get all -n deleevx-prod</code></pre>
     </div>
 
     <div class="callout info">

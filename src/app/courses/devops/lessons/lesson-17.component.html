@@ -95,40 +95,45 @@
     </div>
 
     <div class="terminal-box">
-      <header>Repo 3 - Infrastructure K8s (recommandé)</header>
-      <pre><code>deleevx-infra/
-├── k8s/
-│   ├── base/                     # Manifestes communs à tous les envs
-│   │   ├── namespace.yaml
-│   │   ├── backend-deployment.yaml
-│   │   ├── backend-service.yaml
-│   │   ├── frontend-deployment.yaml
-│   │   ├── frontend-service.yaml
-│   │   ├── postgres-statefulset.yaml
-│   │   ├── postgres-service.yaml
-│   │   ├── redis-deployment.yaml
-│   │   ├── redis-service.yaml
-│   │   ├── ingress.yaml
-│   │   ├── cluster-issuer.yaml
-│   │   ├── backend-servicemonitor.yaml
-│   │   └── kustomization.yaml
-│   └── overlays/
-│       ├── dev/
-│       │   ├── kustomization.yaml
-│       │   └── patches/
+      <header>Repo 3 - repo-infra (Infrastructure as Code)</header>
+      <pre><code>repo-infra/
+├── clusters/
+│   └── vps-production/
+│       └── infrastructure.yaml      # Point d'entrée Flux CD
+│
+├── infrastructure/                   # Composants système du cluster
+│   ├── cert-manager/
+│   ├── ingress-nginx/
+│   └── sealed-secrets/
+│
+├── apps/
+│   ├── base/                        # Manifestes communs (sans environnement)
+│   │   ├── backend/
+│   │   │   ├── deployment.yaml
+│   │   │   ├── service.yaml
+│   │   │   ├── postgres-statefulset.yaml
+│   │   │   ├── redis-deployment.yaml
+│   │   │   └── kustomization.yaml
+│   │   └── frontend/
+│   │       ├── deployment.yaml
+│   │       ├── service.yaml
+│   │       └── kustomization.yaml
+│   │
+│   └── overlays/                    # Surcharges par environnement
+│       ├── development/
+│       │   ├── backend/             # kustomization.yaml + patches
+│       │   └── frontend/
 │       ├── staging/
-│       │   ├── kustomization.yaml
-│       │   └── patches/
-│       └── prod/
-│           ├── kustomization.yaml
-│           ├── patches/
-│           │   ├── backend-replicas.yaml
-│           │   └── resource-limits.yaml
-│           ├── hpa.yaml
-│           ├── resource-quota.yaml
-│           ├── limit-range.yaml
-│           └── network-policy.yaml
-└── docker-compose.dev.yml        # Dev local (optionnel)</code></pre>
+│       │   ├── backend/
+│       │   └── frontend/
+│       └── production/
+│           ├── backend/             # replicas 3, limits prod, sealed-secrets
+│           └── frontend/
+│
+└── namespaces/
+    ├── development.yaml             # namespace: deleevx-dev
+    ├── staging.yaml                 # namespace: deleevx-staging
+    └── production.yaml              # namespace: deleevx-prod</code></pre>
     </div>
 
     <div class="callout info">
@@ -141,14 +146,7 @@
       </ul>
     </div>
 
-    <div class="callout warning">
-      <strong>Alternative : sans repo infra</strong>
-      <p>
-        Si un 3ème repo vous semble excessif, placez le dossier <code>k8s/</code> dans le repo backend.
-        Les workflows utilisent <code>kubectl set image</code> qui ne nécessite pas d'accéder aux YAML -
-        seul le déploiement initial demande un <code>kubectl apply -k</code>.
-      </p>
-    </div>
+
 
   </section>
 
@@ -456,20 +454,20 @@ exec nginx -g "daemon off;"</code></pre>
     </div>
 
     <div class="terminal-box">
-      <header>Déploiement par environnement — la différence est dans le YAML K8s</header>
-      <pre><code class="language-yaml"># k8s/overlays/dev/ → frontend env vars
+      <header>Déploiement par environnement — la différence est dans les overlays de repo-infra</header>
+      <pre><code class="language-yaml"># apps/overlays/development/frontend/ → frontend env vars
 - name: API_URL
   value: "https://api-dev.deleevx.com"
 - name: APP_ENV
-  value: "dev"
+  value: "development"
 
-# k8s/overlays/staging/ → frontend env vars
+# apps/overlays/staging/frontend/ → frontend env vars
 - name: API_URL
   value: "https://api-staging.deleevx.com"
 - name: APP_ENV
   value: "staging"
 
-# k8s/overlays/prod/ → frontend env vars
+# apps/overlays/production/frontend/ → frontend env vars
 - name: API_URL
   value: "https://api.deleevx.com"
 - name: APP_ENV

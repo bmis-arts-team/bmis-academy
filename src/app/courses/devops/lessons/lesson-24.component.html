@@ -1,0 +1,701 @@
+<app-lesson-page [data]="data">
+
+
+
+  <!-- ===== RESOURCE LIMITS ===== -->
+  <section>
+
+    <h2>Resource Quotas &amp; Limit Ranges</h2>
+
+    <p>
+      En production, il faut empêcher un seul Deployment de consommer toutes les ressources du VPS.
+      Deux mécanismes complémentaires permettent ça : les <strong>ResourceQuotas</strong> (budget total du namespace)
+      et les <strong>LimitRanges</strong> (contraintes par conteneur).
+    </p>
+
+    <div class="terminal-box">
+      <header>apps/overlays/production/resource-quota.yaml (dans repo-infra)</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: deleevx-prod-quota
+  namespace: deleevx-prod
+spec:
+  hard:
+    requests.cpu: "4"           # Total CPU demandé max dans le namespace
+    requests.memory: "6Gi"      # Total RAM demandée max
+    limits.cpu: "6"             # Total CPU limit max
+    limits.memory: "8Gi"        # Total RAM limit max
+    pods: "20"                  # Nombre max de pods dans le namespace
+    services: "10"              # Nombre max de Services
+    persistentvolumeclaims: "5" # Nombre max de PVCs</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>apps/overlays/production/limit-range.yaml (dans repo-infra)</header>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: LimitRange
+metadata:
+  name: deleevx-prod-limits
+  namespace: deleevx-prod
+spec:
+  limits:
+    - type: Container
+      default:                  # Limites par défaut si non spécifiées
+        cpu: "500m"
+        memory: "256Mi"
+      defaultRequest:           # Requests par défaut si non spécifiées
+        cpu: "100m"
+        memory: "128Mi"
+      min:                      # Minimum autorisé
+        cpu: "50m"
+        memory: "64Mi"
+      max:                      # Maximum autorisé
+        cpu: "2000m"
+        memory: "2Gi"</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Appliquer et vérifier</header>
+      <pre><code class="language-bash"># Appliquer (opération initiale — Flux gère les mises à jour ensuite)
+kubectl apply -f apps/overlays/production/resource-quota.yaml
+kubectl apply -f apps/overlays/production/limit-range.yaml
+
+# Vérifier le quota
+kubectl describe resourcequota deleevx-prod-quota -n deleevx-prod
+# Name:                   prod-quota
+# Resource                Used   Hard
+# --------                ----   ----
+# limits.cpu              3500m  6
+# limits.memory           3Gi    8Gi
+# pods                    7      20
+# requests.cpu            1150m  4
+# requests.memory         1.5Gi  6Gi
+
+# Tester : créer un pod qui dépasse le quota
+# → Erreur : "exceeded quota: prod-quota"</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Quota vs LimitRange en résumé</strong>
+      <p>
+        <strong>ResourceQuota</strong> = « le namespace deleevx-prod ne peut pas utiliser plus de 8 Gi de RAM au total ».<br>
+        <strong>LimitRange</strong> = « chaque conteneur dans deleevx-prod doit demander entre 64 Mi et 2 Gi de RAM ».
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== SECRETS ===== -->
+  <section>
+
+    <h2>Gestion des Secrets</h2>
+
+    <p>
+      Les Secrets Kubernetes sont encodés en base64 - <strong>pas chiffrés</strong>.
+      Quiconque a accès au cluster peut les lire. Voici les bonnes pratiques pour les protéger.
+    </p>
+
+    <h3>Option 1 : Sealed Secrets (recommandé pour Git)</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - Installer Sealed Secrets</header>
+      <pre><code class="language-bash"># Installer le contrôleur
+helm repo add sealed-secrets \
+  https://bitnami-labs.github.io/sealed-secrets
+helm install sealed-secrets sealed-secrets/sealed-secrets \
+  --namespace kube-system
+
+# Installer l'outil CLI kubeseal
+# macOS : brew install kubeseal
+# Linux : wget https://github.com/bitnami-labs/sealed-secrets/releases/...
+
+# Créer un Secret classique (ne pas committer celui-ci !)
+kubectl create secret generic db-credentials \
+  --namespace=deleevx-prod \
+  --from-literal=username=myapp \
+  --from-literal=password='SuperSecret123!' \
+  --dry-run=client -o yaml > secret.yaml
+
+# Le chiffrer avec kubeseal
+kubeseal --format yaml &lt; secret.yaml > sealed-secret.yaml
+
+# sealed-secret.yaml peut être commité dans Git !
+# Seul le contrôleur sur VOTRE cluster peut le déchiffrer
+
+# Appliquer
+kubectl apply -f sealed-secret.yaml
+# Le contrôleur déchiffre et crée le Secret classique automatiquement
+
+# Supprimer le secret en clair
+rm secret.yaml</code></pre>
+    </div>
+
+    <h3>Option 2 : External Secrets Operator</h3>
+
+    <div class="callout info">
+      <strong>Pour les environnements cloud</strong>
+      <p>
+        Si vous avez accès à AWS Secrets Manager, Azure Key Vault ou HashiCorp Vault,
+        l'<strong>External Secrets Operator</strong> synchronise automatiquement les secrets
+        depuis ces services vers des Secrets Kubernetes. Plus sécurisé que Sealed Secrets
+        pour les grandes équipes.
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== NETWORK POLICIES ===== -->
+  <section>
+
+    <h2>Network Policies - Isolation réseau</h2>
+
+    <p>
+      Par défaut, tous les pods d'un cluster Kubernetes peuvent communiquer entre eux.
+      Les <strong>NetworkPolicies</strong> ajoutent des règles de pare-feu pour isoler les namespaces
+      et restreindre les communications.
+    </p>
+
+    <div class="terminal-box">
+      <header>k8s/apps/deleevx/overlays/prod/network-policy.yaml</header>
+      <pre><code class="language-yaml"># Politique par défaut : bloquer tout trafic entrant dans prod
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: deleevx-prod
+spec:
+  podSelector: &#123;&#125;           # S'applique à TOUS les pods du namespace
+  policyTypes:
+    - Ingress
+---
+# Autoriser le trafic de l'Ingress Controller vers le frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-frontend
+  namespace: deleevx-prod
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 80
+---
+# Autoriser le trafic de l'Ingress Controller vers le backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-backend
+  namespace: deleevx-prod
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+---
+# Autoriser le backend à contacter PostgreSQL et Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-data
+  namespace: deleevx-prod
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+    - to:                          # Autoriser DNS (CoreDNS)
+        - namespaceSelector: &#123;&#125;
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP</code></pre>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Appliquer et tester</header>
+      <pre><code class="language-bash"># Appliquer
+kubectl apply -f k8s/apps/deleevx/overlays/prod/network-policy.yaml
+
+# Tester : depuis un pod dev, essayer de contacter la BDD prod
+kubectl run test-pod -n deleevx-dev --rm -it --image=busybox -- sh
+# Dans le pod :
+wget -qO- --timeout=3 http://postgres.deleevx-prod:5432
+# Résultat attendu : timeout (bloqué par la NetworkPolicy)
+
+# Depuis un pod deleevx-prod backend :
+kubectl exec -it deployment/backend -n deleevx-prod -- sh
+wget -qO- --timeout=3 http://postgres:5432
+# Résultat attendu : connexion établie</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== RATE LIMITING ===== -->
+  <section>
+
+    <h2>Rate Limiting &amp; TLS</h2>
+
+    <h3>Rate limiting au niveau Ingress</h3>
+
+    <div class="terminal-box">
+      <header>k8s/apps/deleevx/base/ingress.yaml - Annotations de sécurité</header>
+      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+  annotations:
+    # HTTPS
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "10"         # 10 req/sec par IP
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"  # Burst de 50
+
+    # Sécurité headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=()";
+
+    # Taille max du body (uploads)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - mondomaine.com
+        - api.mondomaine.com
+      secretName: tls-certificate
+  rules:
+    - host: mondomaine.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    - host: api.mondomaine.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80</code></pre>
+    </div>
+
+    <h3>Tester le rate limiting</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># Envoyer beaucoup de requêtes rapidement
+for i in $(seq 1 100); do
+  curl -s -o /dev/null -w "%&#123;http_code&#125;\n" https://api.mondomaine.com/api/health
+done
+
+# Résultat attendu :
+# 200
+# 200
+# ... (les 50 premières passent = burst)
+# 429   ← Too Many Requests (rate limit atteint)
+# 429
+# ...</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== CHECKLIST FINALE ===== -->
+  <section>
+
+    <h2>Checklist de Production</h2>
+
+    <p>
+      Avant de considérer votre migration comme terminée, vérifiez chaque point :
+    </p>
+
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h4>Infrastructure</h4>
+        <ul>
+          <li>k3s installé et <code>kubectl get nodes</code> = Ready</li>
+          <li>3 namespaces créés (deleevx-dev, deleevx-staging, deleevx-prod)</li>
+          <li>NGINX Ingress Controller opérationnel</li>
+          <li>cert-manager + certificats Let's Encrypt valides</li>
+          <li>DNS configuré chez le registrar</li>
+        </ul>
+      </div>
+      <div class="comparison-card">
+        <h4>Applications</h4>
+        <ul>
+          <li>Backend déployé avec probes (startup, readiness, liveness)</li>
+          <li>Frontend déployé avec NGINX</li>
+          <li>PostgreSQL en StatefulSet avec PVC</li>
+          <li>Redis déployé avec limites mémoire</li>
+          <li>Secrets créés (pas en clair dans Git)</li>
+        </ul>
+      </div>
+      <div class="comparison-card">
+        <h4>Résilience</h4>
+        <ul>
+          <li>HPA configuré (min 2, max 5 replicas)</li>
+          <li>Resource requests &amp; limits sur tous les conteneurs</li>
+          <li>ResourceQuota par namespace</li>
+          <li>RollingUpdate strategy (maxUnavailable: 0)</li>
+        </ul>
+      </div>
+      <div class="comparison-card">
+        <h4>Observabilité &amp; Sécurité</h4>
+        <ul>
+          <li>Prometheus scrape le backend (/actuator/prometheus)</li>
+          <li>Grafana accessible avec dashboards configurés</li>
+          <li>Loki + Promtail collectent les logs</li>
+          <li>NetworkPolicies isolent les namespaces</li>
+          <li>Rate limiting actif sur l'Ingress</li>
+          <li>CI/CD GitHub Actions fonctionnel</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="terminal-box">
+      <header>Terminal - Vérification finale complète</header>
+      <pre><code class="language-bash"># 1. Cluster
+kubectl get nodes
+kubectl cluster-info
+
+# 2. Pods en production
+kubectl get pods -n deleevx-prod -o wide
+# Tous en Running, READY x/x
+
+# 3. Services
+kubectl get svc -n deleevx-prod
+# backend, frontend, postgres, redis
+
+# 4. Ingress
+kubectl get ingress -n deleevx-prod
+# HOSTS : deleevx.com, api.deleevx.com
+
+# 5. Certificats
+kubectl get certificate -n deleevx-prod
+# READY = True
+
+# 6. HPA
+kubectl get hpa -n deleevx-prod
+# TARGETS : xx%/70%
+
+# 7. Monitoring
+kubectl get pods -n monitoring
+# Prometheus, Grafana, Loki : Running
+
+# 8. Accès externe
+curl -I https://mondomaine.com
+# HTTP/2 200
+
+curl https://api.mondomaine.com/actuator/health
+# &#123;"status":"UP"&#125;
+
+# 9. Grafana
+# https://grafana.mondomaine.com → dashboards avec métriques
+
+# 10. Logs dans Grafana
+# Explore → Loki → &#123;namespace="prod"&#125; → logs en temps réel</code></pre>
+    </div>
+
+    <div class="callout success">
+      <strong>Migration terminée</strong>
+      <p>
+        Votre application est désormais conteneurisée, orchestrée par Kubernetes,
+        avec 3 environnements, de l'autoscaling, du monitoring, des logs centralisés,
+        un pipeline CI/CD automatisé, du HTTPS et une isolation réseau.
+        Vous êtes passés d'un déploiement artisanal sur VPS à une architecture cloud-native.
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== BACKUP ===== -->
+  <section>
+
+    <h2>Sauvegardes automatiques de la base de données</h2>
+
+    <p>
+      En production, la base de données doit être sauvegardée automatiquement.
+      On configure un <strong>CronJob Kubernetes</strong> qui exécute un <code>pg_dump</code>
+      deux fois par jour et stocke le fichier dans un bucket <strong>Google Cloud Storage (GCS)</strong>.
+    </p>
+
+    <div class="callout info">
+      <strong>Firebase Storage, Google Drive ou GCS ?</strong>
+      <ul>
+        <li>
+          <strong>Firebase Storage</strong> — non recommandé pour des backups :
+          plan gratuit limité à 1 GB, conçu pour les assets applicatifs (images, vidéos),
+          pas pour du scripting CLI robuste.
+        </li>
+        <li>
+          <strong>Google Drive</strong> — possible avec <code>rclone</code>, mais l'API Drive
+          n'est pas conçue pour des backups automatisés fiables.
+        </li>
+        <li>
+          <strong>Google Cloud Storage (GCS)</strong> — recommandé.
+          Stockage objet durable, CLI <code>gsutil</code> intégré,
+          lifecycle policies (suppression auto), ~0,02 $/GB/mois.
+          Votre compte Google Workspace donne déjà accès à GCP — aucun abonnement supplémentaire.
+        </li>
+      </ul>
+    </div>
+
+    <h3>1. Créer le bucket et le Service Account GCP</h3>
+
+    <div class="terminal-box">
+      <header>Terminal — gcloud CLI</header>
+      <pre><code class="language-bash"># Créer le bucket dans la région de votre VPS
+gsutil mb -l europe-west1 gs://deleevx-backups-prod
+
+# Rétention : lifecycle.json = &#123; "rule": [&#123; "action": &#123;"type":"Delete"&#125;, "condition": &#123;"age":30&#125; &#125;] &#125;
+gsutil lifecycle set lifecycle.json gs://deleevx-backups-prod
+
+# Créer un Service Account dédié (principe du moindre privilège)
+gcloud iam service-accounts create deleevx-backup-sa \
+  --display-name="DeleevX Backup SA"
+
+# Droit d'écriture sur CE bucket uniquement — pas sur le reste du projet GCP
+gsutil iam ch \
+  serviceAccount:deleevx-backup-sa@VOTRE_PROJECT_ID.iam.gserviceaccount.com:objectCreator \
+  gs://deleevx-backups-prod
+
+# Générer la clé JSON du Service Account
+gcloud iam service-accounts keys create ./sa-backup-key.json \
+  --iam-account=deleevx-backup-sa@VOTRE_PROJECT_ID.iam.gserviceaccount.com</code></pre>
+    </div>
+
+    <h3>2. Stocker la clé dans un Secret Kubernetes</h3>
+
+    <div class="terminal-box">
+      <header>Terminal — namespace deleevx-prod uniquement</header>
+      <pre><code class="language-bash">kubectl create secret generic gcs-backup-credentials \
+  --namespace=deleevx-prod \
+  --from-literal=bucket-name=deleevx-backups-prod \
+  --from-file=service-account-key=./sa-backup-key.json
+
+# Supprimer la clé locale — ne jamais la committer dans Git
+rm ./sa-backup-key.json</code></pre>
+    </div>
+
+    <h3>3. CronJob Kubernetes</h3>
+
+    <p>
+      Le job utilise un <strong>initContainer</strong> pour le <code>pg_dump</code>
+      et un conteneur principal pour l'upload sur GCS. Les deux partagent un volume
+      <code>emptyDir</code> temporaire. Si le dump échoue, l'upload ne démarre jamais.
+    </p>
+
+    <div class="terminal-box">
+      <header>k8s/apps/deleevx/overlays/prod/backup-cronjob.yaml</header>
+      <pre><code class="language-yaml">apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  # Dans overlays/prod/ uniquement — les backups ne tournent qu'en production
+spec:
+  schedule: "0 2,14 * * *"      # 2h et 14h UTC (4h et 16h heure Paris en été)
+  concurrencyPolicy: Forbid      # Pas de job concurrent si le précédent tourne encore
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+
+          volumes:
+            - name: backup-tmp
+              emptyDir: &#123;&#125;      # Volume temporaire partagé entre initContainer et conteneur principal
+
+          initContainers:
+            # ── Étape 1 : pg_dump ────────────────────────────────────────────
+            - name: pg-dump
+              image: postgres:16-alpine
+              command:
+                - sh
+                - -c
+                - |
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  pg_dump -h postgres -U $PGUSER -d $PGDATABASE -F c \
+                    -f /backup/backup_$TIMESTAMP.dump
+                  echo "$TIMESTAMP" > /backup/timestamp.txt
+                  echo "Dump OK : $(du -sh /backup/backup_$TIMESTAMP.dump | cut -f1)"
+              env:
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-credentials
+                      key: username
+                - name: PGDATABASE
+                  value: "mydb"
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-credentials
+                      key: password
+              volumeMounts:
+                - name: backup-tmp
+                  mountPath: /backup
+
+          containers:
+            # ── Étape 2 : upload vers GCS ────────────────────────────
+            - name: gcs-upload
+              image: google/cloud-sdk:alpine
+              command:
+                - sh
+                - -c
+                - |
+                  TIMESTAMP=$(cat /backup/timestamp.txt)
+                  echo "$GCS_SA_KEY" > /tmp/sa-key.json
+                  gcloud auth activate-service-account \
+                    --key-file=/tmp/sa-key.json --quiet
+                  gsutil cp /backup/backup_$TIMESTAMP.dump \
+                    gs://$GCS_BUCKET/deleevx/prod/$TIMESTAMP.dump
+                  echo "Upload OK : gs://$GCS_BUCKET/deleevx/prod/$TIMESTAMP.dump"
+                  rm /tmp/sa-key.json
+              env:
+                - name: GCS_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: gcs-backup-credentials
+                      key: bucket-name
+                - name: GCS_SA_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: gcs-backup-credentials
+                      key: service-account-key
+              volumeMounts:
+                - name: backup-tmp
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "256Mi"</code></pre>
+    </div>
+
+    <div class="callout info">
+      <strong>Pourquoi initContainer pour le dump ?</strong>
+      <p>
+        Les initContainers s'exécutent <strong>séquentiellement avant</strong> le conteneur principal
+        et doivent réussir pour que le job continue. En cas d'échec du <code>pg_dump</code>
+        (base inaccessible, disque plein…), le conteneur d'upload ne démarre jamais —
+        aucun fichier vide ou corrompu ne sera envoyé sur GCS.
+      </p>
+    </div>
+
+    <h3>4. Déclarer le CronJob dans l'overlay prod</h3>
+
+    <div class="terminal-box">
+      <header>k8s/apps/deleevx/overlays/prod/kustomization.yaml</header>
+      <pre><code class="language-yaml">apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: deleevx-prod
+
+resources:
+  - ../../base
+  - backup-cronjob.yaml       # ← ajouté ici (prod uniquement)
+
+patches:
+  - path: patches/ingress.yaml</code></pre>
+    </div>
+
+    <h3>5. Vérifier et tester</h3>
+
+    <div class="terminal-box">
+      <header>Terminal</header>
+      <pre><code class="language-bash"># État des CronJobs
+kubectl get cronjobs -n deleevx-prod
+# NAME               SCHEDULE       SUSPEND   ACTIVE   LAST SCHEDULE
+# postgres-backup    0 2,14 * * *   False     0        6h
+
+# Déclencher manuellement sans attendre le schedule
+kubectl create job --from=cronjob/postgres-backup backup-test -n deleevx-prod
+
+# Suivre les logs par conteneur
+kubectl logs -n deleevx-prod job/backup-test -c pg-dump
+kubectl logs -n deleevx-prod job/backup-test -c gcs-upload
+
+# Lister les fichiers dans GCS
+gsutil ls -lh gs://deleevx-backups-prod/deleevx/prod/
+# 43.2M  2026-05-05T02:01:12Z  gs://deleevx-backups-prod/deleevx/prod/20260505_020112.dump</code></pre>
+    </div>
+
+    <div class="callout warning">
+      <strong>Testez la restauration</strong>
+      <p>
+        Une backup non testée est une fausse sécurité. Restaurez régulièrement en staging pour valider :
+      </p>
+      <pre><code class="language-bash">gsutil cp gs://deleevx-backups-prod/deleevx/prod/20260505_020112.dump ./restore.dump
+
+kubectl exec -it -n deleevx-staging statefulset/postgres -- \
+  pg_restore -U myapp -d mydb -c -F c - &lt; ./restore.dump</code></pre>
+    </div>
+
+  </section>
+
+
+
+  <app-quiz [questions]="quiz" />
+
+</app-lesson-page>

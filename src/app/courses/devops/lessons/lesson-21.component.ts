@@ -13,64 +13,100 @@ export class Lesson21Component {
 
   quiz: QuizQuestion[] = [
     {
-      q: 'Pourquoi est-il obligatoire de logger sur stdout/stderr dans un conteneur Kubernetes ?',
+      q: 'Que fait un HorizontalPodAutoscaler (HPA) quand l\'utilisation CPU moyenne dépasse le seuil configuré ?',
       options: [
-        'Parce que les fichiers de log ne sont pas supportés par Linux',
-        'Parce que Kubernetes capture automatiquement stdout/stderr et les rend accessibles via kubectl logs et les collecteurs (Loki, Fluentd…)',
-        'Parce que stdout est plus rapide que l\'écriture fichier',
-        'Parce que les volumes ne sont pas disponibles dans les pods',
+        'Il augmente les ressources CPU du pod existant (scaling vertical)',
+        'Il crée de nouveaux pods (réplicas) pour répartir la charge (scaling horizontal)',
+        'Il redémarre les pods surchargés',
+        'Il alerte l\'administrateur par email',
       ],
       correct: 1,
       explanation:
-        'Les conteneurs sont éphémères. Les logs fichier disparaissent avec le pod. En loggant sur stdout, le container runtime (containerd) capture les logs, kubectl logs les affiche, et les collecteurs comme Loki les agrègent.',
+        'Le HPA surveille les métriques (CPU, mémoire) via le Metrics Server et ajuste le nombre de réplicas du Deployment. C\'est du scaling horizontal : plus de pods, pas des pods plus gros.',
     },
     {
-      q: 'Quelle est la stack Loki recommandée pour centraliser les logs dans Grafana ?',
+      q: 'Quel composant doit être installé pour que le HPA puisse fonctionner ?',
       options: [
-        'Loki + Elasticsearch + Kibana',
-        'Promtail (collecte) + Loki (stockage/indexation) + Grafana (visualisation)',
-        'Fluentd + Loki + Prometheus',
-        'Loki seul suffit pour tout',
+        'kube-proxy',
+        'Metrics Server',
+        'Prometheus',
+        'Grafana',
       ],
       correct: 1,
       explanation:
-        'Promtail est un agent DaemonSet qui collecte les logs de chaque nœud et les envoie à Loki. Loki les indexe par labels (pas en full-text comme Elasticsearch). Grafana permet de les visualiser avec LogQL.',
+        'Le Metrics Server collecte les métriques CPU/mémoire des kubelets et les expose via l\'API metrics.k8s.io. Sans lui, le HPA ne peut pas connaître l\'utilisation des ressources.',
     },
     {
-      q: 'Dans un pipeline GitHub Actions, pourquoi build et push l\'image Docker AVANT de déployer sur Kubernetes ?',
+      q: 'Dans Prometheus, qu\'est-ce qu\'un ServiceMonitor ?',
       options: [
-        'Pour vérifier que le code compile',
-        'Parce que Kubernetes ne peut déployer que des images déjà disponibles dans un registry (GHCR, Docker Hub…)',
-        'Parce que GitHub Actions ne peut pas accéder au cluster directement',
-        'Pour économiser de la bande passante',
+        'Un dashboard de monitoring',
+        'Une ressource CRD qui indique à Prometheus quels Services scraper et sur quel endpoint',
+        'Un agent installé dans chaque pod',
+        'Un type de Service Kubernetes',
       ],
       correct: 1,
       explanation:
-        'Le kubelet du nœud doit pouvoir pull l\'image spécifiée dans le Deployment. Si l\'image n\'est pas dans un registry accessible, le pod reste en ImagePullBackOff.',
+        'Le ServiceMonitor est un CRD (Custom Resource Definition) du Prometheus Operator. Il définit les labels, le port et le path (/metrics, /actuator/prometheus) à scraper automatiquement.',
     },
     {
-      q: 'Quelle stratégie CDN est recommandée pour les assets Angular en production ?',
+      q: 'Comment accéder à Grafana depuis l\'extérieur du cluster sur un VPS ?',
       options: [
-        'Servir les assets directement depuis le pod Angular',
-        'Mettre Cloudflare en proxy devant le domaine pour cacher les assets statiques au plus près des utilisateurs',
-        'Copier les assets sur un serveur FTP séparé',
-        'Utiliser un CDN uniquement pour les images',
+        'Grafana est accessible par défaut sur le port 3000',
+        'Via un Ingress configuré avec un sous-domaine (ex: grafana.mondomaine.com) ou via kubectl port-forward',
+        'En ouvrant le port 3000 dans le firewall uniquement',
+        'En installant Grafana directement sur le VPS sans Kubernetes',
       ],
       correct: 1,
       explanation:
-        'Cloudflare (ou un autre CDN) en mode proxy intercepte les requêtes, met en cache les fichiers statiques (JS, CSS, images) sur ses edge servers mondiaux, et réduit la latence et la charge sur le VPS.',
+        'En production, on crée un Ingress dédié pour Grafana. Pour du debug rapide, kubectl port-forward svc/grafana 3000:80 crée un tunnel temporaire sans exposer le port publiquement.',
     },
     {
-      q: 'Comment Kubernetes met-il à jour un Deployment sans interruption de service ?',
+      q: 'Quel endpoint Spring Boot Actuator expose les métriques au format Prometheus ?',
       options: [
-        'Il arrête tous les anciens pods puis démarre les nouveaux',
-        'Il utilise un Rolling Update : création progressive des nouveaux pods et suppression des anciens, en maintenant le nombre minimum de pods disponibles',
-        'Il redirige le trafic vers un autre cluster pendant la mise à jour',
-        'Il met le Service en mode maintenance',
+        '/actuator/health',
+        '/actuator/metrics',
+        '/actuator/prometheus',
+        '/metrics',
+      ],
+      correct: 2,
+      explanation:
+        'Le starter micrometer-registry-prometheus expose /actuator/prometheus avec toutes les métriques JVM, HTTP, pool de connexions… au format que Prometheus peut scraper directement.',
+    },
+    {
+      q: 'Que signifie stabilizationWindowSeconds dans la configuration du HPA ?',
+      options: [
+        'Le temps maximum avant qu\'un scale up soit déclenché',
+        'La fenêtre de temps pendant laquelle les métriques doivent rester stables avant de réduire ou d\'augmenter le nombre de replicas, évitant les oscillations',
+        'Le délai entre deux collectes de métriques par Prometheus',
+        'Le timeout de démarrage d\'un nouveau pod',
       ],
       correct: 1,
       explanation:
-        'La stratégie RollingUpdate crée de nouveaux pods avec la nouvelle image, attend qu\'ils soient Ready (readinessProbe OK), puis supprime les anciens progressivement. Le Service route automatiquement vers les pods Ready.',
+        'Sans stabilizationWindow, le HPA pourrait scale down immédiatement après un pic, puis scale up à nouveau (oscillations). Une fenêtre de 300s (5min) pour le scale down évite ce comportement erratique.',
+    },
+    {
+      q: 'Quelle requête PromQL permet de calculer le taux de requêtes HTTP par seconde du backend ?',
+      options: [
+        'http_server_requests_seconds_count',
+        'rate(http_server_requests_seconds_count[1m])',
+        'sum(http_server_requests_seconds_count)',
+        'avg(http_requests_total)',
+      ],
+      correct: 1,
+      explanation:
+        'rate() calcule le taux moyen par seconde sur une fenêtre de temps donnée. rate(http_server_requests_seconds_count[1m]) donne le nombre de requêtes par seconde en moyenne sur la dernière minute.',
+    },
+    {
+      q: 'Pourquoi configure-t-on un scaleDown.stabilizationWindowSeconds plus long que scaleUp ?',
+      options: [
+        'Par limitation technique du HPA',
+        'Pour éviter de supprimer des pods trop rapidement après un pic : un traffic burst qui dure 1 minute ne doit pas provoquer un scale down immédiat qui nécessiterait un nouveau scale up',
+        'Parce que créer un pod est plus rapide que d\'en supprimer un',
+        'Pour respecter les SLO de disponibilité',
+      ],
+      correct: 1,
+      explanation:
+        'Le scale down est plus risqué que le scale up : trop agressif, il dégrade la disponibilité. On privilégie la précaution (5min de calme avant réduction) sur l\'optimisation des coûts immédiats.',
     },
   ];
 }

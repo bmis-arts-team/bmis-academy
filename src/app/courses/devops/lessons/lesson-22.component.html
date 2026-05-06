@@ -2,465 +2,136 @@
 
 
 
-  <!-- ===== RESOURCE LIMITS ===== -->
+  <!-- ===== LOGGING ===== -->
   <section>
 
-    <h2>Resource Quotas &amp; Limit Ranges</h2>
+    <h2>Logging centralisé - stdout + Loki</h2>
 
     <p>
-      En production, il faut empêcher un seul Deployment de consommer toutes les ressources du VPS.
-      Deux mécanismes complémentaires permettent ça : les <strong>ResourceQuotas</strong> (budget total du namespace)
-      et les <strong>LimitRanges</strong> (contraintes par conteneur).
+      Dans Kubernetes, la règle d'or du logging est simple : <strong>tout sur stdout/stderr</strong>.
+      Les conteneurs sont éphémères - les fichiers de log disparaissent avec le pod.
+      Le container runtime (containerd) capture automatiquement stdout et le rend accessible via <code>kubectl logs</code>.
     </p>
 
-    <div class="terminal-box">
-      <header>k8s/overlays/prod/resource-quota.yaml</header>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: prod-quota
-  namespace: prod
-spec:
-  hard:
-    requests.cpu: "4"           # Total CPU demandé max dans le namespace
-    requests.memory: "6Gi"      # Total RAM demandée max
-    limits.cpu: "6"             # Total CPU limit max
-    limits.memory: "8Gi"        # Total RAM limit max
-    pods: "20"                  # Nombre max de pods dans le namespace
-    services: "10"              # Nombre max de Services
-    persistentvolumeclaims: "5" # Nombre max de PVCs</code></pre>
-    </div>
+    <h3>Configurer Spring Boot pour stdout</h3>
 
     <div class="terminal-box">
-      <header>k8s/overlays/prod/limit-range.yaml</header>
-      <pre><code class="language-yaml">apiVersion: v1
-kind: LimitRange
-metadata:
-  name: prod-limits
-  namespace: prod
-spec:
-  limits:
-    - type: Container
-      default:                  # Limites par défaut si non spécifiées
-        cpu: "500m"
-        memory: "256Mi"
-      defaultRequest:           # Requests par défaut si non spécifiées
-        cpu: "100m"
-        memory: "128Mi"
-      min:                      # Minimum autorisé
-        cpu: "50m"
-        memory: "64Mi"
-      max:                      # Maximum autorisé
-        cpu: "2000m"
-        memory: "2Gi"</code></pre>
-    </div>
-
-    <div class="terminal-box">
-      <header>Terminal - Appliquer et vérifier</header>
-      <pre><code class="language-bash"># Appliquer
-kubectl apply -f k8s/overlays/prod/resource-quota.yaml
-kubectl apply -f k8s/overlays/prod/limit-range.yaml
-
-# Vérifier le quota
-kubectl describe resourcequota prod-quota -n prod
-# Name:                   prod-quota
-# Resource                Used   Hard
-# --------                ----   ----
-# limits.cpu              3500m  6
-# limits.memory           3Gi    8Gi
-# pods                    7      20
-# requests.cpu            1150m  4
-# requests.memory         1.5Gi  6Gi
-
-# Tester : créer un pod qui dépasse le quota
-# → Erreur : "exceeded quota: prod-quota"</code></pre>
+      <header>backend/src/main/resources/application.yml</header>
+      <pre><code class="language-yaml"># Spring Boot log sur stdout par défaut - mais en JSON pour Loki
+logging:
+  pattern:
+    console: >-
+      &#123;"timestamp":"%d&#123;ISO8601&#125;",
+      "level":"%level",
+      "logger":"%logger&#123;36&#125;",
+      "message":"%msg",
+      "thread":"%thread"&#125;%n</code></pre>
     </div>
 
     <div class="callout info">
-      <strong>Quota vs LimitRange en résumé</strong>
+      <strong>Pourquoi le format JSON ?</strong>
       <p>
-        <strong>ResourceQuota</strong> = « le namespace prod ne peut pas utiliser plus de 8 Gi de RAM au total ».<br>
-        <strong>LimitRange</strong> = « chaque conteneur dans prod doit demander entre 64 Mi et 2 Gi de RAM ».
+        Les logs en texte brut sont difficiles à parser pour les collecteurs.
+        En JSON structuré, Loki peut indexer par champs (level, logger, message) et permettre
+        des requêtes précises comme <code>&#123;app="backend"&#125; |= "ERROR"</code>.
       </p>
     </div>
 
-  </section>
-
-
-
-  <!-- ===== SECRETS ===== -->
-  <section>
-
-    <h2>Gestion des Secrets</h2>
-
-    <p>
-      Les Secrets Kubernetes sont encodés en base64 - <strong>pas chiffrés</strong>.
-      Quiconque a accès au cluster peut les lire. Voici les bonnes pratiques pour les protéger.
-    </p>
-
-    <h3>Option 1 : Sealed Secrets (recommandé pour Git)</h3>
-
-    <div class="terminal-box">
-      <header>Terminal - Installer Sealed Secrets</header>
-      <pre><code class="language-bash"># Installer le contrôleur
-helm repo add sealed-secrets \
-  https://bitnami-labs.github.io/sealed-secrets
-helm install sealed-secrets sealed-secrets/sealed-secrets \
-  --namespace kube-system
-
-# Installer l'outil CLI kubeseal
-# macOS : brew install kubeseal
-# Linux : wget https://github.com/bitnami-labs/sealed-secrets/releases/...
-
-# Créer un Secret classique (ne pas committer celui-ci !)
-kubectl create secret generic db-credentials \
-  --namespace=prod \
-  --from-literal=username=myapp \
-  --from-literal=password='SuperSecret123!' \
-  --dry-run=client -o yaml > secret.yaml
-
-# Le chiffrer avec kubeseal
-kubeseal --format yaml &lt; secret.yaml > sealed-secret.yaml
-
-# sealed-secret.yaml peut être commité dans Git !
-# Seul le contrôleur sur VOTRE cluster peut le déchiffrer
-
-# Appliquer
-kubectl apply -f sealed-secret.yaml
-# Le contrôleur déchiffre et crée le Secret classique automatiquement
-
-# Supprimer le secret en clair
-rm secret.yaml</code></pre>
-    </div>
-
-    <h3>Option 2 : External Secrets Operator</h3>
-
-    <div class="callout info">
-      <strong>Pour les environnements cloud</strong>
-      <p>
-        Si vous avez accès à AWS Secrets Manager, Azure Key Vault ou HashiCorp Vault,
-        l'<strong>External Secrets Operator</strong> synchronise automatiquement les secrets
-        depuis ces services vers des Secrets Kubernetes. Plus sécurisé que Sealed Secrets
-        pour les grandes équipes.
-      </p>
-    </div>
-
-  </section>
-
-
-
-  <!-- ===== NETWORK POLICIES ===== -->
-  <section>
-
-    <h2>Network Policies - Isolation réseau</h2>
-
-    <p>
-      Par défaut, tous les pods d'un cluster Kubernetes peuvent communiquer entre eux.
-      Les <strong>NetworkPolicies</strong> ajoutent des règles de pare-feu pour isoler les namespaces
-      et restreindre les communications.
-    </p>
-
-    <div class="terminal-box">
-      <header>k8s/overlays/prod/network-policy.yaml</header>
-      <pre><code class="language-yaml"># Politique par défaut : bloquer tout trafic entrant dans prod
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-ingress
-  namespace: prod
-spec:
-  podSelector: &#123;&#125;           # S'applique à TOUS les pods du namespace
-  policyTypes:
-    - Ingress
----
-# Autoriser le trafic de l'Ingress Controller vers le frontend
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ingress-to-frontend
-  namespace: prod
-spec:
-  podSelector:
-    matchLabels:
-      app: frontend
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - port: 80
----
-# Autoriser le trafic de l'Ingress Controller vers le backend
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ingress-to-backend
-  namespace: prod
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - port: 8080
----
-# Autoriser le backend à contacter PostgreSQL et Redis
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-backend-to-data
-  namespace: prod
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgres
-      ports:
-        - port: 5432
-    - to:
-        - podSelector:
-            matchLabels:
-              app: redis
-      ports:
-        - port: 6379
-    - to:                          # Autoriser DNS (CoreDNS)
-        - namespaceSelector: &#123;&#125;
-      ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP</code></pre>
-    </div>
-
-    <div class="terminal-box">
-      <header>Terminal - Appliquer et tester</header>
-      <pre><code class="language-bash"># Appliquer
-kubectl apply -f k8s/overlays/prod/network-policy.yaml
-
-# Tester : depuis un pod dev, essayer de contacter la BDD prod
-kubectl run test-pod -n dev --rm -it --image=busybox -- sh
-# Dans le pod :
-wget -qO- --timeout=3 http://postgres.prod:5432
-# Résultat attendu : timeout (bloqué par la NetworkPolicy)
-
-# Depuis un pod prod backend :
-kubectl exec -it deployment/backend -n prod -- sh
-wget -qO- --timeout=3 http://postgres:5432
-# Résultat attendu : connexion établie</code></pre>
-    </div>
-
-  </section>
-
-
-
-  <!-- ===== RATE LIMITING ===== -->
-  <section>
-
-    <h2>Rate Limiting &amp; TLS</h2>
-
-    <h3>Rate limiting au niveau Ingress</h3>
-
-    <div class="terminal-box">
-      <header>k8s/base/ingress.yaml - Annotations de sécurité</header>
-      <pre><code class="language-yaml">apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: main-ingress
-  annotations:
-    # HTTPS
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-
-    # Rate limiting
-    nginx.ingress.kubernetes.io/limit-rps: "10"         # 10 req/sec par IP
-    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"  # Burst de 50
-
-    # Sécurité headers
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      more_set_headers "X-Frame-Options: DENY";
-      more_set_headers "X-Content-Type-Options: nosniff";
-      more_set_headers "X-XSS-Protection: 1; mode=block";
-      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
-      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=()";
-
-    # Taille max du body (uploads)
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-
-    # Timeouts
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
-spec:
-  ingressClassName: nginx
-  tls:
-    - hosts:
-        - mondomaine.com
-        - api.mondomaine.com
-      secretName: tls-certificate
-  rules:
-    - host: mondomaine.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: frontend
-                port:
-                  number: 80
-    - host: api.mondomaine.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: backend
-                port:
-                  number: 80</code></pre>
-    </div>
-
-    <h3>Tester le rate limiting</h3>
+    <h3>kubectl logs - L'outil de base</h3>
 
     <div class="terminal-box">
       <header>Terminal</header>
-      <pre><code class="language-bash"># Envoyer beaucoup de requêtes rapidement
-for i in $(seq 1 100); do
-  curl -s -o /dev/null -w "%&#123;http_code&#125;\n" https://api.mondomaine.com/api/health
-done
+      <pre><code class="language-bash"># Logs du pod le plus récent
+kubectl logs deployment/backend -n deleevx-prod
 
-# Résultat attendu :
-# 200
-# 200
-# ... (les 50 premières passent = burst)
-# 429   ← Too Many Requests (rate limit atteint)
-# 429
-# ...</code></pre>
+# Logs en temps réel (streaming)
+kubectl logs -f deployment/backend -n deleevx-prod
+
+# Logs de tous les pods d'un Deployment
+kubectl logs -l app=backend -n deleevx-prod --all-containers
+
+# Logs des 30 dernières minutes
+kubectl logs deployment/backend -n deleevx-prod --since=30m
+
+# Logs du pod précédent (après un crash)
+kubectl logs deployment/backend -n prod --previous</code></pre>
     </div>
 
-  </section>
-
-
-
-  <!-- ===== CHECKLIST FINALE ===== -->
-  <section>
-
-    <h2>Checklist de Production</h2>
-
-    <p>
-      Avant de considérer votre migration comme terminée, vérifiez chaque point :
-    </p>
-
-    <div class="comparison-grid">
-      <div class="comparison-card">
-        <h4>Infrastructure</h4>
-        <ul>
-          <li>k3s installé et <code>kubectl get nodes</code> = Ready</li>
-          <li>3 namespaces créés (dev, staging, prod)</li>
-          <li>NGINX Ingress Controller opérationnel</li>
-          <li>cert-manager + certificats Let's Encrypt valides</li>
-          <li>DNS configuré chez le registrar</li>
-        </ul>
-      </div>
-      <div class="comparison-card">
-        <h4>Applications</h4>
-        <ul>
-          <li>Backend déployé avec probes (startup, readiness, liveness)</li>
-          <li>Frontend déployé avec NGINX</li>
-          <li>PostgreSQL en StatefulSet avec PVC</li>
-          <li>Redis déployé avec limites mémoire</li>
-          <li>Secrets créés (pas en clair dans Git)</li>
-        </ul>
-      </div>
-      <div class="comparison-card">
-        <h4>Résilience</h4>
-        <ul>
-          <li>HPA configuré (min 2, max 5 replicas)</li>
-          <li>Resource requests &amp; limits sur tous les conteneurs</li>
-          <li>ResourceQuota par namespace</li>
-          <li>RollingUpdate strategy (maxUnavailable: 0)</li>
-        </ul>
-      </div>
-      <div class="comparison-card">
-        <h4>Observabilité &amp; Sécurité</h4>
-        <ul>
-          <li>Prometheus scrape le backend (/actuator/prometheus)</li>
-          <li>Grafana accessible avec dashboards configurés</li>
-          <li>Loki + Promtail collectent les logs</li>
-          <li>NetworkPolicies isolent les namespaces</li>
-          <li>Rate limiting actif sur l'Ingress</li>
-          <li>CI/CD GitHub Actions fonctionnel</li>
-        </ul>
-      </div>
-    </div>
+    <h3>Installer Loki + Promtail</h3>
 
     <div class="terminal-box">
-      <header>Terminal - Vérification finale complète</header>
-      <pre><code class="language-bash"># 1. Cluster
-kubectl get nodes
-kubectl cluster-info
+      <header>Terminal - VPS</header>
+      <pre><code class="language-bash"># Ajouter le repo Grafana
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
 
-# 2. Pods en production
-kubectl get pods -n prod -o wide
-# Tous en Running, READY x/x
+# Installer Loki Stack (Loki + Promtail)
+helm install loki grafana/loki-stack \
+  --namespace monitoring \
+  --set loki.persistence.enabled=true \
+  --set loki.persistence.size=5Gi \
+  --set promtail.enabled=true \
+  --set loki.resources.requests.memory=128Mi \
+  --set loki.resources.limits.memory=256Mi
 
-# 3. Services
-kubectl get svc -n prod
-# backend, frontend, postgres, redis
+# Vérifier
+kubectl get pods -n monitoring -l app=loki
+# NAME                    READY   STATUS    RESTARTS   AGE
+# loki-0                  1/1     Running   0          1m
 
-# 4. Ingress
-kubectl get ingress -n prod
-# HOSTS : mondomaine.com, api.mondomaine.com
-
-# 5. Certificats
-kubectl get certificate -n prod
-# READY = True
-
-# 6. HPA
-kubectl get hpa -n prod
-# TARGETS : xx%/70%
-
-# 7. Monitoring
-kubectl get pods -n monitoring
-# Prometheus, Grafana, Loki : Running
-
-# 8. Accès externe
-curl -I https://mondomaine.com
-# HTTP/2 200
-
-curl https://api.mondomaine.com/actuator/health
-# &#123;"status":"UP"&#125;
-
-# 9. Grafana
-# https://grafana.mondomaine.com → dashboards avec métriques
-
-# 10. Logs dans Grafana
-# Explore → Loki → &#123;namespace="prod"&#125; → logs en temps réel</code></pre>
+kubectl get pods -n monitoring -l app=promtail
+# NAME                 READY   STATUS    RESTARTS   AGE
+# loki-promtail-xxx    1/1     Running   0          1m</code></pre>
     </div>
 
-    <div class="callout success">
-      <strong>Migration terminée</strong>
-      <p>
-        Votre application est désormais conteneurisée, orchestrée par Kubernetes,
-        avec 3 environnements, de l'autoscaling, du monitoring, des logs centralisés,
-        un pipeline CI/CD automatisé, du HTTPS et une isolation réseau.
-        Vous êtes passés d'un déploiement artisanal sur VPS à une architecture cloud-native.
-      </p>
+    <div class="callout info">
+      <strong>Comment ça fonctionne</strong>
+      <ul>
+        <li><strong>Promtail</strong> - DaemonSet qui tourne sur chaque nœud, collecte les logs de <code>/var/log/pods/</code> et les envoie à Loki</li>
+        <li><strong>Loki</strong> - Stocke et indexe les logs par labels (namespace, pod, container), pas en full-text</li>
+        <li><strong>Grafana</strong> - Visualise les logs avec le langage de requête <strong>LogQL</strong></li>
+      </ul>
+    </div>
+
+    <h3>Configurer Grafana pour Loki</h3>
+
+    <div class="terminal-box">
+      <header>Terminal - Ajouter Loki comme data source</header>
+      <pre><code class="language-bash"># Si Grafana est installé avec kube-prometheus-stack,
+# Loki doit être ajouté comme data source.
+
+# Option 1 : Via l'interface Grafana
+# Configuration → Data Sources → Add → Loki
+# URL : http://loki:3100
+
+# Option 2 : Via Helm values (recommandé)
+# Ajoutez lors de l'installation de Grafana :
+# --set grafana.additionalDataSources[0].name=Loki
+# --set grafana.additionalDataSources[0].type=loki
+# --set grafana.additionalDataSources[0].url=http://loki:3100</code></pre>
+    </div>
+
+    <h3>Requêtes LogQL dans Grafana</h3>
+
+    <div class="terminal-box">
+      <header>Exemples LogQL</header>
+      <pre><code class="language-logql"># Tous les logs du backend en prod
+&#123;namespace="deleevx-prod", app="backend"&#125;
+
+# Uniquement les erreurs
+&#123;namespace="deleevx-prod", app="backend"&#125; |= "ERROR"
+
+# Logs contenant "timeout" ou "connection refused"
+&#123;namespace="deleevx-prod", app="backend"&#125; |~ "timeout|connection refused"
+
+# Parser les logs JSON et filtrer par level
+&#123;namespace="deleevx-prod", app="backend"&#125; | json | level="ERROR"
+
+# Compter les erreurs par minute (métrique depuis les logs)
+rate(&#123;namespace="deleevx-prod", app="backend"&#125; |= "ERROR" [1m])</code></pre>
     </div>
 
   </section>
-
 
 
   <app-quiz [questions]="quiz" />

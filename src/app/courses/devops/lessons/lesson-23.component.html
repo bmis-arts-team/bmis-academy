@@ -1,0 +1,165 @@
+<app-lesson-page [data]="data">
+
+
+  <!-- ===== CI/CD ===== -->
+  <section>
+
+    <h2>CI/CD — Pipeline GitHub Actions</h2>
+
+    <p>
+      Dans les leçons précédentes, nous avons établi l'architecture : les manifestes Kubernetes
+      vivent dans <code>repo-infra</code>, Flux CD synchronise le cluster depuis Git.
+      Le pipeline CI/CD n'a qu'<strong>une seule responsabilité</strong> : construire l'image Docker
+      et mettre à jour le tag dans <code>repo-infra</code>. Flux fait le reste.
+    </p>
+
+    <div class="callout info">
+      <strong>Ce que fait la CI — et rien d'autre</strong>
+      <ol>
+        <li>Exécuter les tests (Maven / Angular)</li>
+        <li>Construire l'image Docker et la pousser sur GHCR avec un tag immutable</li>
+        <li>Cloner <code>repo-infra</code>, mettre à jour le <code>newTag</code> dans l'overlay concerné, committer et pousser</li>
+      </ol>
+      <p>
+        La CI ne parle <strong>jamais</strong> directement au cluster.
+        Elle n'a pas besoin de kubeconfig ni de token Kubernetes.
+        Flux détecte le changement dans <code>repo-infra</code> et applique.
+      </p>
+    </div>
+
+    <h3>Stratégie de déploiement par branche</h3>
+
+    <div class="callout info">
+      <ul>
+        <li>
+          <strong>Push sur <code>develop</code></strong> →
+          image taguée <code>develop-&lt;sha&gt;</code> →
+          mise à jour de l'overlay <code>development</code> dans <code>repo-infra</code> →
+          Flux déploie automatiquement sur <code>deleevx-dev</code>, puis <code>deleevx-staging</code>
+        </li>
+        <li>
+          <strong>Push sur <code>main</code></strong> →
+          image taguée <code>v&lt;sha&gt;</code> →
+          mise à jour de l'overlay <code>production</code> →
+          <strong>approbation manuelle requise</strong> via GitHub Environments →
+          Flux déploie sur <code>deleevx-prod</code>
+        </li>
+      </ul>
+      <p>
+        Les deux pipelines (backend et frontend) sont indépendants.
+        Un fix CSS ne touche pas les overlays backend.
+        Un changement de schéma DB ne redéploie pas le frontend.
+      </p>
+    </div>
+
+    <h3>Workflow Backend</h3>
+
+    <div class="terminal-box">
+      <header>repo-backend/.github/workflows/deploy.yml</header>
+      <pre><code class="language-yaml" [textContent]="backendWorkflow"></code></pre>
+    </div>
+
+    <h3>Workflow Frontend</h3>
+
+    <p>Structure identique — seuls l'image et les chemins d'overlay changent.</p>
+
+    <div class="terminal-box">
+      <header>repo-frontend/.github/workflows/deploy.yml</header>
+      <pre><code class="language-yaml" [textContent]="frontendWorkflow"></code></pre>
+    </div>
+
+    <h3>Le secret <code>INFRA_REPO_TOKEN</code></h3>
+
+    <div class="callout warning">
+      <strong>Un PAT avec accès Write sur repo-infra</strong>
+      <p>
+        Le <code>GITHUB_TOKEN</code> automatique n'a accès qu'au repo courant.
+        Pour écrire dans <code>repo-infra</code> depuis <code>repo-backend</code> ou <code>repo-frontend</code>,
+        créez un <strong>Fine-grained Personal Access Token</strong> (ou un GitHub App Token) avec :
+      </p>
+      <ul>
+        <li>Repository : <code>ITCloud-Consulting/repo-infra</code></li>
+        <li>Permission : <strong>Contents → Read &amp; Write</strong></li>
+      </ul>
+      <p>
+        Ajoutez ce token sous le nom <code>INFRA_REPO_TOKEN</code> dans les secrets de
+        <strong>chaque repo applicatif</strong> (backend et frontend).
+      </p>
+      <p>
+        Préférez un <strong>GitHub App Token</strong> en production : il est lié à l'organisation,
+        ne dépend pas d'un compte personnel et peut être révoqué sans impacter les accès humains.
+      </p>
+    </div>
+
+    <h3>Approbation manuelle pour la production</h3>
+
+    <div class="callout info">
+      <strong>GitHub Environments — comment ça fonctionne</strong>
+      <p>
+        Le job <code>update-infra-prod</code> déclare <code>environment: production</code>.
+        Dans les paramètres GitHub du repo, configurez cet environnement avec :
+      </p>
+      <ul>
+        <li><strong>Required reviewers</strong> : les DevOps seniors autorisés à valider un déploiement prod</li>
+        <li><strong>Wait timer</strong> : optionnel — délai de sécurité avant exécution</li>
+        <li><strong>Deployment branches</strong> : restreindre à <code>main</code> uniquement</li>
+      </ul>
+      <p>
+        Lorsqu'un push arrive sur <code>main</code>, le pipeline s'arrête avant ce job et envoie
+        une notification. Le reviewer approuve (ou rejette) depuis l'interface GitHub.
+        <strong>Flux ne déploie en prod que si un humain a validé le commit dans repo-infra.</strong>
+      </p>
+    </div>
+
+    <h3>Vue d'ensemble de l'architecture complète</h3>
+
+    <div class="callout info">
+      <strong>Flux de bout en bout — du commit au pod</strong>
+      <ol>
+        <li><strong>repo-backend</strong> ou <strong>repo-frontend</strong> : push sur <code>develop</code> ou <code>main</code></li>
+        <li>GitHub Actions : tests → build image → push GHCR</li>
+        <li>GitHub Actions : clone <code>repo-infra</code>, <code>kustomize edit set image</code>, commit, push</li>
+        <li><strong>repo-infra</strong> : PR de validation auto déclenchée (workflow <code>validate.yaml</code> vu en leçon 20)</li>
+        <li><strong>Flux CD</strong> : détecte le nouveau commit dans <code>repo-infra</code> toutes les 60s</li>
+        <li>Flux applique l'overlay modifié → rolling update sur le namespace cible</li>
+        <li>Kubernetes : <code>kubectl rollout status</code> confirme la mise à jour</li>
+      </ol>
+      <p>
+        La CI ne connaît pas l'adresse du cluster.
+        Le cluster n'est pas exposé à internet pour les déploiements.
+        <strong>Git est l'unique source de vérité.</strong>
+      </p>
+    </div>
+
+  </section>
+
+
+
+  <!-- ===== CDN ===== -->
+  <section>
+
+    <h2>CDN &amp; Distribution</h2>
+
+    <div class="callout info">
+      <strong>Sujet traité dans la leçon théorique</strong>
+      <p>
+        La stratégie CDN complète (Cloudflare, caching des assets Angular, rules par type de fichier,
+        bypass de l'API) est couverte en détail dans la
+        <strong>Leçon&nbsp;14 — CDN &amp; Distribution</strong>.
+      </p>
+      <p>
+        Pour DeleevX, l'intégration se résume à trois étapes :
+      </p>
+      <ol>
+        <li>Mettre Cloudflare en proxy <em>Proxied</em> devant votre domaine.</li>
+        <li>Créer des <strong>Cache Rules</strong> ciblant <code>*.js</code>, <code>*.css</code>, <code>assets/*</code> — TTL 1 mois.</li>
+        <li>Ajouter un bypass explicite sur <code>api.*</code> pour ne jamais cacher les réponses API.</li>
+      </ol>
+    </div>
+
+  </section>
+
+
+  <app-quiz [questions]="quiz" />
+
+</app-lesson-page>

@@ -64,13 +64,49 @@ export class Lesson17Component {
       q: 'Quelle est la structure de dossiers recommandée pour séparer les fichiers Kubernetes par environnement ?',
       options: [
         'Un seul dossier k8s/ avec tout dedans',
-        'k8s/base/ pour les ressources communes et k8s/overlays/{dev,staging,prod}/ pour les spécificités par environnement',
+        'k8s/namespaces/ pour les namespaces et k8s/apps/{app}/base/ + k8s/apps/{app}/overlays/{dev,staging,prod}/ pour les manifestes',
         'Un dépôt Git séparé par environnement',
         'Un namespace différent suffit, pas besoin de dossiers séparés',
       ],
       correct: 1,
       explanation:
-        'La structure base/overlays (pattern Kustomize) permet de factoriser les ressources communes et de ne surcharger que ce qui change par environnement (replicas, limites, variables…).',
+        'La structure namespaces/ + apps/{app}/base/ + apps/{app}/overlays/ (pattern Kustomize) isole les namespaces (réutilisables entre apps) des manifestes applicatifs. Ajouter une nouvelle app = créer k8s/apps/nouvelle-app/ sans toucher au reste.',
+    },
+    {
+      q: 'Pourquoi l\'instruction USER appuser est-elle ajoutée dans le Dockerfile Spring Boot ?',
+      options: [
+        'Pour donner plus de permissions au processus Java',
+        'Pour éviter que le processus tourne en root, réduisant la surface d\'attaque si le conteneur est compromis',
+        'Pour que Spring Boot démarre plus vite',
+        'C\'est obligatoire sinon Docker refuse de builder',
+      ],
+      correct: 1,
+      explanation:
+        'Exécuter un processus en root dans un conteneur est dangereux : si l\'attaquant sort du conteneur, il a des privilèges root sur le nœud. Un utilisateur non-root limite les dégâts potentiels.',
+    },
+    {
+      q: 'Pourquoi une seule image Docker est-elle déployée dans les 3 environnements (dev/staging/prod) pour le frontend Angular ?',
+      options: [
+        'Pour économiser de l\'espace disque',
+        'Parce que la configuration runtime (API URL, env) est injectée via des variables d\'environnement au démarrage du conteneur, pas compilée dans le build',
+        'Parce qu\'Angular génère le même code pour tous les environnements',
+        'Parce que le Dockerfile ne supporte pas plusieurs cibles',
+      ],
+      correct: 1,
+      explanation:
+        'Le principe "build once, deploy anywhere" : l\'image est identique partout. Au démarrage, le docker-entrypoint.sh génère /assets/environment.json à partir des variables d\'environnement du pod Kubernetes.',
+    },
+    {
+      q: 'Quel est le rôle du .dockerignore dans un projet Spring Boot ?',
+      options: [
+        'Il liste les fichiers à inclure dans l\'image',
+        'Il exclut target/, .git/ et autres fichiers inutiles du contexte de build, réduisant la taille envoyée au daemon Docker et évitant d\'invalider le cache',
+        'Il désactive certaines instructions du Dockerfile',
+        'Il configure le réseau Docker',
+      ],
+      correct: 1,
+      explanation:
+        'Sans .dockerignore, le dossier target/ (des centaines de MB) serait envoyé au daemon à chaque build. Le cache layer serait aussi invalidé par des changements dans .git/ qui n\'impactent pas le code.',
     },
   ];
 }
